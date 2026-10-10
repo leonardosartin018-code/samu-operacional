@@ -1,24 +1,346 @@
-<!doctype html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>SAMU Operacional Beta</title><style>
-:root{--n:#0d1c3b;--b:#0f5f8f;--c:#2da7d8;--r:#c62828;--bg:#eef3f7;--t:#142033;--m:#66758a;--l:#d9e2ec}*{box-sizing:border-box}body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--t)}button,input,select{font:inherit}.hidden{display:none!important}.login{min-height:100vh;display:grid;place-items:center;padding:22px;background:linear-gradient(145deg,#0d1c3b,#174d78)}.card{width:min(440px,100%);background:#fff;border-radius:20px;padding:26px;box-shadow:0 24px 55px #0004}.logo{width:54px;height:54px;border-radius:15px;background:linear-gradient(145deg,#e53935,#b71c1c);color:#fff;display:grid;place-items:center;font-weight:1000;font-size:23px}.brand{display:flex;gap:14px;align-items:center}.brand h1{margin:0;font-size:23px}.brand p{margin:4px 0 0;color:var(--m);font-size:13px}.tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#edf2f6;padding:4px;border-radius:11px;margin:20px 0 15px}.tab{border:0;background:transparent;padding:9px;border-radius:8px;font-weight:800;color:#58697d}.tab.on{background:#fff;color:var(--n);box-shadow:0 2px 8px #0001}.form{display:grid;gap:12px}.form label{display:grid;gap:6px;font-size:13px;font-weight:800;color:#38495d}.form input{border:1px solid #cbd6e2;border-radius:10px;padding:12px;outline:0}.form input:focus{border-color:var(--c);box-shadow:0 0 0 3px #2da7d822}.btn{border:0;border-radius:10px;padding:11px 14px;font-weight:900;cursor:pointer}.primary{background:linear-gradient(#1176aa,#0c5d8a);color:#fff}.ghost{background:#ffffff18;color:#fff;border:1px solid #ffffff2c}.shell{min-height:100vh}.top{height:64px;background:linear-gradient(90deg,#0d1c3b,#132a50);color:#fff;padding:0 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0}.top strong{display:block}.top small{color:#a9c6d9}.role{font-size:11px;font-weight:900;padding:5px 8px;border-radius:999px;background:#2da7d833;border:1px solid #2da7d855}.actions{display:flex;gap:9px;align-items:center}.nav{display:flex;gap:6px;overflow:auto;background:#fff;padding:8px 12px;border-bottom:1px solid var(--l)}.nav button{white-space:nowrap;border:0;background:transparent;padding:9px 12px;border-radius:9px;font-weight:900;color:#56677b}.nav button.on{background:var(--b);color:#fff}.main{width:min(1350px,calc(100% - 22px));margin:18px auto 40px}.head{display:flex;justify-content:space-between;align-items:end;gap:12px}.head h2{margin:0}.head p{margin:4px 0 0;color:var(--m)}.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:16px 0}.stat,.unit,.scale{background:#fff;border:1px solid var(--l);border-radius:13px;box-shadow:0 4px 14px #0d1c3b0d}.stat{padding:14px}.stat span{font-size:11px;color:var(--m);font-weight:900;text-transform:uppercase}.stat b{display:block;font-size:24px;margin-top:5px;color:var(--n)}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}.unit{overflow:hidden}.uh{background:var(--n);color:#fff;padding:11px 12px;display:flex;justify-content:space-between;gap:8px}.ub{padding:12px}.member{display:flex;justify-content:space-between;gap:8px;padding:7px 8px;border-radius:8px;background:#f6f8fa;margin-top:6px}.member small{color:var(--m);font-weight:800}.member b{font-size:13px}.screen{display:none}.screen.on{display:block}.tools{display:grid;grid-template-columns:1fr 1fr auto;gap:10px;background:#fff;border:1px solid var(--l);border-radius:13px;padding:12px;margin:15px 0}.tools label{display:grid;gap:5px;font-size:12px;font-weight:800}.tools select{padding:10px;border:1px solid #cbd6e2;border-radius:9px}.scale{padding:12px;border-left:5px solid var(--b)}.scale .v{font-size:12px;font-weight:1000;color:var(--b)}.scale .w{font-size:18px;font-weight:1000;margin-top:5px;color:var(--n)}.scale .f{font-size:12px;color:var(--m)}.msg{font-size:13px;margin-top:10px;color:var(--m)}@media(max-width:700px){.stats{grid-template-columns:1fr 1fr}.tools{grid-template-columns:1fr}.head{display:block}.role{display:none}}
-</style></head><body>
-<section id="auth" class="login"><div class="card"><div class="brand"><div class="logo">S</div><div><h1>SAMU Operacional</h1><p>Nova versão conectada ao Supabase</p></div></div><div class="tabs"><button class="tab on" data-a="in">Entrar</button><button class="tab" data-a="up">Criar acesso</button></div>
-<form id="in" class="form"><label>E-mail<input id="ie" type="email" required></label><label>Senha<input id="ip" type="password" required></label><button class="btn primary">Entrar</button></form>
-<form id="up" class="form hidden"><label>Nome<input id="un" required></label><label>E-mail<input id="ue" type="email" required></label><label>Senha<input id="upw" type="password" minlength="8" required></label><button class="btn primary">Criar conta</button><div class="msg">A conta inicia como Consulta. Depois ela pode ser promovida para Administrador ou Rádio-operador.</div></form><div id="am" class="msg"></div></div></section>
-<section id="app" class="shell hidden"><header class="top"><div><strong>SAMU Operacional</strong><small id="sync">Banco novo conectado</small></div><div class="actions"><span id="rb" class="role">CONSULTA</span><button id="out" class="btn ghost">Sair</button></div></header><nav class="nav"><button class="on" data-v="dash">Painel</button><button data-v="esc">Equipe / Escala</button></nav><main class="main">
-<section id="dash" class="screen on"><div class="head"><div><h2>Painel Operacional</h2><p id="sub">Carregando plantão...</p></div><button id="ref" class="btn primary">Atualizar</button></div><div class="stats"><div class="stat"><span>Viaturas</span><b id="sv">—</b></div><div class="stat"><span>Equipe ativa</span><b id="se">—</b></div><div class="stat"><span>Ocorrências</span><b id="so">—</b></div><div class="stat"><span>Plantão</span><b id="sp">—</b></div></div><div id="vg" class="grid"></div></section>
-<section id="esc" class="screen"><div class="head"><div><h2>Escala Expressa — Anápolis</h2><p>Escala fixa já migrada para o novo banco.</p></div></div><div class="tools"><label>Ala<select id="ala"><option>ALFA</option><option>BRAVO</option><option>CHARLIE</option><option>DELTA</option></select></label><label>Turno<select id="tur"><option>DIURNO</option><option>NOTURNO</option></select></label><button id="car" class="btn primary">Carregar</button></div><div id="sum" class="msg"></div><div id="eg" class="grid"></div></section>
-</main></section>
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Central Operacional SAMU</title>
+<style>
+:root{
+  --navy:#06324a;--blue:#075985;--blue2:#0b6b9d;--red:#b91c1c;--green:#16a34a;
+  --yellow:#eab308;--purple:#7c3aed;--canvas:#eaf0f4;--panel:#fff;--line:#cbd9e3;
+  --text:#102f40;--muted:#667e8b;--orange:#f97316;
+}
+*{box-sizing:border-box}
+body{margin:0;background:#eaf0f4;color:var(--text);font-family:Arial,Helvetica,sans-serif}
+button,input,select,textarea{font:inherit}
+.hidden{display:none!important}
+.app{max-width:1720px;margin:auto;padding:12px 16px 14px}
+.top{background:linear-gradient(135deg,#073955,#075985);border-top:4px solid #c81e1e;border-radius:13px;
+  box-shadow:0 5px 18px #17354718;padding:12px 15px;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}
+.top h1{margin:0;font-size:27px}.top .mut{color:#d7eaf3}.small{font-size:11px}
+.row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.btn,.tab{border:1px solid #b9ccd8;background:#fff;color:#17394d;border-radius:9px;padding:10px 13px;font-weight:900;cursor:pointer}
+.btn:hover,.tab:hover{filter:brightness(.98)}.btn.primary,.tab.active{background:var(--blue);border-color:#0ea5e9;color:#fff}
+.btn.danger{background:var(--red);border-color:#ef4444;color:#fff}.btn:disabled{opacity:.55;cursor:not-allowed}
+.role-badge{padding:6px 9px;border-radius:999px;background:#0ea5e933;border:1px solid #7dd3fc;color:#fff;font-size:10px;font-weight:1000}
+.tabs{display:flex;gap:5px;flex-wrap:wrap;margin:9px 0 10px;padding:5px;background:#dce7ed;border:1px solid #c6d4dc;border-radius:11px}
+.tab{background:transparent;border-color:transparent;color:#29495a}.page{display:none}.page.active{display:block}
+.notice{background:#e7f7ed;border:1px solid #7bc795;color:#166534;border-radius:9px;padding:8px;font-size:10px;margin-bottom:10px}
+.ops-command{display:flex;align-items:center;justify-content:space-between;gap:15px;background:#fff;border:1px solid var(--line);border-left:5px solid var(--red);
+  border-radius:13px;padding:11px 13px;margin-bottom:9px;box-shadow:0 3px 12px #1534480b}
+.ops-command h2{margin:1px 0 2px;color:#073955;font-size:20px}.kicker{font-size:9px;font-weight:1000;letter-spacing:.11em;color:var(--red)}
+.ops-command-actions{display:flex;gap:7px;flex-wrap:wrap;justify-content:flex-end}
+.summary{display:grid;grid-template-columns:repeat(5,minmax(135px,1fr));gap:7px;margin:0 0 10px}
+.sum{min-height:65px;border-radius:11px;padding:8px 10px;border:1px solid var(--line);border-top:4px solid #64748b;background:#fff}
+.sum:nth-child(1){border-top-color:#16a34a}.sum:nth-child(2){border-top-color:#dc2626}.sum:nth-child(3){border-top-color:#eab308}.sum:nth-child(4){border-top-color:#7c3aed}.sum:nth-child(5){border-top-color:#0ea5e9}
+.sum b{display:block;font-size:21px;margin-top:3px}.sum span{font-size:9px;color:var(--muted);font-weight:1000;text-transform:uppercase}
+.ops-main-grid{display:grid;grid-template-columns:minmax(0,1.95fr) minmax(340px,.75fr);gap:10px;align-items:start}
+.section{border:1px solid var(--line);background:#fff;border-radius:13px;box-shadow:0 3px 13px #14364b0b;padding:11px;margin-bottom:10px}
+.section.fleet{border-top:5px solid var(--blue)}.section.rotation{border-top:5px solid var(--red)}.section.regional{border-top:5px solid #0e7490}.section.history{border-top:5px solid var(--red)}
+.head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}.head h2{margin:0;color:#073955;font-size:18px}.head .mut{color:var(--muted)}
+.vehicle-row{display:grid;grid-template-columns:repeat(3,minmax(260px,1fr));gap:8px;margin-top:10px}
+.vehicle-row.usb-row{margin-top:22px;padding-top:14px;border-top:3px solid #b9d4e1;position:relative}
+.vehicle-row.usa-row:before,.vehicle-row.usb-row:before,.vehicle-row.moto-row:before{grid-column:1/-1;font-size:10px;font-weight:1000;letter-spacing:.08em;margin:2px 0 -2px 2px}
+.vehicle-row.usa-row:before{content:"USA — SUPORTE AVANÇADO";color:#b91c1c}.vehicle-row.usb-row:before{content:"USB — SUPORTE BÁSICO";color:#075985}
+.vehicle-row.moto-row:before{content:"MOTOLÂNCIA";color:#075985}
+.card{border:2px solid #4ade80;border-radius:12px;padding:9px;background:#101827;transition:.18s ease;box-shadow:0 4px 13px #12314318;color:#fff}
+.card.status-base{background:linear-gradient(135deg,#14532d,#0f3d24);border-color:#4ade80}
+.card.status-occurrence{background:linear-gradient(135deg,#4c1518,#2b1115);border-color:#ef4444}
+.card.status-returning{background:linear-gradient(135deg,#facc15,#a16207);border-color:#fde047;color:#2b1605}
+.card.status-asepsis{background:linear-gradient(135deg,#173a78,#10254d);border-color:#3b82f6}
+.card.status-mechanical{background:linear-gradient(135deg,#111827,#05080d);border-color:#64748b}
+.card.status-noCrew{background:linear-gradient(135deg,#4c1d75,#24103d);border-color:#a855f7}
+.card.status-noStretcher{background:linear-gradient(135deg,#6b183f,#351020);border-color:#ec4899}
+.card .vtitle{display:flex;justify-content:space-between;align-items:center;gap:8px}.vname{font-size:20px;font-weight:1000}
+.badge{border-radius:999px;padding:5px 8px;background:#22c55e;color:#052e16;font-size:9px;font-weight:1000}
+.status-occurrence .badge{background:#dc2626;color:#fff}.status-returning .badge{background:#fde047;color:#422006}.status-asepsis .badge{background:#2563eb;color:#fff}
+.status-mechanical .badge{background:#111827;border:1px solid #64748b;color:#fff}.status-noCrew .badge{background:#7e22ce;color:#fff}.status-noStretcher .badge{background:#be185d;color:#fff}
+.crew{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin:8px 0}.crew.two{grid-template-columns:1fr 1fr}.crew.one{grid-template-columns:1fr}
+.box{background:#07101da8;border:1px solid #ffffff22;border-radius:8px;padding:7px}.status-base .box{background:#082819cc;border-color:#4ade8055}
+.status-returning .box{background:#5c3b08cc;border-color:#fde04766;color:#fff}
+.role{font-size:8px;color:#d8e6ef;font-weight:1000;text-transform:uppercase}.name{font-weight:900;font-size:14px;line-height:1.08;word-break:break-word}
+.occ-detail{margin-top:5px;font-size:11px;font-weight:900;color:#fff}.occ-address{margin-top:3px;font-size:10px;color:#e2e8f0}
+.occ-timeline{display:grid;grid-template-columns:repeat(3,1fr);gap:5px;margin-top:7px}.time-chip{background:#07101db5;border:1px solid #ffffff24;border-radius:7px;padding:5px;font-size:8px;color:#fff}.time-chip b{display:block;font-size:10px;margin-top:2px}
+.main-actions{display:grid;gap:5px;margin-top:7px}.qth-btn{width:100%;min-height:42px;border:2px solid #ea580c;border-radius:9px;background:linear-gradient(180deg,#fb923c,#f97316 55%,#ea580c);color:#111;font-size:11px;font-weight:1000;cursor:pointer}
+.action-row{display:grid;grid-template-columns:minmax(68px,.70fr) minmax(96px,1fr) minmax(150px,1.75fr);gap:8px}
+.action-row button{min-height:42px;border-radius:8px;font-size:10px;font-weight:1000;cursor:pointer}.qta-btn{background:linear-gradient(180deg,#c4b5fd,#a78bfa 55%,#8b5cf6);border:2px solid #7c3aed;color:#111}
+.edit-btn{background:linear-gradient(180deg,#d8d4fe,#c4b5fd 55%,#a78bfa);border:2px solid #8b5cf6;color:#082f49}
+.return-btn{background:#dc2626;border:1px solid #f87171;color:#fff;animation:pulseReturn 1.85s ease-in-out infinite}
+.arrive-btn{width:100%;min-height:42px;border:1px solid #fde047;border-radius:8px;background:#facc15;color:#422006;font-weight:1000;cursor:pointer}
+.dispatch-btn{width:100%;min-height:42px;border:1px solid #86efac;border-radius:8px;background:#22c55e;color:#052e16;font-weight:1000;cursor:pointer}
+@keyframes pulseReturn{0%,100%{box-shadow:0 4px 9px #dc262633}50%{box-shadow:0 8px 16px #dc262666}}
+.status-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-top:6px}.status-grid button{border:1px solid #ffffff35;color:#fff;border-radius:7px;padding:6px 3px;font-size:8px;font-weight:900;background:#1a2538;cursor:pointer}
+.rotation-list{display:grid;gap:6px;margin-top:8px}.rotation-card{border:1px solid #d7e2e8;border-left:4px solid var(--blue);border-radius:10px;padding:8px;background:#f8fbfd}
+.rotation-title{font-weight:1000;color:#29495a}.rotation-line{display:flex;justify-content:space-between;gap:7px;font-size:10px;border-top:1px solid #e3ebef;padding:6px 0}.rotation-line:first-child{border-top:0}
+.regional-overview{display:grid;grid-template-columns:repeat(4,minmax(120px,1fr));gap:7px;margin:9px 0}.regional-overview .sum{min-height:58px}
+.regional-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(350px,1fr));gap:14px}.regional-card{padding:14px;border-radius:16px;border:1px solid #cfe0e8;box-shadow:0 8px 22px #11354a12;background:#fff}
+.regional-card h3{margin:0;color:#0f3550;font-size:20px}.regional-sub{font-size:11px;color:#627786;margin:4px 0 8px}
+.regional-vehicle{border:1px solid #d9e5eb;border-left:5px solid #16a34a;border-radius:12px;padding:10px;margin-top:8px;background:#fbfdff}.regional-vehicle.occ{border-left-color:#dc2626;background:#fff7f7}.regional-vehicle.ret{border-left-color:#f59e0b;background:#fffbeb}.regional-vehicle.down{border-left-color:#7c3aed;background:#faf5ff}
+.rvtop{display:flex;justify-content:space-between;gap:8px}.rvname{font-size:14px;font-weight:1000}.rvcrew{font-size:10px;color:#425b6b;margin-top:5px}
+.details{margin-top:10px;border:1px solid var(--line);border-radius:12px;background:#fff;overflow:hidden}.details summary{cursor:pointer;display:flex;justify-content:space-between;gap:8px;padding:11px 13px;font-weight:1000;color:#073955}.details[open] summary{border-bottom:1px solid #dce6eb}.details-body{padding:10px}
+.destination-stack{display:grid;gap:12px}.destination-card{border:1px solid #d2dee6;border-top:3px solid var(--blue);border-radius:10px;background:#fff;padding:10px;text-align:center}.destination-board{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
+.destination-card .occ-number{font-size:18px;font-weight:1000}.destination-card .occ-place{font-size:11px;margin-top:4px}.destination-card .occ-vehicle{font-size:9px;color:#718591;margin-top:4px}
+.express{margin:12px 0 14px;border:1px solid #86b7cc;border-top:5px solid #075985;border-radius:15px;background:#fff;overflow:hidden}.express-head{padding:13px 14px;background:linear-gradient(135deg,#eaf6fc,#f8fcfe);display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.express-kicker{font-size:9px;font-weight:1000;letter-spacing:.1em;color:#075985}.express-title{font-size:23px;font-weight:1000;color:#073955}.express-sub{font-size:11px;color:#597180;max-width:850px;margin-top:4px}.express-tools{display:grid;grid-template-columns:1fr 1fr auto;gap:8px;padding:12px;border-top:1px solid #d5e3ea;border-bottom:1px solid #d5e3ea}.express-tools label{font-size:10px;font-weight:1000;color:#456274}.express-tools select{width:100%;padding:9px;border:1px solid #b9ccd8;border-radius:8px;background:#fff;color:#163244}.express-grid{display:grid;grid-template-columns:repeat(3,minmax(250px,1fr));gap:8px;padding:12px}.scale-card{border:1px solid #cbdde7;border-top:4px solid #075985;border-radius:10px;padding:9px;background:#fff}.scale-card .veh{font-size:10px;font-weight:1000;color:#075985}.scale-card .war{font-size:17px;font-weight:1000;color:#0b2f45;margin-top:3px}.scale-card .full{font-size:9px;color:#597180;margin-top:2px}
+.team-preview{margin:10px 0 12px;padding:12px;border:1px solid #b9d7e6;border-radius:14px;background:#f7fbfd}.role-group{border:1px solid #cbdde7;border-top:4px solid #075985;border-radius:12px;background:#fff;margin-top:8px;overflow:hidden}.role-head{display:flex;justify-content:space-between;align-items:center;padding:9px 11px;background:#e0f2fe}.role-title{font-size:12px;font-weight:1000;color:#075985}.role-list{display:grid;grid-template-columns:repeat(2,minmax(280px,1fr));gap:8px;padding:9px}.team-card{border:1px solid #d1e0e8;border-radius:9px;padding:9px;background:#fff}.team-card b{color:#0b2f45}.team-meta{font-size:9px;color:#597180;margin-top:3px}
+.table-wrap{overflow:auto;border:1px solid #cbd9e2;border-radius:9px;background:#fff}.table-wrap table{width:100%;border-collapse:collapse;font-size:10px}.table-wrap th,.table-wrap td{padding:7px;border-bottom:1px solid #dde7ec;text-align:left;white-space:nowrap}.table-wrap th{background:#eaf4f9;color:#0b4869;position:sticky;top:0}
+.footer{margin:14px 0 4px;background:linear-gradient(135deg,#052f47,#075985);color:#fff;border-radius:13px;padding:9px 13px;border-bottom:4px solid var(--red);text-align:center}.footer b{font-size:10px;letter-spacing:.05em}.footer span{display:block;font-size:9px;color:#d8edf6;margin-top:2px}
+.modal{position:fixed;inset:0;background:#06131dbd;display:none;align-items:center;justify-content:center;padding:12px;z-index:99}.modal.show{display:flex}.dialog{width:min(720px,100%);max-height:92vh;overflow:auto;background:#f9fcfe;color:#153247;border:1px solid #a9c3d1;border-radius:14px;padding:14px;box-shadow:0 24px 60px #0006}.dialog h2{margin:0;color:#06324a}.form-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}.form-grid label{font-size:10px;font-weight:900;color:#466171}.form-grid input,.form-grid select,.form-grid textarea{width:100%;margin-top:4px;background:#fff;color:#163244;border:1px solid #b9ccd8;border-radius:8px;padding:9px}.form-grid .full{grid-column:1/-1}.modal-actions{display:flex;justify-content:flex-end;gap:7px;margin-top:10px}
+.auth{min-height:100vh;display:grid;place-items:center;padding:22px;background:linear-gradient(145deg,#0d1c3b,#174d78)}.auth-card{width:min(440px,100%);background:#fff;border-radius:20px;padding:26px;box-shadow:0 24px 55px #0004}.auth-brand{display:flex;gap:14px;align-items:center}.auth-logo{width:54px;height:54px;border-radius:15px;background:linear-gradient(145deg,#e53935,#b71c1c);color:#fff;display:grid;place-items:center;font-weight:1000;font-size:23px}.auth-tabs{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#edf2f6;padding:4px;border-radius:11px;margin:20px 0 15px}.auth-tab{border:0;background:transparent;padding:9px;border-radius:8px;font-weight:900;color:#58697d}.auth-tab.on{background:#fff;color:#06324a;box-shadow:0 2px 8px #0001}.auth-form{display:grid;gap:12px}.auth-form label{display:grid;gap:6px;font-size:13px;font-weight:900}.auth-form input{border:1px solid #cbd6e2;border-radius:10px;padding:12px}.auth-msg{font-size:12px;color:#66758a;margin-top:10px}
+@media(max-width:1180px){.ops-main-grid{grid-template-columns:1fr}.summary{grid-template-columns:repeat(3,1fr)}.express-grid{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:780px){.ops-command{align-items:flex-start;flex-direction:column}.ops-command-actions{justify-content:flex-start}.summary{grid-template-columns:repeat(2,1fr)}.vehicle-row{grid-template-columns:1fr}.regional-overview{grid-template-columns:repeat(2,1fr)}.regional-grid{grid-template-columns:1fr}.express-tools{grid-template-columns:1fr}.express-grid,.role-list{grid-template-columns:1fr}.top h1{font-size:22px}.form-grid{grid-template-columns:1fr}.form-grid .full{grid-column:auto}}
+</style>
+</head>
+<body>
+<section id="auth" class="auth">
+  <div class="auth-card">
+    <div class="auth-brand"><div class="auth-logo">S</div><div><h1 style="margin:0;font-size:23px">SAMU Operacional</h1><div class="auth-msg" style="margin-top:4px">Central Operacional conectada ao Supabase</div></div></div>
+    <div class="auth-tabs"><button class="auth-tab on" data-auth="login">Entrar</button><button class="auth-tab" data-auth="signup">Criar acesso</button></div>
+    <form id="loginForm" class="auth-form"><label>E-mail<input id="loginEmail" type="email" required></label><label>Senha<input id="loginPass" type="password" required></label><button class="btn primary">Entrar</button></form>
+    <form id="signupForm" class="auth-form hidden"><label>Nome<input id="signupName" required></label><label>E-mail<input id="signupEmail" type="email" required></label><label>Senha<input id="signupPass" type="password" minlength="8" required></label><button class="btn primary">Criar conta</button></form>
+    <div id="authMsg" class="auth-msg"></div>
+  </div>
+</section>
+
+<div id="app" class="app hidden">
+  <header class="top">
+    <div><h1>Central Operacional SAMU <span style="font-size:12px;background:#16a34a;padding:5px 8px;border-radius:999px;vertical-align:middle">NOVO BANCO</span></h1><div class="mut small">Central de regulação operacional • Anápolis • escala • viaturas • ocorrências</div></div>
+    <div class="row">
+      <label class="small" style="color:#fff">Data do plantão <input id="shiftDate" type="date" style="width:auto;padding:7px;border-radius:7px;border:1px solid #b9ccd8"></label>
+      <span id="roleBadge" class="role-badge">CONSULTA</span>
+      <button id="exportBtn" class="btn">Exportar CSV</button>
+      <button id="endShiftBtn" class="btn danger">ENCERRAR PLANTÃO</button>
+      <button id="logoutBtn" class="btn">Sair</button>
+    </div>
+  </header>
+  <div id="syncStatus" class="notice">Conectando ao banco de dados...</div>
+  <nav class="tabs">
+    <button class="tab active" data-page="base">Painel Operacional</button>
+    <button class="tab" data-page="team">Equipe / Escala</button>
+    <button class="tab" data-page="history">Histórico</button>
+  </nav>
+
+  <section id="base" class="page active">
+    <div class="ops-command">
+      <div><div class="kicker">CENTRAL DE COMANDO</div><h2>Painel do rádio-operador</h2><div class="small" style="color:#667e8b">Tudo que o rádio-operador precisa para decidir, escalar e acionar sem procurar informações em várias áreas.</div></div>
+      <div class="ops-command-actions">
+        <button class="btn primary" onclick="openPage('team')">MONTAR / ALTERAR EQUIPE</button>
+        <button class="btn" id="manualOccBtn">LANÇAR OCORRÊNCIA MANUAL</button>
+        <button class="btn" onclick="openPage('history')">HISTÓRICO</button>
+        <button class="btn" id="regionalBtn">IR PARA BASES REGIONAIS</button>
+      </div>
+    </div>
+    <div id="summary" class="summary"></div>
+    <div class="ops-main-grid">
+      <div>
+        <section class="section fleet">
+          <div class="head"><div><div class="kicker" style="color:#075985">FROTA PRINCIPAL</div><h2>Base Anápolis</h2><div id="plantaoInfo" class="small mut">Carregando plantão...</div></div><button class="btn primary" id="refreshBtn">ATUALIZAR</button></div>
+          <div id="anapolisFleet"></div>
+        </section>
+      </div>
+      <aside>
+        <section class="section rotation">
+          <div class="head"><div><div class="kicker">REVEZAMENTO</div><h2>Quem é o da vez</h2></div></div>
+          <div id="rotationList" class="rotation-list"></div>
+        </section>
+      </aside>
+    </div>
+
+    <section id="regionalSection" class="section regional">
+      <div class="head"><div><div class="kicker" style="color:#0e7490">BASES DESCENTRALIZADAS</div><h2>Acionamento rápido das bases regionais</h2></div></div>
+      <div id="regionalOverview" class="regional-overview"></div>
+      <div id="regionalGrid" class="regional-grid"></div>
+    </section>
+
+    <details class="details">
+      <summary>Ocorrências / destinos <span class="small" style="color:#075985">ABRIR</span></summary>
+      <div class="details-body">
+        <div class="destination-stack">
+          <div><h3 style="color:#991b1b;margin:0 0 7px">Ocorrências de Anápolis</h3><div id="destAnapolis" class="destination-board"></div></div>
+          <div><h3 style="color:#991b1b;margin:0 0 7px">Ocorrências das bases descentralizadas</h3><div id="destRegional" class="destination-board"></div></div>
+        </div>
+      </div>
+    </details>
+  </section>
+
+  <section id="team" class="page">
+    <section class="section fleet">
+      <div class="head"><div><h2>Equipe de serviço do dia</h2><div class="small mut">Selecione a Ala e o turno para conferir a escala fixa migrada. A edição completa será ligada ao novo banco nesta etapa.</div></div><button class="btn primary" id="teamReloadBtn">ATUALIZAR EQUIPE</button></div>
+      <div class="express">
+        <div class="express-head"><div><div class="express-kicker">ESCALA DE PLANTÃO • ANÁPOLIS</div><div class="express-title">Escala Expressa</div><div class="express-sub">Carregue a Ala e o turno, confira os fixos e use esta tela como referência da mesma Escala Expressa do sistema anterior.</div></div><div class="role-badge" style="background:#075985;color:#fff">CONDUTOR • TÉCNICO • ENFERMEIRO</div></div>
+        <div class="express-tools"><label>Ala<select id="ala"><option>ALFA</option><option>BRAVO</option><option>CHARLIE</option><option>DELTA</option></select></label><label>Turno<select id="turno"><option>DIURNO</option><option>NOTURNO</option></select></label><button class="btn primary" id="loadScaleBtn">CARREGAR</button></div>
+        <div id="scaleGrid" class="express-grid"></div>
+      </div>
+      <div class="team-preview"><div class="head"><div><h2>Equipe confirmada do plantão</h2><div class="small mut">Organizada por função, como na versão do Google Apps Script.</div></div></div><div id="teamPreview"></div></div>
+    </section>
+  </section>
+
+  <section id="history" class="page">
+    <section class="section history"><div class="head"><div><h2>Histórico do plantão</h2><div class="small mut">Ocorrências registradas no novo banco.</div></div></div>
+      <div class="table-wrap" style="margin-top:8px"><table><thead><tr><th>Oc.</th><th>Viatura</th><th>Natureza</th><th>Bairro</th><th>Destino</th><th>Endereço</th><th>Saída</th><th>QTH</th><th>Início retorno</th><th>Chegada base</th><th>Status</th></tr></thead><tbody id="historyTable"></tbody></table></div>
+    </section>
+  </section>
+
+  <footer class="footer"><b>Sistema criado por LEONARDO DE JESUS SARTIN</b><span>Central Operacional SAMU • nova arquitetura Supabase + GitHub Pages</span></footer>
+</div>
+
+<div id="occModal" class="modal"><div class="dialog"><h2 id="occModalTitle">Acionar viatura</h2><div class="form-grid">
+  <label>Nº ocorrência<input id="occNumber"></label><label>Natureza<input id="occNature"></label><label>Bairro<input id="occBairro"></label><label>Destino<input id="occDestino"></label>
+  <label class="full">Endereço<input id="occEndereco"></label><label class="full">Observação<textarea id="occObs"></textarea></label>
+</div><div class="modal-actions"><button class="btn" id="cancelOcc">Cancelar</button><button class="btn primary" id="saveOcc">ACIONAR</button></div></div></div>
+
 <script type="module">
 import{createClient}from'https://esm.sh/@supabase/supabase-js@2';
-const s=createClient('https://bcdxgfcmhedlaswiylud.supabase.co','sb_publishable_3rOX2Q23kZm_SyCh9k-VKA_9OxDg_AR'),$=x=>document.querySelector(x),$$=x=>[...document.querySelectorAll(x)];
-const esc=x=>String(x??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));const dn=p=>(p?.nome_de_guerra||p?.nome_completo?.split(/\s+/)[0]||'—').toUpperCase();const fd=x=>x?new Date(x+'T12:00:00').toLocaleDateString('pt-BR'):'—';
-$$('.tab').forEach(b=>b.onclick=()=>{$$('.tab').forEach(x=>x.classList.remove('on'));b.classList.add('on');$('#in').classList.toggle('hidden',b.dataset.a!=='in');$('#up').classList.toggle('hidden',b.dataset.a==='in')});
-$('#in').onsubmit=async e=>{e.preventDefault();const{error}=await s.auth.signInWithPassword({email:$('#ie').value.trim(),password:$('#ip').value});$('#am').textContent=error?error.message:''};
-$('#up').onsubmit=async e=>{e.preventDefault();const{data,error}=await s.auth.signUp({email:$('#ue').value.trim(),password:$('#upw').value,options:{data:{nome:$('#un').value.trim()},emailRedirectTo:'https://leonardosartin018-code.github.io/samu-operacional/'}});$('#am').textContent=error?error.message:(data.session?'Conta criada.':'Conta criada. Confira seu e-mail para confirmar.')};
-$('#out').onclick=()=>s.auth.signOut();$$('.nav button').forEach(b=>b.onclick=()=>{$$('.nav button').forEach(x=>x.classList.remove('on'));b.classList.add('on');$$('.screen').forEach(x=>x.classList.remove('on'));$('#'+b.dataset.v).classList.add('on')});$('#ref').onclick=load;$('#car').onclick=scale;$('#ala').onchange=scale;$('#tur').onchange=scale;
-async function apply(sess){if(!sess){$('#auth').classList.remove('hidden');$('#app').classList.add('hidden');return}const{data:p}=await s.from('usuarios_perfis').select('*').eq('user_id',sess.user.id).maybeSingle();$('#rb').textContent=p?.papel||'CONSULTA';$('#auth').classList.add('hidden');$('#app').classList.remove('hidden');await Promise.all([load(),scale()]);live()}
-async function load(){const[{data:ps,error:pe},{data:v,error:ve}]=await Promise.all([s.from('plantoes').select('*').eq('status','ABERTO').order('data_plantao',{ascending:false}).order('iniciado_em',{ascending:false}).limit(1),s.from('viaturas').select('*,bases(nome)').eq('ativo',true).order('ordem_exibicao')]);if(pe||ve)return $('#sub').textContent=(pe||ve).message;const p=ps?.[0];let team=[],occ=[];if(p){const[t,o]=await Promise.all([s.from('equipe_plantao').select('*,profissionais(nome_completo,nome_de_guerra),viaturas(nome)').eq('plantao_id',p.id).eq('status','ATIVO'),s.from('ocorrencias').select('*').eq('plantao_id',p.id)]);team=t.data||[];occ=(o.data||[]).filter(x=>!['FINALIZADA','QTA'].includes(x.status))}$('#sv').textContent=v.length;$('#se').textContent=team.length;$('#so').textContent=occ.length;$('#sp').textContent=p?fd(p.data_plantao):'—';$('#sub').textContent=p?'Último plantão aberto: '+p.legacy_id+' • '+fd(p.data_plantao):'Nenhum plantão aberto.';$('#vg').innerHTML=v.map(x=>{const c=team.filter(m=>m.viatura_id===x.id||(!m.viatura_id&&m.viatura_snapshot===x.nome));return '<article class="unit"><div class="uh"><b>'+esc(x.nome||x.codigo)+'</b><small>'+esc(x.status_atual||'BASE')+'</small></div><div class="ub"><small>'+esc(x.bases?.nome||'Sem base')+'</small>'+(c.length?c.map(m=>'<div class="member"><small>'+esc(m.funcao)+'</small><b>'+esc(dn(m.profissionais))+'</b></div>').join(''):'<div class="msg">Sem equipe ativa</div>')+'</div></article>'}).join('')}
-async function scale(){const a=$('#ala').value,t=$('#tur').value,{data,error}=await s.from('escala_fixa_anapolis').select('*,profissionais(nome_completo,nome_de_guerra)').eq('ala',a).eq('turno',t).eq('ativo',true).order('ordem');if(error)return $('#sum').textContent=error.message;$('#sum').textContent='ALA '+a+' • '+t+' — '+data.length+' condutor(es)';$('#eg').innerHTML=data.map(r=>'<article class="scale"><div class="v">'+esc(r.codigo_viatura)+'</div><div class="w">'+esc(dn(r.profissionais))+'</div><div class="f">'+esc(r.profissionais?.nome_completo||r.nome_referencia)+'</div></article>').join('')}
-let ch;function live(){if(ch)s.removeChannel(ch);ch=s.channel('beta').on('postgres_changes',{event:'*',schema:'public',table:'equipe_plantao'},load).on('postgres_changes',{event:'*',schema:'public',table:'viaturas'},load).on('postgres_changes',{event:'*',schema:'public',table:'ocorrencias'},load).subscribe(x=>{if(x==='SUBSCRIBED')$('#sync').textContent='Tempo real ativo'})}
-s.auth.onAuthStateChange((_,x)=>apply(x));const{data:{session}}=await s.auth.getSession();await apply(session);
-</script></body></html>
+const supabase=createClient('https://bcdxgfcmhedlaswiylud.supabase.co','sb_publishable_3rOX2Q23kZm_SyCh9k-VKA_9OxDg_AR');
+const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)];
+let session=null,profile=null,currentPlantao=null,vehicles=[],team=[],occurrences=[],rotation=[],selectedVehicle=null,channel=null;
+
+const esc=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const fmtDate=v=>v?new Date(v+'T12:00:00').toLocaleDateString('pt-BR'):'—';
+const fmtTime=v=>v?new Date(v).toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'}):'—';
+const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+const displayName=p=>{if(!p)return'—';const f=norm(p.funcao_sistema);if(f.includes('CONDUTOR'))return (p.nome_de_guerra||p.nome_completo?.trim().split(/\s+/)[0]||'—').toUpperCase();return (p.nome_completo||'—').toUpperCase()};
+const isAdmin=()=>['ADMIN','RADIO_OPERADOR'].includes(profile?.papel);
+function statusInfo(v){
+  const s=norm(v?.status_atual||'BASE');
+  if(s.includes('OCOR'))return{cls:'status-occurrence',label:'OCORRÊNCIA',key:'occurrence'};
+  if(s.includes('RETORN'))return{cls:'status-returning',label:'RETORNANDO',key:'returning'};
+  if(s.includes('ASSEP'))return{cls:'status-asepsis',label:'ASSEPSIA',key:'down'};
+  if(s.includes('PANE')||s.includes('MECAN'))return{cls:'status-mechanical',label:'PANE',key:'down'};
+  if(s.includes('EQUIPE'))return{cls:'status-noCrew',label:'SEM EQUIPE',key:'down'};
+  if(s.includes('MACA'))return{cls:'status-noStretcher',label:'SEM MACA',key:'down'};
+  return{cls:'status-base',label:'QRV / BASE',key:'base'};
+}
+function openPage(id){$$('.page').forEach(x=>x.classList.remove('active'));$$('.tab').forEach(x=>x.classList.remove('active'));$('#'+id).classList.add('active');document.querySelector('.tab[data-page="'+id+'"]')?.classList.add('active');if(id==='history')renderHistory();if(id==='team'){loadScale();renderTeamPreview()}}
+window.openPage=openPage;
+
+$$('.auth-tab').forEach(b=>b.onclick=()=>{$$('.auth-tab').forEach(x=>x.classList.remove('on'));b.classList.add('on');$('#loginForm').classList.toggle('hidden',b.dataset.auth!=='login');$('#signupForm').classList.toggle('hidden',b.dataset.auth!=='signup')});
+$('#loginForm').onsubmit=async e=>{e.preventDefault();const{error}=await supabase.auth.signInWithPassword({email:$('#loginEmail').value.trim(),password:$('#loginPass').value});$('#authMsg').textContent=error?error.message:''};
+$('#signupForm').onsubmit=async e=>{e.preventDefault();const{data,error}=await supabase.auth.signUp({email:$('#signupEmail').value.trim(),password:$('#signupPass').value,options:{data:{nome:$('#signupName').value.trim()},emailRedirectTo:'https://leonardosartin018-code.github.io/samu-operacional/'}});$('#authMsg').textContent=error?error.message:(data.session?'Conta criada.':'Conta criada. Confira seu e-mail para confirmar.')};
+$('#logoutBtn').onclick=()=>supabase.auth.signOut();
+$$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page));
+$('#refreshBtn').onclick=()=>loadAll();
+$('#teamReloadBtn').onclick=()=>loadAll();
+$('#loadScaleBtn').onclick=loadScale;$('#ala').onchange=loadScale;$('#turno').onchange=loadScale;
+$('#regionalBtn').onclick=()=>$('#regionalSection').scrollIntoView({behavior:'smooth'});
+$('#manualOccBtn').onclick=()=>openOccModal(null);
+$('#cancelOcc').onclick=closeOccModal;$('#saveOcc').onclick=saveOccurrence;
+$('#exportBtn').onclick=exportCSV;$('#endShiftBtn').onclick=endShift;
+$('#shiftDate').onchange=()=>loadAll($('#shiftDate').value);
+
+async function applySession(s){
+  session=s;
+  if(!s){$('#auth').classList.remove('hidden');$('#app').classList.add('hidden');return}
+  const{data:p}=await supabase.from('usuarios_perfis').select('*').eq('user_id',s.user.id).maybeSingle();profile=p;
+  $('#roleBadge').textContent=p?.papel||'CONSULTA';$('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
+  $('#endShiftBtn').disabled=!isAdmin();$('#manualOccBtn').disabled=!isAdmin();
+  await loadAll();subscribeRealtime();
+}
+async function loadAll(preferredDate){
+  $('#syncStatus').textContent='Atualizando dados do banco...';
+  const q=supabase.from('plantoes').select('*').order('data_plantao',{ascending:false}).order('iniciado_em',{ascending:false});
+  let pq=preferredDate?q.eq('data_plantao',preferredDate):q.eq('status','ABERTO');
+  let{data:ps,error:pe}=await pq.limit(1);
+  if((!ps||!ps.length)&&!preferredDate){const alt=await supabase.from('plantoes').select('*').order('data_plantao',{ascending:false}).limit(1);ps=alt.data||[]}
+  if(pe){$('#syncStatus').textContent=pe.message;return}
+  currentPlantao=ps?.[0]||null;
+  if(currentPlantao)$('#shiftDate').value=currentPlantao.data_plantao;
+  const [vr,tr,or,rr]=await Promise.all([
+    supabase.from('viaturas').select('*,bases(id,nome,tipo)').eq('ativo',true).order('ordem_exibicao'),
+    currentPlantao?supabase.from('equipe_plantao').select('*,profissionais(*)').eq('plantao_id',currentPlantao.id):Promise.resolve({data:[]}),
+    currentPlantao?supabase.from('ocorrencias').select('*').eq('plantao_id',currentPlantao.id).order('criado_em',{ascending:false}):Promise.resolve({data:[]}),
+    currentPlantao?supabase.from('revezamento_plantao').select('*,profissionais(*)').eq('plantao_id',currentPlantao.id).order('grupo_revezamento').order('ordem_inicial'):Promise.resolve({data:[]})
+  ]);
+  vehicles=vr.data||[];team=tr.data||[];occurrences=or.data||[];rotation=rr.data||[];
+  $('#plantaoInfo').textContent=currentPlantao?'Plantão '+(currentPlantao.legacy_id||'')+' • '+fmtDate(currentPlantao.data_plantao)+' • '+currentPlantao.status:'Nenhum plantão encontrado';
+  renderAll();$('#syncStatus').textContent='Banco conectado • atualização em tempo real ativa';
+}
+function renderAll(){renderSummary();renderFleet();renderRotation();renderRegional();renderDestinations();renderHistory();renderTeamPreview();loadScale()}
+function renderSummary(){
+  const stats=vehicles.map(statusInfo);const base=stats.filter(x=>x.key==='base').length,occ=stats.filter(x=>x.key==='occurrence').length,ret=stats.filter(x=>x.key==='returning').length,down=stats.filter(x=>x.key==='down').length;
+  const activeTeam=team.filter(x=>norm(x.status||'ATIVO')==='ATIVO').length;
+  $('#summary').innerHTML=[['VIATURAS QRV',base],['EM OCORRÊNCIA',occ],['RETORNANDO',ret],['INDISPONÍVEIS',down],['EQUIPE ATIVA',activeTeam]].map(x=>'<div class="sum"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('');
+}
+function vehicleMembers(v){return team.filter(m=>m.viatura_id===v.id||(!m.viatura_id&&m.viatura_snapshot===v.nome)).filter(m=>norm(m.status||'ATIVO')==='ATIVO')}
+function activeOccurrence(v){return occurrences.find(o=>o.viatura_id===v.id&&!['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status)))}
+function cardHtml(v){
+  const st=statusInfo(v),mem=vehicleMembers(v),occ=activeOccurrence(v);let crew=mem.length?mem.map(m=>'<div class="box"><div class="role">'+esc(m.funcao)+'</div><div class="name">'+esc(displayName(m.profissionais))+'</div></div>').join(''):'<div class="box"><div class="role">EQUIPE</div><div class="name">SEM EQUIPE ATIVA</div></div>';
+  let action='';
+  if(st.key==='base')action='<button class="dispatch-btn" data-act="dispatch" data-v="'+v.id+'">ACIONAR VIATURA</button>';
+  else if(st.key==='occurrence'&&occ){
+    action='<div class="main-actions"><button class="qth-btn" data-act="qth" data-o="'+occ.id+'">CHEGADA NO QTH</button><div class="action-row"><button class="qta-btn" data-act="qta" data-o="'+occ.id+'" data-v="'+v.id+'">QTA</button><button class="edit-btn" data-act="edit-team" data-v="'+v.id+'">EDITAR EQUIPE</button><button class="return-btn" data-act="return" data-o="'+occ.id+'" data-v="'+v.id+'">RETORNAR À BASE</button></div></div>';
+  }else if(st.key==='returning')action='<button class="arrive-btn" data-act="arrive" data-o="'+(occ?.id||'')+'" data-v="'+v.id+'">CHEGADA À BASE</button>';
+  const occInfo=occ?'<div class="occ-detail">OC. '+esc(occ.numero||'—')+' • '+esc(occ.natureza||'SEM NATUREZA')+'</div><div class="occ-address">'+esc([occ.bairro,occ.endereco,occ.destino].filter(Boolean).join(' • '))+'</div><div class="occ-timeline"><div class="time-chip">SAÍDA<b>'+fmtTime(occ.saida_em||occ.acionada_em)+'</b></div><div class="time-chip">QTH<b>'+fmtTime(occ.chegada_qth_em)+'</b></div><div class="time-chip">INÍCIO RETORNO<b>'+fmtTime(occ.inicio_retorno_em)+'</b></div></div>':'';
+  const statusButtons=isAdmin()?'<div class="status-grid"><button data-status="BASE" data-v="'+v.id+'">BASE</button><button data-status="ASSEPSIA" data-v="'+v.id+'">ASSEPSIA</button><button data-status="PANE" data-v="'+v.id+'">PANE</button><button data-status="SEM EQUIPE" data-v="'+v.id+'">S/EQUIPE</button><button data-status="SEM MACA" data-v="'+v.id+'">S/MACA</button></div>':'';
+  return '<article class="card '+st.cls+'"><div class="vtitle"><div class="vname">'+esc(v.nome||v.codigo)+'</div><span class="badge">'+st.label+'</span></div><div class="crew '+(mem.length===1?'one':mem.length===2?'two':'')+'">'+crew+'</div>'+occInfo+action+statusButtons+'</article>';
+}
+function renderFleet(){
+  const an=vehicles.filter(v=>norm(v.bases?.nome).includes('ANAPOL'));
+  const moto=an.filter(v=>norm(v.tipo).includes('MOTO')||norm(v.nome).includes('MOTO')),usa=an.filter(v=>norm(v.nome).includes('USA')&&!norm(v.nome).includes('USB')),usb=an.filter(v=>norm(v.nome).includes('USB'));
+  $('#anapolisFleet').innerHTML=(moto.length?'<div class="vehicle-row moto-row">'+moto.map(cardHtml).join('')+'</div>':'')+(usa.length?'<div class="vehicle-row usa-row">'+usa.map(cardHtml).join('')+'</div>':'')+(usb.length?'<div class="vehicle-row usb-row">'+usb.map(cardHtml).join('')+'</div>':'')+(!an.length?'<div class="small mut" style="padding:12px">Nenhuma viatura vinculada à base Anápolis.</div>':'');
+  bindCardActions($('#anapolisFleet'));
+}
+function renderRotation(){
+  if(!rotation.length){$('#rotationList').innerHTML='<div class="rotation-card"><div class="rotation-title">Revezamento</div><div class="small" style="color:#667e8b;margin-top:5px">Ainda não há registros de revezamento no novo banco para este plantão.</div></div>';return}
+  const groups={};rotation.forEach(x=>(groups[x.grupo_revezamento||'GERAL']??=[]).push(x));
+  $('#rotationList').innerHTML=Object.entries(groups).map(([g,arr])=>'<div class="rotation-card"><div class="rotation-title">'+esc(g)+'</div>'+arr.slice(0,5).map(x=>'<div class="rotation-line"><b>'+esc(displayName(x.profissionais)||x.nome_snapshot||'—')+'</b><span>'+esc(x.eh_da_vez?'DA VEZ':'#'+(x.ordem_inicial||'—'))+'</span></div>').join('')+'</div>').join('');
+}
+function renderRegional(){
+  const reg=vehicles.filter(v=>!norm(v.bases?.nome).includes('ANAPOL'));const sts=reg.map(statusInfo),base=sts.filter(x=>x.key==='base').length,occ=sts.filter(x=>x.key==='occurrence').length,ret=sts.filter(x=>x.key==='returning').length,down=sts.filter(x=>x.key==='down').length;
+  $('#regionalOverview').innerHTML=[['QRV',base],['OCORRÊNCIA',occ],['RETORNANDO',ret],['BAIXADAS',down]].map(x=>'<div class="sum"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('');
+  const groups={};reg.forEach(v=>{const b=v.bases?.nome||'SEM BASE';(groups[b]??=[]).push(v)});
+  const order=['ABADIÂNIA','ALEXÂNIA','COCALZINHO','CORUMBÁ','GOIANÁPOLIS','JARANÁPOLIS','PIRENÓPOLIS','TEREZÓPOLIS'];
+  $('#regionalGrid').innerHTML=Object.entries(groups).sort((a,b)=>{const ia=order.indexOf(norm(a[0])),ib=order.indexOf(norm(b[0]));return(ia<0?99:ia)-(ib<0?99:ib)}).map(([baseName,arr])=>{
+    const bst=arr.some(v=>statusInfo(v).key==='occurrence')?'OCORRÊNCIA':arr.some(v=>statusInfo(v).key==='returning')?'RETORNANDO':arr.every(v=>statusInfo(v).key==='base')?'QRV':'ATENÇÃO';
+    return '<article class="regional-card"><div class="rvtop"><div><h3>'+esc(baseName)+'</h3><div class="regional-sub">'+arr.length+' viatura(s)</div></div><span class="badge">'+bst+'</span></div>'+arr.sort((a,b)=>norm(a.nome).localeCompare(norm(b.nome))).map(v=>{const s=statusInfo(v),m=vehicleMembers(v),o=activeOccurrence(v);return '<div class="regional-vehicle '+(s.key==='occurrence'?'occ':s.key==='returning'?'ret':s.key==='down'?'down':'')+'"><div class="rvtop"><div class="rvname">'+esc(v.nome||v.codigo)+'</div><b style="font-size:9px">'+s.label+'</b></div><div class="rvcrew">'+(m.length?m.map(x=>esc(displayName(x.profissionais))).join(' • '):'Sem equipe ativa')+'</div>'+(o?'<div class="small" style="margin-top:5px"><b>OC. '+esc(o.numero||'—')+'</b> • '+esc(o.natureza||'')+'</div>':'')+'<div style="margin-top:7px">'+(s.key==='base'?'<button class="dispatch-btn" data-act="dispatch" data-v="'+v.id+'">ACIONAR</button>':s.key==='returning'?'<button class="arrive-btn" data-act="arrive" data-v="'+v.id+'" data-o="'+(o?.id||'')+'">CHEGADA À BASE</button>':'')+'</div></div>'}).join('')+'</article>'
+  }).join('');
+  bindCardActions($('#regionalGrid'));
+}
+function renderDestinations(){
+  const active=occurrences.filter(o=>!['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status)));const anIds=new Set(vehicles.filter(v=>norm(v.bases?.nome).includes('ANAPOL')).map(v=>v.id));
+  const make=arr=>arr.length?arr.map(o=>{const v=vehicles.find(x=>x.id===o.viatura_id);return '<div class="destination-card"><div class="occ-number">#'+esc(o.numero||'—')+'</div><div class="occ-place">'+esc(o.destino||o.bairro||'Destino não informado')+'</div><div class="occ-vehicle">'+esc(v?.nome||o.viatura_snapshot||'Sem viatura')+'</div></div>'}).join(''):'<div class="small" style="color:#718591">Nenhuma ocorrência ativa.</div>';
+  $('#destAnapolis').innerHTML=make(active.filter(o=>anIds.has(o.viatura_id)));$('#destRegional').innerHTML=make(active.filter(o=>!anIds.has(o.viatura_id)));
+}
+function renderTeamPreview(){
+  const active=team.filter(x=>norm(x.status||'ATIVO')==='ATIVO');const groups=[['CONDUTOR','Condutores'],['TECN','Técnicos'],['ENFERM','Enfermeiros'],['MEDIC','Médicos']];
+  $('#teamPreview').innerHTML=groups.map(([key,title])=>{const arr=active.filter(x=>norm(x.funcao).includes(key));return '<div class="role-group"><div class="role-head"><span class="role-title">'+title.toUpperCase()+'</span><span class="badge">'+arr.length+'</span></div><div class="role-list">'+(arr.length?arr.map(x=>'<div class="team-card"><b>'+esc(displayName(x.profissionais))+'</b><div class="team-meta">'+esc(x.funcao)+' • '+esc(x.viatura_snapshot||vehicles.find(v=>v.id===x.viatura_id)?.nome||x.tipo_escala||'SEM VIATURA')+'</div></div>').join(''):'<div class="small" style="color:#667e8b;padding:7px">Nenhum profissional nesta função.</div>')+'</div></div>'}).join('');
+}
+async function loadScale(){
+  const a=$('#ala').value,t=$('#turno').value;const{data,error}=await supabase.from('escala_fixa_anapolis').select('*,profissionais(*)').eq('ala',a).eq('turno',t).eq('ativo',true).order('ordem');
+  if(error){$('#scaleGrid').innerHTML='<div class="small">'+esc(error.message)+'</div>';return}
+  $('#scaleGrid').innerHTML=(data||[]).map(r=>'<div class="scale-card"><div class="veh">'+esc(r.codigo_viatura)+'</div><div class="war">'+esc(displayName(r.profissionais)||r.nome_referencia)+'</div><div class="full">'+esc(r.profissionais?.nome_completo||r.nome_referencia)+'</div></div>').join('');
+}
+function renderHistory(){
+  $('#historyTable').innerHTML=occurrences.length?occurrences.map(o=>{const v=vehicles.find(x=>x.id===o.viatura_id);return '<tr><td>'+esc(o.numero||'—')+'</td><td>'+esc(v?.nome||o.viatura_snapshot||'—')+'</td><td>'+esc(o.natureza||'—')+'</td><td>'+esc(o.bairro||'—')+'</td><td>'+esc(o.destino||'—')+'</td><td>'+esc(o.endereco||'—')+'</td><td>'+fmtTime(o.saida_em||o.acionada_em)+'</td><td>'+fmtTime(o.chegada_qth_em)+'</td><td>'+fmtTime(o.inicio_retorno_em)+'</td><td>'+fmtTime(o.retorno_base_em)+'</td><td>'+esc(o.status||'—')+'</td></tr>'}).join(''):'<tr><td colspan="11">Nenhuma ocorrência registrada neste plantão.</td></tr>';
+}
+function bindCardActions(root){
+  root.querySelectorAll('[data-act="dispatch"]').forEach(b=>b.onclick=()=>openOccModal(b.dataset.v));
+  root.querySelectorAll('[data-act="qth"]').forEach(b=>b.onclick=()=>setOccurrenceQth(b.dataset.o));
+  root.querySelectorAll('[data-act="qta"]').forEach(b=>b.onclick=()=>setOccurrenceQta(b.dataset.o,b.dataset.v));
+  root.querySelectorAll('[data-act="return"]').forEach(b=>b.onclick=()=>setReturning(b.dataset.o,b.dataset.v));
+  root.querySelectorAll('[data-act="arrive"]').forEach(b=>b.onclick=()=>setArrived(b.dataset.o,b.dataset.v));
+  root.querySelectorAll('[data-act="edit-team"]').forEach(b=>b.onclick=()=>{openPage('team');window.scrollTo({top:0,behavior:'smooth'})});
+  root.querySelectorAll('[data-status]').forEach(b=>b.onclick=()=>setVehicleStatus(b.dataset.v,b.dataset.status));
+}
+function openOccModal(vId){if(!isAdmin())return;selectedVehicle=vId;const v=vehicles.find(x=>x.id===vId);$('#occModalTitle').textContent=v?'Acionar '+(v.nome||v.codigo):'Lançar ocorrência manual';['occNumber','occNature','occBairro','occDestino','occEndereco','occObs'].forEach(id=>$('#'+id).value='');$('#occModal').classList.add('show')}
+function closeOccModal(){$('#occModal').classList.remove('show');selectedVehicle=null}
+async function saveOccurrence(){
+  if(!currentPlantao)return alert('Abra ou selecione um plantão antes de lançar ocorrência.');
+  const v=vehicles.find(x=>x.id===selectedVehicle);const now=new Date().toISOString();
+  const payload={plantao_id:currentPlantao.id,viatura_id:selectedVehicle||null,numero:$('#occNumber').value.trim()||null,natureza:$('#occNature').value.trim()||null,bairro:$('#occBairro').value.trim()||null,destino:$('#occDestino').value.trim()||null,endereco:$('#occEndereco').value.trim()||null,observacao:$('#occObs').value.trim()||null,status:'EM OCORRENCIA',acionada_em:now,saida_em:now,viatura_snapshot:v?.nome||null,base_snapshot:v?.bases?.nome||null,data_ocorrencia:currentPlantao.data_plantao,criado_por:profile?.nome||null};
+  const{data:o,error}=await supabase.from('ocorrencias').insert(payload).select().single();if(error)return alert(error.message);
+  if(selectedVehicle)await supabase.from('viaturas').update({status_atual:'OCORRENCIA'}).eq('id',selectedVehicle);
+  const members=v?vehicleMembers(v):[];if(o&&members.length)await supabase.from('equipe_ocorrencia').insert(members.map(m=>({ocorrencia_id:o.id,profissional_id:m.profissional_id,funcao:m.funcao,nome_snapshot:m.nome_snapshot||m.profissionais?.nome_completo,viatura_id:v.id,viatura_snapshot:v.nome,tipo_escala_no_momento:m.tipo_escala})));
+  closeOccModal();await loadAll($('#shiftDate').value);
+}
+async function setVehicleStatus(id,status){if(!isAdmin())return;const{error}=await supabase.from('viaturas').update({status_atual:status}).eq('id',id);if(error)alert(error.message)}
+async function setOccurrenceQth(id){if(!isAdmin())return;const{error}=await supabase.from('ocorrencias').update({chegada_qth_em:new Date().toISOString()}).eq('id',id);if(error)alert(error.message)}
+async function setOccurrenceQta(oid,vid){if(!isAdmin()||!confirm('Confirmar QTA desta ocorrência?'))return;const now=new Date().toISOString();const r=await supabase.from('ocorrencias').update({status:'QTA',qta_em:now,finalizado_em:now,finalizado_por:profile?.nome||null}).eq('id',oid);if(r.error)return alert(r.error.message);if(vid)await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid)}
+async function setReturning(oid,vid){if(!isAdmin())return;const now=new Date().toISOString();if(oid)await supabase.from('ocorrencias').update({status:'RETORNANDO',inicio_retorno_em:now}).eq('id',oid);if(vid)await supabase.from('viaturas').update({status_atual:'RETORNANDO'}).eq('id',vid)}
+async function setArrived(oid,vid){if(!isAdmin()||!confirm('Confirmar chegada da viatura à base?'))return;const now=new Date().toISOString();if(oid)await supabase.from('ocorrencias').update({status:'FINALIZADA',retorno_base_em:now,finalizado_em:now,finalizado_por:profile?.nome||null}).eq('id',oid);if(vid)await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid)}
+async function endShift(){if(!isAdmin()||!currentPlantao||!confirm('ENCERRAR O PLANTÃO selecionado?'))return;const{error}=await supabase.from('plantoes').update({status:'ENCERRADO',encerrado_em:new Date().toISOString(),operador_encerramento:profile?.nome||null}).eq('id',currentPlantao.id);if(error)alert(error.message);else await loadAll()}
+function exportCSV(){const rows=[['Ocorrencia','Viatura','Natureza','Bairro','Destino','Endereco','Status','Saida','QTH','Inicio retorno','Chegada base'],...occurrences.map(o=>{const v=vehicles.find(x=>x.id===o.viatura_id);return[o.numero||'',v?.nome||o.viatura_snapshot||'',o.natureza||'',o.bairro||'',o.destino||'',o.endereco||'',o.status||'',o.saida_em||'',o.chegada_qth_em||'',o.inicio_retorno_em||'',o.retorno_base_em||'']})];const csv=rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(';')).join('\n');const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download='samu_'+($('#shiftDate').value||'plantao')+'.csv';a.click();URL.revokeObjectURL(a.href)}
+function subscribeRealtime(){if(channel)supabase.removeChannel(channel);channel=supabase.channel('samu-live').on('postgres_changes',{event:'*',schema:'public',table:'viaturas'},()=>loadAll($('#shiftDate').value)).on('postgres_changes',{event:'*',schema:'public',table:'equipe_plantao'},()=>loadAll($('#shiftDate').value)).on('postgres_changes',{event:'*',schema:'public',table:'ocorrencias'},()=>loadAll($('#shiftDate').value)).on('postgres_changes',{event:'*',schema:'public',table:'revezamento_plantao'},()=>loadAll($('#shiftDate').value)).subscribe(s=>{if(s==='SUBSCRIBED')$('#syncStatus').textContent='Banco conectado • atualização em tempo real ativa'})}
+supabase.auth.onAuthStateChange((_,s)=>applySession(s));const{data:{session:s}}=await supabase.auth.getSession();await applySession(s);
+</script>
+</body>
+</html>
