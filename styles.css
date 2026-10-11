@@ -221,3 +221,33 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
   .book-page:last-child{page-break-after:auto}
   .top,.sync-strip,.tabs,.book-workspace>.head,.book-flow,.book-config-grid,.book-internal-editor,.book-preview-title,.system-footer{display:none!important}
 }
+
+/* ---------- divisão operacional / interno ---------- */
+.scale-scope-tabs{display:flex;gap:5px;margin:0 0 8px;padding:4px;background:#dce7ed;border:1px solid #c6d4dc;border-radius:10px}
+.scale-scope-btn{border:1px solid transparent;background:transparent;color:#29495a;border-radius:8px;padding:8px 12px;font-size:.78rem;font-weight:1000;cursor:pointer}
+.scale-scope-btn.active{background:#075985;border-color:#0ea5e9;color:#fff;box-shadow:0 2px 6px #07598522}
+.section-internal{border-top:5px solid #7c3aed}
+.internal-head-actions{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.internal-guidance{margin:8px 0;padding:8px 10px;border:1px solid #c4b5fd;border-radius:9px;background:#faf5ff;color:#5b21b6;font-size:.66rem;line-height:1.38}
+.internal-slot{transition:border-color .15s ease,box-shadow .15s ease}
+.internal-slot.status-escalado{border-top-color:#16a34a}
+.internal-slot.status-ausente{border-top-color:#dc2626;background:#fff7f7}
+.internal-slot.status-permuta{border-top-color:#f59e0b;background:#fffaf0}
+.internal-slot.status-vago{border-top-color:#94a3b8;background:#f8fafc}
+.internal-fixed-label{font-size:.54rem;font-weight:1000;color:#64748b;letter-spacing:.05em}
+.internal-fixed-name{margin-top:2px;font-size:.82rem;font-weight:1000;color:#0f172a}
+.internal-status-actions{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;margin-top:7px}
+.internal-status-actions button{min-height:32px;border-radius:7px;padding:5px 4px;font-size:.56rem;font-weight:1000;cursor:pointer}
+.internal-status-actions .escalado{background:#dcfce7;border:1px solid #86efac;color:#166534}
+.internal-status-actions .ausente{background:#fee2e2;border:1px solid #fecaca;color:#991b1b}
+.internal-status-actions .permuta{background:#fef3c7;border:1px solid #fcd34d;color:#92400e}
+.internal-status-actions button.active{box-shadow:inset 0 0 0 2px currentColor}
+.internal-permuta-box{display:none;margin-top:7px;padding:7px;border:1px dashed #f59e0b;border-radius:8px;background:#fff}
+.internal-permuta-box.show{display:block}
+.internal-permuta-box label{display:block;font-size:.57rem;font-weight:1000;color:#92400e;margin-bottom:4px}
+.internal-permuta-selected{margin-top:5px;font-size:.6rem;color:#92400e;font-weight:900}
+.internal-card-footer{display:flex;justify-content:space-between;gap:6px;align-items:center;margin-top:7px;padding-top:6px;border-top:1px solid #e5edf2}
+.internal-card-footer small{font-size:.55rem;color:#64748b}
+.internal-save-btn{border:1px solid #0ea5e9;background:#075985;color:#fff;border-radius:7px;padding:6px 8px;font-size:.58rem;font-weight:1000;cursor:pointer}
+.internal-empty-fixed{color:#94a3b8;font-style:italic}
+@media(max-width:720px){.scale-scope-tabs{display:grid;grid-template-columns:1fr 1fr}.internal-status-actions{grid-template-columns:1fr}}
