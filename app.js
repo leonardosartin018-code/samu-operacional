@@ -2034,6 +2034,7 @@ function fixedFunctionForRole(role,p,v){
 }
 function validateFixedAssignment(role,v){
   const type=vehicleType(v);
+  if(role==='driver'&&!type.includes('USA')&&!type.includes('USB'))return 'Condutor deve ficar em uma USA ou USB.';
   if(role==='tech'&&!type.includes('USB'))return 'Técnico deve ficar em uma USB.';
   if(role==='doctor'&&!type.includes('USA'))return 'Médico deve ficar em uma USA.';
   if(role==='nurse'&&!type.includes('USA')&&!type.includes('USB'))return 'Enfermeiro deve ficar em USA ou USB.';
