@@ -276,7 +276,7 @@
           <summary>
             <div>
               <h2>Cadastro permanente — Banco de dados</h2>
-              <p>Cadastro de profissionais e nome de guerra do condutor.</p>
+              <p>Cadastro de profissionais. O nome de guerra é opcional e, quando preenchido, tem prioridade de exibição no sistema.</p>
             </div>
             <span>ABRIR</span>
           </summary>
@@ -289,6 +289,10 @@
                 <option value="Enfermeiro">Enfermeiro</option>
                 <option value="Médico">Médico</option>
                 <option value="Motolância">Motolância</option>
+                <option value="TARM">TARM</option>
+                <option value="Rádio-operador">Rádio-operador</option>
+                <option value="Lavador">Lavador</option>
+                <option value="Sanitária">Sanitária</option>
               </select></label>
               <label id="regWarWrap">Nome de guerra<input id="regWarName" placeholder="Ex.: SARTIN"></label>
               <label>Tópico NTFY (opcional)<input id="regTopic" placeholder="Pode deixar vazio"></label>
@@ -541,6 +545,35 @@
   </div>
 </div>
 
+<div id="quickRegisterModal" class="modal">
+  <div class="dialog assign-dialog">
+    <div class="dialog-head">
+      <div><div class="dialog-kicker">NOVO PROFISSIONAL</div><h2>Cadastrar no banco</h2></div>
+      <button class="icon-close" data-close-modal="quickRegisterModal">×</button>
+    </div>
+    <div class="team-modal-note">Cadastre aqui quando o nome não existir. O <b>nome de guerra é opcional</b>; se ficar vazio, o sistema exibirá o primeiro e o segundo nome.</div>
+    <div class="form-grid">
+      <label class="full">Nome completo<input id="quickRegName" placeholder="Nome completo"></label>
+      <label>Nome de guerra (opcional)<input id="quickRegWar" placeholder="Ex.: SARTIN"></label>
+      <label>Função<select id="quickRegRole">
+        <option value="Condutor">Condutor</option>
+        <option value="Motolância">Motolância</option>
+        <option value="TARM">TARM</option>
+        <option value="Rádio-operador">Rádio-operador</option>
+        <option value="Lavador">Lavador</option>
+        <option value="Sanitária">Sanitária</option>
+        <option value="Técnico de Enfermagem">Técnico de Enfermagem</option>
+        <option value="Enfermeiro">Enfermeiro</option>
+        <option value="Médico">Médico</option>
+      </select></label>
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-close-modal="quickRegisterModal">Cancelar</button>
+      <button id="saveQuickRegisterBtn" class="btn primary">CADASTRAR E SELECIONAR</button>
+    </div>
+  </div>
+</div>
+
 <div id="assignModal" class="modal">
   <div class="dialog assign-dialog">
     <div class="dialog-head"><div><div class="dialog-kicker">ESCALAR PROFISSIONAL</div><h2 id="assignTitle">Escalar</h2></div><button class="icon-close" data-close-modal="assignModal">×</button></div>
@@ -569,6 +602,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261011-7"></script>
+<script type="module" src="./app.js?v=20261011-8"></script>
 </body>
 </html>
