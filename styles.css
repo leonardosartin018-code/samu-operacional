@@ -251,3 +251,7 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 .internal-save-btn{border:1px solid #0ea5e9;background:#075985;color:#fff;border-radius:7px;padding:6px 8px;font-size:.58rem;font-weight:1000;cursor:pointer}
 .internal-empty-fixed{color:#94a3b8;font-style:italic}
 @media(max-width:720px){.scale-scope-tabs{display:grid;grid-template-columns:1fr 1fr}.internal-status-actions{grid-template-columns:1fr}}
+
+.book-logo{overflow:hidden;background:#fff}
+.book-logo img{width:100%;height:100%;object-fit:contain;display:block;padding:6px}
+.book-logo.samu img{padding:4px}
