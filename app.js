@@ -40,6 +40,7 @@ let expressNurseSelected = new Map();
 let unsavedOperationalScale = false;
 let unsavedInternalScale = false;
 let unsavedBook = false;
+let pendingShiftWarningKey = '';
 const modalDraftSnapshots = new Map();
 const TRACKED_DRAFT_MODALS = new Set([
   'teamModal','occModal','occEditModal','expressPermutaModal',
@@ -362,6 +363,15 @@ async function synchronizeCurrentOperationalShift(force=false){
   const key=operationalShiftKey(ctx);
   if(!force && key===lastOperationalShiftKey && plantaoShiftKey()===key)return;
 
+  if(!force && key!==plantaoShiftKey() && (unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())){
+    if(pendingShiftWarningKey!==key){
+      pendingShiftWarningKey=key;
+      alert('VIRADA DE PLANTÃO DETECTADA\n\nExistem alterações pendentes ou dados ainda não confirmados nesta tela.\nConfirme/salve antes de o sistema mudar automaticamente para a nova Ala e período.');
+    }
+    setSync('Virada de plantão aguardando confirmação/salvamento','warn');
+    return;
+  }
+
   operationalShiftSyncBusy=true;
   try{
     setSync('Sincronizando Ala e turno atuais...','warn');
@@ -375,6 +385,7 @@ async function synchronizeCurrentOperationalShift(force=false){
     if($('#book')?.classList.contains('active'))renderBook();
 
     lastOperationalShiftKey=operationalShiftKey(ctx);
+    pendingShiftWarningKey='';
     setSync('Plantão atual sincronizado • '+alaForDate(ctx.date)+' • '+ctx.turno);
   }catch(error){
     console.error('Falha ao sincronizar plantão atual',error);
@@ -2403,7 +2414,7 @@ function renderInternalEditorTo(selector){
     }
     markInternalDirty();
   });
-  el.querySelectorAll('[data-int-search]').forEach(inp=>inp.oninput=()=>internalAutocomplete(inp.dataset.intSearch,inp.value,el));
+  el.querySelectorAll('[data-int-search]').forEach(inp=>inp.oninput=()=>{markInternalDirty();internalAutocomplete(inp.dataset.intSearch,inp.value,el)});
 }
 function renderInternalEditors(){
   const scaleCtx=currentScaleContext();
@@ -2811,7 +2822,9 @@ $('#saveExpressPermutaBtn').onclick=saveExpressPermuta;
 $('#saveQuickRegisterBtn').onclick=saveQuickRegistration;
 
 window.addEventListener('beforeunload',e=>{
-  if(unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen()){
+  const page=document.querySelector('.page.active')?.id||'';
+  const unconfirmedScalePage=page==='team'&&(operationalNeedsConfirmation()||internalNeedsConfirmation());
+  if(unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen()||unconfirmedScalePage){
     e.preventDefault();
     e.returnValue='';
   }
