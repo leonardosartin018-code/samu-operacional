@@ -434,61 +434,266 @@ function renderFleet(){
   bindVehicleActions($('#vehicles'));
 }
 
-function rotationGroupTitle(g){
-  const n=norm(g);
-  if(n.includes('USA')&&n.includes('COND')) return 'USA • CONDUTORES';
-  if(n.includes('USB')&&n.includes('COND')) return 'USB • CONDUTORES';
-  if(n.includes('USA')&&n.includes('ENFER')) return 'USA • ENFERMEIROS';
-  if(n.includes('USB')&&(n.includes('TECN')||n.includes('ENFER'))) return 'USB • TÉCNICOS';
-  return g || 'REVEZAMENTO';
+function currentRotationCriterion(){
+  return $('#rotationCriterion')?.value || 'baseTime';
 }
-function derivedRotationRows(){
+function rotationCriterionDbValue(value){
+  return value==='occurrences'?'MENOR_OCORRENCIAS':'TEMPO_BASE';
+}
+function syncRotationCriterionFromPlantao(){
+  const saved=norm(
+    currentPlantao?.criterio_usb_condutor ||
+    currentPlantao?.criterio_usb_tecnico ||
+    currentPlantao?.criterio_usa_equipe ||
+    ''
+  );
+  const value=saved.includes('OCOR')?'occurrences':'baseTime';
+  $('#rotationCriterion').value=value;
+  renderRotationRuleHelp();
+}
+function renderRotationRuleHelp(){
+  const crit=currentRotationCriterion();
+  $('#rotationRuleHelp').textContent=crit==='occurrences'
+    ? 'Critério ativo: menor número de ocorrências. Se houver empate, passa na frente quem está há mais tempo na base.'
+    : 'Critério padrão: mais tempo disponível na base. Se houver empate, passa na frente quem tem menos ocorrências.';
+}
+async function persistRotationCriterion(value){
+  renderRotationRuleHelp();
+  renderRotation();
+  if(!currentPlantao||!isOperator())return;
+  const db=rotationCriterionDbValue(value);
+  const payload={
+    criterio_usb_condutor:db,
+    criterio_usb_tecnico:db,
+    criterio_usa_equipe:db,
+    criterio_usa_condutor:db,
+    criterio_usa_enfermeiro:db
+  };
+  Object.assign(currentPlantao,payload);
+  const {error}=await supabase.from('plantoes').update(payload).eq('id',currentPlantao.id);
+  if(error)console.warn('Não foi possível salvar o critério do revezamento:',error);
+}
+function isRotationMember(m){
+  const t=norm(m?.tipo_escala);
+  return t.includes('REVEZ') || (!!m?.grupo_revezamento && !m?.viatura_id);
+}
+function fixedVehicleForMemberType(m,type){
+  if(!m?.viatura_id||isRotationMember(m))return null;
+  const v=vehicleById(m.viatura_id);
+  if(!v||!isAnapolisVehicle(v))return null;
+  return vehicleType(v).includes(type)?v:null;
+}
+function activeOccurrenceIdsSet(){
+  return new Set(occurrences.filter(o=>!['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status))).map(o=>o.id));
+}
+function memberIsBusy(m){
+  if(!m)return true;
+  const activeIds=activeOccurrenceIdsSet();
+  return occurrenceTeam.some(x=>x.profissional_id===m.profissional_id&&activeIds.has(x.ocorrencia_id));
+}
+function driverScopeForMember(m){
+  const raw=norm(m?.revezamento_tipo_viatura||m?.grupo_revezamento||'');
+  if(raw.includes('BOTH')||raw.includes('AMB'))return 'BOTH';
+  if(raw.includes('USA'))return 'USA';
+  if(raw.includes('USB'))return 'USB';
+  const v=vehicleById(m?.viatura_id);
+  if(v&&vehicleType(v).includes('USA'))return 'USA';
+  if(v&&vehicleType(v).includes('USB'))return 'USB';
+  return 'USB';
+}
+function driverRotationAllowsMember(m,type){
+  if(teamRoleKey(m)!=='driver')return true;
+  if(!isRotationMember(m))return true;
+  const scope=driverScopeForMember(m);
+  return scope==='BOTH'||scope===type;
+}
+function vehicleAvailableForRotation(v){
+  return !!v && isAnapolisVehicle(v) && statusInfo(v).key==='base' && !activeOccurrence(v);
+}
+function memberEligibleForPriority(m,role,type){
+  if(!m||norm(m.status||'ATIVO')!=='ATIVO')return false;
+  if(teamRoleKey(m)!==role||memberIsBusy(m))return false;
+
+  const fixed=fixedVehicleForMemberType(m,type);
+  if(fixed)return vehicleAvailableForRotation(fixed);
+
+  // Profissional fixo em outro tipo de viatura não entra nesta fila.
+  if(m.viatura_id&&!isRotationMember(m))return false;
+
+  if(role==='driver'&&!driverRotationAllowsMember(m,type))return false;
+  if(role==='tech'&&type!=='USB')return false;
+  if(role==='nurse'&&type!=='USA')return false;
+  return true;
+}
+function latestReturnForVehicle(v){
+  const times=occurrences
+    .filter(o=>o.viatura_id===v.id)
+    .map(o=>o.retorno_base_em||((norm(o.status)==='QTA')?o.qta_em:null))
+    .filter(Boolean)
+    .map(x=>new Date(x).getTime())
+    .filter(Number.isFinite);
+  if(!times.length)return null;
+  return new Date(Math.max(...times)).toISOString();
+}
+function minutesSinceIso(ts){
+  if(!ts)return 0;
+  const n=Math.floor((Date.now()-new Date(ts).getTime())/60000);
+  return Number.isFinite(n)?Math.max(0,n):0;
+}
+function vehicleBaseMinutes(v){
+  if(!vehicleAvailableForRotation(v))return -1;
+  const start=latestReturnForVehicle(v)||currentPlantao?.iniciado_em;
+  return minutesSinceIso(start);
+}
+function personBaseMinutes(m,type){
+  if(memberIsBusy(m))return -1;
+  const fixed=fixedVehicleForMemberType(m,type);
+  if(fixed)return vehicleBaseMinutes(fixed);
+  return minutesSinceIso(m.ultimo_retorno_em||m.entrou_em||currentPlantao?.iniciado_em);
+}
+function personOccurrenceCount(m){
+  const stored=Number(m?.ocorrencias_validas);
+  if(Number.isFinite(stored))return stored;
+  const ids=new Set(occurrenceTeam.filter(x=>x.profissional_id===m?.profissional_id).map(x=>x.ocorrencia_id));
+  return occurrences.filter(o=>ids.has(o.id)&&!['QTA','CANCELADA'].includes(norm(o.status))).length;
+}
+function vehicleOccurrenceCount(v){
+  return occurrences.filter(o=>o.viatura_id===v.id&&!['QTA','CANCELADA'].includes(norm(o.status))).length;
+}
+function assignmentPriorityLabel(m,type){
+  const fixed=fixedVehicleForMemberType(m,type);
+  if(fixed)return 'FIXO — '+(fixed.nome||fixed.codigo);
+  if(teamRoleKey(m)==='driver')return 'REVEZAMENTO — '+driverScopeForMember(m);
+  return 'REVEZAMENTO';
+}
+function priorityPeopleForRole(role,type,{rotationOnly=false}={}){
+  const crit=currentRotationCriterion();
   return activeTeamRows()
-    .filter(m=>isAnapolisVehicle(vehicleById(m.viatura_id) || {bases:{nome:'Anápolis'}}))
-    .filter(m=>norm(m.tipo_escala).includes('REVEZ') || m.grupo_revezamento)
-    .map(m=>({
-      id:m.id,
-      grupo_revezamento:m.grupo_revezamento || (
-        teamRoleKey(m)==='driver'
-          ? ((vehicleType(vehicleById(m.viatura_id)).includes('USA'))?'USA_CONDUTOR':'USB_CONDUTOR')
-          : teamRoleKey(m)==='nurse'?'USA_ENFERMEIRO':'USB_TECNICO'
-      ),
-      profissional_id:m.profissional_id,
-      profissionais:m.profissionais,
-      nome_snapshot:m.nome_snapshot,
-      ocorrencias_validas:Number(m.ocorrencias_validas||0),
-      ultimo_retorno:m.ultimo_retorno_em,
-      criado_em:m.entrou_em,
-      ordem_inicial:Number(m.ordem_inicial||999)
-    }));
+    .filter(m=>memberEligibleForPriority(m,role,type))
+    .filter(m=>!rotationOnly||isRotationMember(m)||!m.viatura_id)
+    .sort((a,b)=>{
+      const ab=personBaseMinutes(a,type),bb=personBaseMinutes(b,type);
+      const ao=personOccurrenceCount(a),bo=personOccurrenceCount(b);
+      if(crit==='occurrences'){
+        if(ao!==bo)return ao-bo;
+        if(ab!==bb)return bb-ab;
+      }else{
+        if(ab!==bb)return bb-ab;
+        if(ao!==bo)return ao-bo;
+      }
+      return Number(a.ordem_inicial||999)-Number(b.ordem_inicial||999) ||
+        String(displayName(a.profissionais)).localeCompare(String(displayName(b.profissionais)),'pt-BR');
+    });
+}
+function priorityMetricText(m,type){
+  return fmtMinutes(personBaseMinutes(m,type))+' base • '+personOccurrenceCount(m)+' oc.';
+}
+function priorityReasonText(m,type){
+  return currentRotationCriterion()==='occurrences'
+    ? 'Menor nº de ocorrências; empate decidido pelo maior tempo na base.'
+    : 'Maior tempo na base; empate decidido pelo menor nº de ocorrências.';
+}
+function rotationPersonCard(title,role,type){
+  const fila=priorityPeopleForRole(role,type);
+  const first=fila[0];
+  let html='<div class="priority-card"><div class="priority-card-title"><span>'+esc(title)+'</span><small>'+fila.length+' disponível(is)</small></div>';
+  if(first){
+    html+='<div class="priority-next"><b>'+esc(displayName(first.profissionais)||first.nome_snapshot||'—')+'</b>'+
+      '<span>DA VEZ</span>'+
+      '<div class="priority-assignment">'+esc(assignmentPriorityLabel(first,type))+'</div>'+
+      '<div class="priority-next-meta"><span class="priority-pill">'+esc(fmtMinutes(personBaseMinutes(first,type)))+' na base</span><span class="priority-pill">'+personOccurrenceCount(first)+' ocorrência(s)</span></div>'+
+      '<div class="priority-reason">'+esc(priorityReasonText(first,type))+'</div></div>';
+    if(fila.length>1){
+      html+=fila.slice(1,6).map((m,i)=>'<div class="priority-line"><div class="priority-line-main"><b>'+(i+2)+'. '+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</b><small>'+esc(assignmentPriorityLabel(m,type))+'</small></div><div class="priority-line-metric">'+esc(priorityMetricText(m,type))+'</div></div>').join('');
+    }
+  }else{
+    html+='<div class="priority-empty">Nenhum profissional disponível para esta fila neste momento.</div>';
+  }
+  return html+'</div>';
+}
+function doctorCandidateForVehicle(v,used=new Set()){
+  const exact=activeTeamRows().filter(m=>
+    teamRoleKey(m)==='doctor'&&!memberIsBusy(m)&&!isRotationMember(m)&&m.viatura_id===v.id
+  );
+  if(exact.length)return exact.find(m=>!used.has(m.profissional_id))||null;
+  return activeTeamRows().filter(m=>
+    teamRoleKey(m)==='doctor'&&!memberIsBusy(m)&&
+    (!m.viatura_id||isRotationMember(m))&&!used.has(m.profissional_id)
+  ).sort((a,b)=>personBaseMinutes(b,'USA')-personBaseMinutes(a,'USA'))[0]||null;
+}
+function dispatchCandidateForVehicleRole(v,role,used=new Set()){
+  const type=vehicleType(v).includes('USA')?'USA':vehicleType(v).includes('USB')?'USB':'';
+  if(!type)return null;
+  const exact=activeTeamRows().filter(m=>
+    teamRoleKey(m)===role&&!memberIsBusy(m)&&!isRotationMember(m)&&m.viatura_id===v.id
+  );
+  const exactPick=exact.find(m=>!used.has(m.profissional_id));
+  if(exactPick)return exactPick;
+  if(role==='doctor')return doctorCandidateForVehicle(v,used);
+  return priorityPeopleForRole(role,type,{rotationOnly:true}).find(m=>!used.has(m.profissional_id))||null;
+}
+function availableUsaTeams(){
+  const crit=currentRotationCriterion();
+  return vehicles.filter(v=>
+    isAnapolisVehicle(v)&&vehicleType(v).includes('USA')&&!vehicleType(v).includes('USB')&&
+    v.participa_revezamento!==false&&vehicleAvailableForRotation(v)
+  ).map(v=>{
+    const used=new Set();
+    const driver=dispatchCandidateForVehicleRole(v,'driver',used);if(driver)used.add(driver.profissional_id);
+    const nurse=dispatchCandidateForVehicleRole(v,'nurse',used);if(nurse)used.add(nurse.profissional_id);
+    const doctor=dispatchCandidateForVehicleRole(v,'doctor',used);
+    return {
+      v,driver,nurse,doctor,complete:!!driver&&!!nurse&&!!doctor,
+      base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)
+    };
+  }).filter(x=>x.complete).sort((a,b)=>{
+    if(crit==='occurrences'){
+      if(a.occ!==b.occ)return a.occ-b.occ;
+      if(a.base!==b.base)return b.base-a.base;
+    }else{
+      if(a.base!==b.base)return b.base-a.base;
+      if(a.occ!==b.occ)return a.occ-b.occ;
+    }
+    return String(a.v.nome).localeCompare(String(b.v.nome),'pt-BR');
+  });
+}
+function usaTeamRotationCard(){
+  const fila=availableUsaTeams(),first=fila[0];
+  let html='<div class="priority-card vehicle-priority"><div class="priority-card-title"><span>USA — Equipe / viatura da vez</span><small>'+fila.length+' completa(s)</small></div>';
+  if(first){
+    html+='<div class="priority-next"><b>'+esc(first.v.nome||first.v.codigo)+'</b><span>USA DA VEZ</span>'+
+      '<div class="priority-assignment">Condutor '+esc(displayName(first.driver.profissionais))+' • Enfermeiro '+esc(displayName(first.nurse.profissionais))+' • Médico '+esc(displayName(first.doctor.profissionais))+'</div>'+
+      '<div class="priority-next-meta"><span class="priority-pill">'+esc(fmtMinutes(first.base))+' na base</span><span class="priority-pill">'+first.occ+' ocorrência(s)</span></div>'+
+      '<div class="priority-reason">'+(currentRotationCriterion()==='occurrences'?'Menor nº de ocorrências; empate pelo maior tempo na base.':'Maior tempo na base; empate pelo menor nº de ocorrências.')+'</div></div>';
+    html+=fila.slice(1,5).map((x,i)=>'<div class="priority-line"><div class="priority-line-main"><b>'+(i+2)+'. '+esc(x.v.nome||x.v.codigo)+'</b><small>Equipe completa disponível</small></div><div class="priority-line-metric">'+esc(fmtMinutes(x.base))+' • '+x.occ+' oc.</div></div>').join('');
+  }else{
+    html+='<div class="priority-empty">Nenhuma USA está na base com equipe completa disponível neste momento.</div>';
+  }
+  return html+'</div>';
+}
+function automaticDispatchCrew(v){
+  const type=vehicleType(v);
+  const fixed=vehicleMembers(v).filter(m=>!isRotationMember(m));
+  if(type.includes('MOTO'))return fixed;
+  const roles=type.includes('USA')?['driver','nurse','doctor']:type.includes('USB')?['driver','tech']:[];
+  const used=new Set();
+  const crew=[];
+  roles.forEach(role=>{
+    const existing=fixed.find(m=>teamRoleKey(m)===role || (role==='tech'&&teamRoleKey(m)==='nurse'&&norm(m.funcao).includes('TECN')));
+    const pick=existing||dispatchCandidateForVehicleRole(v,role,used);
+    if(pick&&!used.has(pick.profissional_id)){crew.push(pick);used.add(pick.profissional_id)}
+  });
+  fixed.forEach(m=>{if(!used.has(m.profissional_id)){crew.push(m);used.add(m.profissional_id)}});
+  return crew;
 }
 function renderRotation(){
-  const crit=$('#rotationCriterion').value;
-  const source=rotation.length?rotation:derivedRotationRows();
-  if(!source.length){
-    $('#priority').innerHTML='<div class="priority-card"><div class="priority-card-title">Revezamento</div><div class="priority-empty">Nenhum profissional em revezamento neste plantão.</div></div>';
-    return;
-  }
-  const groups={};
-  source.forEach(x=>(groups[x.grupo_revezamento||'GERAL']??=[]).push(x));
-  $('#priority').innerHTML=Object.entries(groups).map(([g,arr])=>{
-    const sorted=arr.slice().sort((a,b)=>{
-      if(a.eh_da_vez!==b.eh_da_vez) return a.eh_da_vez?-1:1;
-      if(crit==='occurrences'){
-        const d=Number(a.ocorrencias_validas||0)-Number(b.ocorrencias_validas||0);
-        if(d) return d;
-      }
-      const ta=new Date(a.ultimo_retorno||a.criado_em||0).getTime();
-      const tb=new Date(b.ultimo_retorno||b.criado_em||0).getTime();
-      return ta-tb || Number(a.ordem_inicial||999)-Number(b.ordem_inicial||999);
-    });
-    const first=sorted[0];
-    return '<div class="priority-card">'+
-      '<div class="priority-card-title">'+esc(rotationGroupTitle(g))+'</div>'+
-      '<div class="priority-next"><b>'+esc(displayName(first.profissionais)||first.nome_snapshot||'—')+'</b><span>Próximo da fila • '+Number(first.ocorrencias_validas||0)+' ocorrência(s)</span></div>'+
-      sorted.slice(1,5).map((x,i)=>'<div class="priority-line"><span>'+(i+2)+'. '+esc(displayName(x.profissionais)||x.nome_snapshot||'—')+'</span><b>'+Number(x.ocorrencias_validas||0)+'</b></div>').join('')+
-    '</div>';
-  }).join('');
+  renderRotationRuleHelp();
+  $('#priority').innerHTML=
+    rotationPersonCard('USB — Condutor da vez','driver','USB')+
+    rotationPersonCard('USB — Técnico da vez','tech','USB')+
+    usaTeamRotationCard()+
+    rotationPersonCard('USA — Condutor da vez','driver','USA')+
+    rotationPersonCard('USA — Enfermeiro da vez','nurse','USA');
 }
 
 function regionalOrderIndex(name){
