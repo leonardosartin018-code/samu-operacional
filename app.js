@@ -992,7 +992,7 @@ function bindQuickInputs(){
 }
 async function openTeamModal(vId){
   if(!isOperator())return;
-  if(!currentPlantao)return alert('Selecione um plantão antes de montar a equipe.');
+  if(!currentPlantao)await ensurePlantaoForBook();
   await ensureProfessionals();
   selectedTeamVehicle=vId;
   const v=vehicleById(vId);
@@ -1019,6 +1019,7 @@ async function deactivateTeamRow(m,now){
   }
 }
 async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPIDA'){
+  if(!currentPlantao)await ensurePlantaoForBook();
   const pro=professionals.find(p=>p.id===proId);
   const v=vehicleById(vId);
   if(!pro||!v)throw new Error('Profissional ou viatura não encontrado.');
@@ -1273,6 +1274,7 @@ function renderExpressDrivers(){
 }
 async function expressUseFixed(rowId){
   if(!isOperator())return;
+  if(!currentPlantao)await ensurePlantaoForBook();
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
   if(!r?.profissional_id||!v)return alert('Titular ou viatura não vinculado ao banco.');
   try{await assignProfessionalToVehicle(r.profissional_id,v.id,'Condutor','ESCALA_EXPRESSA');await loadAll(selectedDate());await loadExpressScale()}catch(e){alert(e.message||e)}
@@ -1284,6 +1286,7 @@ function expressSwap(rowId){
 }
 async function expressToggleRotation(rowId){
   if(!isOperator())return;
+  if(!currentPlantao)await ensurePlantaoForBook();
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);if(!v)return;
   let cur=currentByRole(v.id,'driver');
   if(!cur&&r?.profissional_id){
@@ -1308,6 +1311,7 @@ async function expressVacant(rowId){
 }
 async function setAllDriversRotation(){
   if(!isOperator())return;
+  if(!currentPlantao)await ensurePlantaoForBook();
   const rows=activeTeamRows().filter(m=>teamRoleKey(m)==='driver'&&m.viatura_id&&isAnapolisVehicle(vehicleById(m.viatura_id))&&['USA','USB'].some(t=>vehicleType(vehicleById(m.viatura_id)).includes(t)));
   if(!rows.length)return alert('Não há condutores fixos ativos para colocar em revezamento.');
   for(const m of rows){
@@ -1321,6 +1325,7 @@ async function setAllDriversRotation(){
 }
 async function restoreFixedDrivers(){
   if(!isOperator()||!scaleRows.length)return;
+  if(!currentPlantao)await ensurePlantaoForBook();
   if(!confirm('Restaurar todos os condutores fixos desta Ala/turno? As exceções atuais de condutor serão substituídas.'))return;
   for(const r of scaleRows){
     const v=vehicleByCode(r.codigo_viatura);
@@ -1366,7 +1371,7 @@ async function putProfessionalInRotation(pro,group,funcao){
 }
 async function confirmExpress(){
   if(!isOperator())return;
-  if(!currentPlantao)return alert('Selecione um plantão.');
+  if(!currentPlantao)await ensurePlantaoForBook();
   $('#confirmExpressBtn').disabled=true;$('#confirmExpressBtn').textContent='CONFIRMANDO...';
   try{
     for(const p of expressTechSelected.values())await putProfessionalInRotation(p,'USB_TECNICO','Técnico de Enfermagem');
@@ -1502,10 +1507,7 @@ async function ensurePlantaoForBook(){
 }
 async function loadBookData(){
   await ensureProfessionals();
-  if(!currentPlantao){
-    bookMeta=null;internalScaleRows=[];fixedInternalRows=[];bookDriverFixedRows=[];
-    renderBook();renderInternalEditors();return;
-  }
+  await ensurePlantaoForBook();
   const ala=currentPlantao.ala||alaForDate(currentPlantao.data_plantao);
   const turno=normalizeTurno(currentPlantao.turno||operationalShiftContext().turno);
   const [bm,di,fi,fd]=await Promise.all([
@@ -1516,6 +1518,71 @@ async function loadBookData(){
   ]);
   if(bm.error)throw bm.error;if(di.error)throw di.error;if(fi.error)throw fi.error;if(fd.error)throw fd.error;
   bookMeta=bm.data||null;internalScaleRows=di.data||[];fixedInternalRows=fi.data||[];bookDriverFixedRows=fd.data||[];
+
+  await ensureInternalScaleFromFixed();
+  await ensureAutomaticBookNumber();
+}
+async function ensureInternalScaleFromFixed(){
+  if(!currentPlantao||!fixedInternalRows.length)return;
+  const existingCodes=new Set(internalScaleRows.map(x=>x.codigo_posicao));
+  const inserts=[];
+  for(const fixed of fixedInternalRows){
+    if(existingCodes.has(fixed.codigo_posicao))continue;
+    const resolved=fixed.profissional_id
+      ? professionals.find(p=>p.id===fixed.profissional_id)
+      : findProfessionalByReference(fixed.nome_referencia);
+    inserts.push({
+      plantao_id:currentPlantao.id,
+      escala_fixa_id:fixed.id,
+      setor:fixed.setor,
+      codigo_posicao:fixed.codigo_posicao,
+      funcao:fixed.funcao,
+      profissional_id:resolved?.id||fixed.profissional_id||null,
+      nome_snapshot:resolved?.nome_completo||fixed.nome_referencia||null,
+      titular_profissional_id:resolved?.id||fixed.profissional_id||null,
+      titular_nome_snapshot:fixed.nome_referencia||resolved?.nome_completo||null,
+      tipo_alteracao:'ESCALADO',
+      status:'ATIVO',
+      ordem:fixed.ordem,
+      atualizado_em:new Date().toISOString()
+    });
+  }
+  if(!inserts.length)return;
+  const {error}=await supabase.from('escala_interna_plantao').upsert(inserts,{onConflict:'plantao_id,codigo_posicao'});
+  if(error)throw error;
+  const {data,error:reloadError}=await supabase.from('escala_interna_plantao')
+    .select('*').eq('plantao_id',currentPlantao.id).eq('status','ATIVO').order('ordem');
+  if(reloadError)throw reloadError;
+  internalScaleRows=data||[];
+}
+async function ensureAutomaticBookNumber(){
+  if(!currentPlantao)return;
+  if(bookMeta?.parte_diaria)return;
+
+  const {data:allBooks,error:listError}=await supabase.from('livro_plantao').select('parte_diaria');
+  if(listError)throw listError;
+  const nums=(allBooks||[]).map(x=>Number.parseInt(x.parte_diaria,10)).filter(Number.isFinite);
+  let next=Math.max(531,...nums)+1;
+
+  const payload={
+    plantao_id:currentPlantao.id,
+    parte_diaria:String(next),
+    ano:Number(currentPlantao.data_plantao.slice(0,4)),
+    status:'RASCUNHO',
+    atualizado_por:profile?.nome||null,
+    atualizado_em:new Date().toISOString()
+  };
+  let {data,error}=await supabase.from('livro_plantao').insert(payload).select().single();
+
+  if(error&&String(error.code)==='23505'){
+    const retry=await supabase.from('livro_plantao').select('parte_diaria');
+    const retryNums=(retry.data||[]).map(x=>Number.parseInt(x.parte_diaria,10)).filter(Number.isFinite);
+    next=Math.max(531,...retryNums)+1;
+    const again=await supabase.from('livro_plantao').insert({...payload,parte_diaria:String(next)}).select().single();
+    data=again.data;error=again.error;
+  }
+  if(error)throw error;
+  bookMeta=data;
 }
 function internalRow(code){return internalScaleRows.find(x=>x.codigo_posicao===code)||null}
 function fixedInternalRow(code){return fixedInternalRows.find(x=>x.codigo_posicao===code)||null}
