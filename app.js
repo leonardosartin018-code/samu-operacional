@@ -977,7 +977,7 @@ function renderTeamPreview(){
       groups.map(([key,label])=>{
         const arr=list.filter(m=>teamRoleKey(m)===key);
         if(!arr.length)return '';
-        return '<div class="roster-role-group"><div class="roster-role-head"><b>'+label+'</b><span>'+arr.length+'</span></div><div class="roster-list">'+arr.map(rosterPersonHtml).join('')+'</div></div>';
+        return '<div class="roster-role-group role-'+key+'"><div class="roster-role-head"><b>'+label+'</b><span>'+arr.length+'</span></div><div class="roster-list">'+arr.map(rosterPersonHtml).join('')+'</div></div>';
       }).join('')+
       (!list.length?'<div class="priority-empty">Nenhum profissional escalado nesta região.</div>':'')+
     '</section>';
