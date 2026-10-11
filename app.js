@@ -1230,10 +1230,10 @@ function expressCard(r){
     '<div class="express-current-label">EM SERVIÇO</div><div class="express-current-name">'+esc(currentName)+'</div>'+
     (st.state==='permuta'?'<div class="express-permuta-note">SUBSTITUINDO: '+esc(titular||'TITULAR')+'</div>':'')+
     '<div class="express-driver-actions">'+
-      '<button class="fixed" data-exp-fixed="'+r.id+'">FIXO</button>'+
-      '<button class="swap" data-exp-swap="'+r.id+'">'+(st.current?'PERMUTA':'ESCALAR')+'</button>'+
-      '<button class="rotation" data-exp-rotation="'+r.id+'">REVEZ.</button>'+
-      '<button class="vacant" data-exp-vacant="'+r.id+'">VAGO</button>'+
+      '<button class="fixed '+(st.state==='fixed'?'active':'')+'" data-exp-fixed="'+r.id+'">✓ FIXO</button>'+
+      '<button class="swap '+(st.state==='permuta'?'active':'')+'" data-exp-swap="'+r.id+'">⇄ PERMUTA</button>'+
+      '<button class="rotation '+(st.state==='rotation'?'active':'')+'" data-exp-rotation="'+r.id+'">↻ REVEZ.</button>'+
+      '<button class="vacant '+(st.state==='vacant'||st.state==='unresolved'?'active':'')+'" data-exp-vacant="'+r.id+'">□ VAGO</button>'+
     '</div>'+
   '</article>';
 }
