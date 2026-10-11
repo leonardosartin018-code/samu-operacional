@@ -247,14 +247,19 @@ function renderAll(){
 }
 
 function renderSummary(){
-  const sts=vehicles.map(statusInfo);
-  const qrv=sts.filter(x=>x.key==='base').length;
-  const occ=sts.filter(x=>x.key==='occurrence').length;
-  const ret=sts.filter(x=>x.key==='returning').length;
-  const down=sts.filter(x=>['asepsis','mechanical','noCrew','noStretcher'].includes(x.key)).length;
-  const active=activeTeamRows().length;
+  const an=vehicles.filter(isAnapolisVehicle),rg=vehicles.filter(v=>!isAnapolisVehicle(v));
+  const calc=list=>{
+    const x={base:0,occurrence:0,returning:0,other:0,total:list.length};
+    list.forEach(v=>{const k=statusInfo(v).key;if(k==='base')x.base++;else if(k==='occurrence')x.occurrence++;else if(k==='returning')x.returning++;else x.other++});
+    return x;
+  };
+  const a=calc(an),r=calc(rg),attention=a.returning+a.other+r.returning+r.other;
   $('#summary').innerHTML=[
-    ['VIATURAS QRV',qrv],['EM OCORRÊNCIA',occ],['RETORNANDO',ret],['INDISPONÍVEIS',down],['EQUIPE ATIVA',active]
+    ['ANÁPOLIS QRV',a.base+' / '+a.total],
+    ['ANÁPOLIS EM OCORRÊNCIA',a.occurrence],
+    ['REGIONAL QRV',r.base+' / '+r.total],
+    ['REGIONAL EM OCORRÊNCIA',r.occurrence],
+    ['PRECISAM DE ATENÇÃO',attention]
   ].map(x=>'<div class="sum"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('');
   $('#plantaoInfo').textContent=currentPlantao
     ? 'Plantão '+(currentPlantao.legacy_id||'')+' • '+fmtDate(currentPlantao.data_plantao)+' • '+currentPlantao.status
