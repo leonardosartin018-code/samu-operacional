@@ -391,3 +391,22 @@ nav.tabs .tab.book-tab.active{
   color:#9a3412;font-size:.64rem;font-weight:1000;text-align:left;cursor:pointer
 }
 .autocomplete-register:hover{background:#ffedd5}
+
+/* ---------- confirmações de escala / persistência ---------- */
+.team-head-actions,.internal-head-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.confirm-scale-top,.internal-confirm-btn{
+  background:#0b6ea8!important;
+  border:1px solid #075985!important;
+  color:#fff!important;
+  font-weight:1000!important
+}
+.confirm-scale-top:hover,.internal-confirm-btn:hover{background:#075985!important}
+.confirm-copy{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.scale-confirm-state{
+  display:inline-flex;align-items:center;min-height:25px;padding:5px 8px;border-radius:999px;
+  font-size:.58rem;font-weight:1000;letter-spacing:.02em;border:1px solid transparent
+}
+.scale-confirm-state.pending{background:#fff7ed;border-color:#fdba74;color:#9a3412}
+.scale-confirm-state.confirmed{background:#dcfce7;border-color:#86efac;color:#166534}
+.internal-card-footer{min-height:29px}
+.internal-card-footer small{line-height:1.25}
