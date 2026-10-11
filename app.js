@@ -34,10 +34,10 @@ let expressNurseSelected = new Map();
 
 const REGIONAL_ORDER = ['ABADIÂNIA','ALEXÂNIA','COCALZINHO','CORUMBÁ','GOIANÁPOLIS','JARANÁPOLIS','PIRENÓPOLIS','TEREZÓPOLIS'];
 const BOOK_INTERNAL_SLOTS = [
-  {code:'AMB-S1',label:'AMB - S1',setor:'SANITARIA',funcao:'SANITARIA',order:10},
-  {code:'AMB-S2',label:'AMB - S2',setor:'SANITARIA',funcao:'SANITARIA',order:20},
-  {code:'AMB-03-EXTRA',label:'AMB - 03 EXTRA',setor:'SANITARIA',funcao:'SANITARIA',order:30},
-  {code:'AMB-S4-EXTRA',label:'AMB - S4 EXTRA',setor:'SANITARIA',funcao:'SANITARIA',order:40},
+  {code:'AMB-S1',label:'S 01 - IRACEMA',bookLabel:'AMB - S1',setor:'SANITARIA',funcao:'SANITARIA',order:10},
+  {code:'AMB-S2',label:'S 02 - EXTRA',bookLabel:'AMB - S2',setor:'SANITARIA',funcao:'SANITARIA',order:20},
+  {code:'AMB-03-EXTRA',label:'AMB - 03 EXTRA',bookLabel:'AMB - 03 EXTRA',setor:'SANITARIA',funcao:'SANITARIA',order:30},
+  {code:'AMB-S4-EXTRA',label:'AMB - S4 EXTRA',bookLabel:'AMB - S4 EXTRA',setor:'SANITARIA',funcao:'SANITARIA',order:40},
   {code:'RADIO-01',label:'RADIO 01',setor:'CENTRAL',funcao:'RADIO',order:100},
   {code:'RADIO-02',label:'RADIO 02',setor:'CENTRAL',funcao:'RADIO',order:110},
   {code:'TARM-01',label:'TARM 01',setor:'CENTRAL',funcao:'TARM',order:120},
