@@ -509,6 +509,38 @@
   </div>
 </div>
 
+<div id="expressPermutaModal" class="modal">
+  <div class="dialog assign-dialog">
+    <div class="dialog-head">
+      <div><div class="dialog-kicker">PERMUTA DE CONDUTOR</div><h2 id="expressPermutaTitle">Registrar permuta</h2></div>
+      <button class="icon-close" data-close-modal="expressPermutaModal">×</button>
+    </div>
+    <div id="expressPermutaTitular" class="assign-person"></div>
+    <div class="form-grid">
+      <label class="full">Quem está substituindo
+        <div class="autocomplete-shell">
+          <input id="expressPermutaSearch" autocomplete="off" placeholder="Digite 3 letras do nome do condutor">
+          <input id="expressPermutaProId" type="hidden">
+          <div id="expressPermutaResults" class="autocomplete-results floating"></div>
+        </div>
+      </label>
+      <label class="full">Como o substituto ficará no plantão
+        <select id="expressPermutaMode">
+          <option value="FIXO">FIXO NA VIATURA</option>
+          <option value="REVEZAMENTO">REVEZAMENTO</option>
+        </select>
+      </label>
+    </div>
+    <div class="team-modal-note">
+      Na opção <b>FIXO NA VIATURA</b>, o substituto fica vinculado à viatura desta escala. Em <b>REVEZAMENTO</b>, ele entra na fila correspondente e deixa de ficar fixo na viatura.
+    </div>
+    <div class="modal-actions">
+      <button class="btn" data-close-modal="expressPermutaModal">Cancelar</button>
+      <button id="saveExpressPermutaBtn" class="btn primary">SALVAR PERMUTA</button>
+    </div>
+  </div>
+</div>
+
 <div id="assignModal" class="modal">
   <div class="dialog assign-dialog">
     <div class="dialog-head"><div><div class="dialog-kicker">ESCALAR PROFISSIONAL</div><h2 id="assignTitle">Escalar</h2></div><button class="icon-close" data-close-modal="assignModal">×</button></div>
@@ -537,6 +569,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261011-6"></script>
+<script type="module" src="./app.js?v=20261011-7"></script>
 </body>
 </html>
