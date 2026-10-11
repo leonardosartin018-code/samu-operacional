@@ -894,9 +894,11 @@ function renderTeamSearch(q){
   const list=professionals.filter(p=>teamSearchText(p).includes(n)).slice(0,20);
   box.innerHTML=list.length?list.map(p=>
     '<div class="team-search-result"><div><div class="team-search-name">'+esc(displayName(p))+'</div><div class="team-search-meta">'+esc(p.nome_completo||'')+'</div></div><div class="team-search-meta">'+esc(p.funcao_sistema||'')+'</div><button class="btn primary" data-assign-prof="'+p.id+'">ESCALAR</button></div>'
-  ).join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div>';
+  ).join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div><button type="button" class="autocomplete-register" data-register-new="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
   box.classList.add('show');
   box.querySelectorAll('[data-assign-prof]').forEach(b=>b.onclick=()=>openAssignModal(b.dataset.assignProf));
+  const add=box.querySelector('[data-register-new]');
+  if(add)add.onclick=()=>openQuickRegistration(q,'other',null,null);
 }
 
 function rosterPersonHtml(m){
@@ -2042,15 +2044,19 @@ function internalAutocomplete(code,q,root=document){
   if(hidden)hidden.value='';
   if(n.length<3){box.classList.remove('show');box.innerHTML='';return}
   const list=professionals.filter(p=>teamSearchText(p).includes(n)).slice(0,15);
-  box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-int-prof="'+p.id+'"><b>'+esc(displayName(p))+'</b><small>'+esc(p.nome_completo)+' • '+esc(p.funcao_sistema||'')+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div>';
+  const input=root.querySelector('[data-int-search="'+code+'"]'),idEl=root.querySelector('[data-int-id="'+code+'"]');
+  box.innerHTML=list.length
+    ? list.map(p=>'<button type="button" class="autocomplete-result" data-int-prof="'+p.id+'"><b>'+esc(professionalLabel(p,'other'))+'</b><small>'+esc(p.funcao_sistema||'')+' • '+esc(p.nome_completo)+'</small></button>').join('')
+    : '<div class="autocomplete-empty">Nenhum profissional encontrado.</div><button type="button" class="autocomplete-register" data-register-new="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
   box.classList.add('show');
   box.querySelectorAll('[data-int-prof]').forEach(b=>b.onclick=()=>{
     const p=professionals.find(x=>x.id===b.dataset.intProf);
-    const input=root.querySelector('[data-int-search="'+code+'"]'),idEl=root.querySelector('[data-int-id="'+code+'"]');
-    input.value=p.nome_completo;if(idEl)idEl.value=p.id;box.classList.remove('show');
+    input.value=professionalLabel(p,'other');if(idEl)idEl.value=p.id;box.classList.remove('show');
     const selected=input.closest('.internal-permuta-box')?.querySelector('.internal-permuta-selected');
-    if(selected)selected.textContent='Substituto: '+p.nome_completo;
+    if(selected)selected.textContent='Substituto: '+displayName(p);
   });
+  const add=box.querySelector('[data-register-new]');
+  if(add)add.onclick=()=>openQuickRegistration(input.value,'other',input,idEl);
 }
 async function saveInternalSlot(code,root=document){
   if(!isOperator())return;
