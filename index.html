@@ -243,9 +243,12 @@
           <div class="express-final-actions">
             <div class="express-final-left">
               <button id="applyExpressPreviewBtn" class="express-apply-btn">APLICAR NA PRÉVIA</button>
-              <span class="express-note">A confirmação grava no Supabase e atualiza o painel em tempo real.</span>
+              <div class="confirm-copy">
+                <span class="express-note">A confirmação registra a escala operacional e sincroniza o LIVRO.</span>
+                <span id="expressConfirmState" class="scale-confirm-state pending">NÃO CONFIRMADA</span>
+              </div>
             </div>
-            <button id="confirmExpressBtn" class="express-confirm-btn">CONFIRMAR ESCALA EXPRESSA</button>
+            <button id="confirmExpressBtn" class="express-confirm-btn">CONFIRMAR ESCALA</button>
           </div>
         </div>
 
@@ -320,7 +323,9 @@
             </div>
             <div class="internal-head-actions">
               <span id="internalAlaTurnoBadge" class="count-badge">—</span>
+              <span id="internalConfirmState" class="scale-confirm-state pending">NÃO CONFIRMADA</span>
               <button id="internalReloadBtn" class="btn">ATUALIZAR</button>
+              <button id="confirmInternalBtn" class="btn internal-confirm-btn">CONFIRMAR EQUIPE INTERNA</button>
             </div>
           </div>
           <div class="internal-guidance">
@@ -359,7 +364,10 @@
         </div>
 
         <div class="book-internal-editor">
-          <div class="head"><div><h2>Escala interna do plantão</h2><p>Digite 3 letras para localizar o profissional. Quando houver permuta, selecione PERMUTA e informe quem está substituindo o titular.</p></div></div>
+          <div class="head">
+            <div><h2>Escala interna do plantão</h2><p>Digite 3 letras para localizar o profissional. Quando houver permuta, selecione PERMUTA e informe quem está substituindo o titular. Confirme para gravar e atualizar o documento oficial.</p></div>
+            <button id="confirmInternalBookBtn" class="btn internal-confirm-btn">CONFIRMAR EQUIPE INTERNA</button>
+          </div>
           <div id="internalScaleEditor" class="internal-scale-grid"></div>
         </div>
 
