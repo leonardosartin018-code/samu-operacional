@@ -154,8 +154,35 @@ function statusInfo(v){
 function statusDbValue(key){
   return {base:'BASE',occurrence:'OCORRENCIA',returning:'RETORNANDO',asepsis:'ASSEPSIA',mechanical:'PANE',noCrew:'SEM EQUIPE',noStretcher:'SEM MACA'}[key] || key;
 }
+const ALA_CYCLE=['ALFA','BRAVO','CHARLIE','DELTA'];
+const ALA_REFERENCE_DATE='2026-09-29';
+const ALA_REFERENCE_INDEX=2; // 29/09/2026 = CHARLIE, referência do sistema anterior
+
+function localTodayIso(){
+  const parts=new Intl.DateTimeFormat('en-US',{
+    timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'
+  }).formatToParts(new Date());
+  const obj=Object.fromEntries(parts.map(p=>[p.type,p.value]));
+  return obj.year+'-'+obj.month+'-'+obj.day;
+}
+function alaForDate(dateIso){
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(String(dateIso||'')))return '—';
+  const ref=Date.parse(ALA_REFERENCE_DATE+'T00:00:00Z');
+  const cur=Date.parse(dateIso+'T00:00:00Z');
+  const diff=Math.round((cur-ref)/86400000);
+  const idx=((ALA_REFERENCE_INDEX+diff)%ALA_CYCLE.length+ALA_CYCLE.length)%ALA_CYCLE.length;
+  return ALA_CYCLE[idx];
+}
+function syncDateAndAla(dateIso){
+  const date=dateIso||localTodayIso();
+  $('#shiftDate').value=date;
+  const ala=alaForDate(date);
+  $('#dayAlaBadge').textContent='ALA DO DIA: '+ala;
+  if($('#expressAla'))$('#expressAla').value=ala;
+  return ala;
+}
 function selectedDate(){
-  return $('#shiftDate').value || currentPlantao?.data_plantao || new Date().toISOString().slice(0,10);
+  return $('#shiftDate').value || currentPlantao?.data_plantao || localTodayIso();
 }
 
 function openPage(id){
@@ -187,52 +214,94 @@ async function ensureProfessionals(){
 }
 
 async function choosePlantao(preferredDate){
-  if(preferredDate){
-    const {data,error}=await supabase.from('plantoes').select('*').eq('data_plantao',preferredDate).order('iniciado_em',{ascending:false});
-    if(error) throw error;
-    const list=data||[];
-    return list.find(x=>norm(x.status)==='ABERTO') || list[0] || null;
-  }
-  const open=await supabase.from('plantoes').select('*').eq('status','ABERTO').order('data_plantao',{ascending:false}).order('iniciado_em',{ascending:false}).limit(1);
-  if(open.error) throw open.error;
-  if(open.data?.[0]) return open.data[0];
-  const latest=await supabase.from('plantoes').select('*').order('data_plantao',{ascending:false}).order('iniciado_em',{ascending:false}).limit(1);
-  if(latest.error) throw latest.error;
-  return latest.data?.[0]||null;
+  const date=preferredDate||localTodayIso();
+  const {data,error}=await supabase.from('plantoes')
+    .select('*')
+    .eq('data_plantao',date)
+    .order('iniciado_em',{ascending:false});
+  if(error)throw error;
+  const list=data||[];
+  return list.find(x=>norm(x.status)==='ABERTO') || list[0] || null;
 }
 
 async function loadAll(preferredDate=null){
-  try{
-    setSync('Atualizando dados do banco...','warn');
-    currentPlantao=await choosePlantao(preferredDate);
-    if(currentPlantao) $('#shiftDate').value=currentPlantao.data_plantao;
-    const baseQueries=[
-      supabase.from('viaturas').select('*,bases(id,nome,tipo,ordem_exibicao)').eq('ativo',true).order('ordem_exibicao'),
-      currentPlantao ? supabase.from('equipe_plantao').select('*,profissionais(id,nome_completo,nome_de_guerra,funcao_sistema)').eq('plantao_id',currentPlantao.id) : Promise.resolve({data:[]}),
-      currentPlantao ? supabase.from('ocorrencias').select('*').eq('plantao_id',currentPlantao.id).order('criado_em',{ascending:false}) : Promise.resolve({data:[]}),
-      currentPlantao ? supabase.from('revezamento_plantao').select('*,profissionais(id,nome_completo,nome_de_guerra,funcao_sistema)').eq('plantao_id',currentPlantao.id).order('grupo_revezamento').order('ordem_inicial') : Promise.resolve({data:[]})
-    ];
-    const [vr,tr,or,rr]=await Promise.all(baseQueries);
-    for(const q of [vr,tr,or,rr]) if(q.error) throw q.error;
-    vehicles=vr.data||[];
-    team=tr.data||[];
-    occurrences=or.data||[];
-    rotation=rr.data||[];
+  const date=preferredDate||selectedDate()||localTodayIso();
+  const ala=syncDateAndAla(date);
+  setSync('Atualizando dados do banco...','warn');
 
-    occurrenceTeam=[];
-    if(occurrences.length){
-      const ids=occurrences.map(o=>o.id);
-      const et=await supabase.from('equipe_ocorrencia')
-        .select('*,profissionais(id,nome_completo,nome_de_guerra,funcao_sistema)')
-        .in('ocorrencia_id',ids);
-      if(!et.error) occurrenceTeam=et.data||[];
+  currentPlantao=null;
+  vehicles=[];team=[];occurrences=[];rotation=[];occurrenceTeam=[];
+  const warnings=[];
+
+  try{
+    try{
+      currentPlantao=await choosePlantao(date);
+    }catch(e){
+      console.warn('Falha ao carregar plantão',e);
+      warnings.push('plantão');
     }
-    await ensureProfessionals();
+
+    // A frota e as bases são carregadas primeiro e de forma independente.
+    // Assim, um erro em equipe/revezamento nunca mais faz as viaturas sumirem do painel.
+    const [vr,br]=await Promise.all([
+      supabase.from('viaturas').select('*').eq('ativo',true).order('ordem_exibicao'),
+      supabase.from('bases').select('id,nome,tipo,municipio,ordem_exibicao').eq('ativo',true)
+    ]);
+    if(vr.error)throw vr.error;
+    if(br.error)warnings.push('bases');
+    const basesMap=new Map((br.data||[]).map(b=>[b.id,b]));
+    vehicles=(vr.data||[]).map(v=>({...v,bases:basesMap.get(v.base_id)||null}));
+
+    try{
+      await ensureProfessionals();
+    }catch(e){
+      console.warn('Falha ao carregar profissionais',e);
+      warnings.push('profissionais');
+      professionals=[];
+    }
+    const profMap=new Map(professionals.map(p=>[p.id,p]));
+
+    if(currentPlantao){
+      const [tr,or,rr]=await Promise.all([
+        supabase.from('equipe_plantao').select('*').eq('plantao_id',currentPlantao.id),
+        supabase.from('ocorrencias').select('*').eq('plantao_id',currentPlantao.id).order('criado_em',{ascending:false}),
+        supabase.from('revezamento_plantao').select('*').eq('plantao_id',currentPlantao.id).order('grupo_revezamento').order('ordem_inicial')
+      ]);
+
+      if(tr.error){console.warn(tr.error);warnings.push('equipe')}
+      else team=(tr.data||[]).map(m=>({...m,profissionais:profMap.get(m.profissional_id)||null}));
+
+      if(or.error){console.warn(or.error);warnings.push('ocorrências')}
+      else occurrences=or.data||[];
+
+      if(rr.error){console.warn(rr.error);warnings.push('revezamento')}
+      else rotation=(rr.data||[]).map(m=>({...m,profissionais:profMap.get(m.profissional_id)||null}));
+
+      if(occurrences.length){
+        const ids=occurrences.map(o=>o.id);
+        const et=await supabase.from('equipe_ocorrencia').select('*').in('ocorrencia_id',ids);
+        if(et.error){console.warn(et.error);warnings.push('equipe das ocorrências')}
+        else occurrenceTeam=(et.data||[]).map(m=>({...m,profissionais:profMap.get(m.profissional_id)||null}));
+      }
+    }
+
     renderAll();
-    setSync('Banco conectado • atualização em tempo real ativa');
+    if(currentPlantao){
+      $('#plantaoInfo').textContent='Plantão '+(currentPlantao.legacy_id||'')+' • '+fmtDate(date)+' • ALA '+(currentPlantao.ala||ala)+' • '+currentPlantao.status;
+    }else{
+      $('#plantaoInfo').textContent=fmtDate(date)+' • ALA '+ala+' • ainda não há plantão aberto para esta data no novo banco';
+    }
+
+    if(warnings.length){
+      setSync('Frota carregada. Atenção: não foi possível carregar '+[...new Set(warnings)].join(', ')+'.','warn');
+    }else{
+      setSync('Banco conectado • atualização em tempo real ativa');
+    }
   }catch(e){
     console.error(e);
-    setSync(e.message || String(e),'error');
+    // Mesmo em erro total, tenta renderizar o estado disponível para não deixar a tela vazia.
+    try{renderAll()}catch(renderError){console.error(renderError)}
+    setSync('Erro ao carregar o painel: '+(e.message||String(e)),'error');
   }
 }
 
@@ -1124,7 +1193,11 @@ async function applySession(s){
   $('#roleBadge').textContent=p?.papel||'CONSULTA';
   $('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
   $('#endShiftBtn').disabled=!isOperator();$('#manualOccBtn').disabled=!isOperator();
-  await loadAll();
+
+  // Sempre abre no dia atual de São Paulo, e não em um plantão antigo que ficou ABERTO.
+  const today=localTodayIso();
+  syncDateAndAla(today);
+  await loadAll(today);
   subscribeRealtime();
 }
 
@@ -1152,7 +1225,7 @@ $$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page));
 $$('[data-open-page]').forEach(b=>b.onclick=()=>openPage(b.dataset.openPage));
 $$('[data-close-modal]').forEach(b=>b.onclick=()=>closeModal(b.dataset.closeModal));
 $$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModal(m.id)}));
-$('#shiftDate').onchange=()=>loadAll($('#shiftDate').value);
+$('#shiftDate').onchange=()=>{syncDateAndAla($('#shiftDate').value);loadAll($('#shiftDate').value)};
 $('#exportBtn').onclick=exportCSV;$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
 $('#regionalBtn').onclick=()=>$('#regionalIntegrated').scrollIntoView({behavior:'smooth',block:'start'});
 $('#rotationCriterion').onchange=renderRotation;
