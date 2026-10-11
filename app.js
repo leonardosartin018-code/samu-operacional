@@ -18,6 +18,9 @@ let occurrenceTeam = [];
 let rotation = [];
 let professionals = [];
 let scaleRows = [];
+let bookMeta = null;
+let internalScaleRows = [];
+let fixedInternalRows = [];
 let selectedVehicle = null;
 let selectedTeamVehicle = null;
 let selectedEditOccurrence = null;
@@ -29,6 +32,19 @@ let expressTechSelected = new Map();
 let expressNurseSelected = new Map();
 
 const REGIONAL_ORDER = ['ABADIÂNIA','ALEXÂNIA','COCALZINHO','CORUMBÁ','GOIANÁPOLIS','JARANÁPOLIS','PIRENÓPOLIS','TEREZÓPOLIS'];
+const BOOK_INTERNAL_SLOTS = [
+  {code:'AMB-S1',label:'AMB - S1',setor:'SANITARIA',funcao:'SANITARIA',order:10},
+  {code:'AMB-S2',label:'AMB - S2',setor:'SANITARIA',funcao:'SANITARIA',order:20},
+  {code:'AMB-03-EXTRA',label:'AMB - 03 EXTRA',setor:'SANITARIA',funcao:'SANITARIA',order:30},
+  {code:'AMB-S4-EXTRA',label:'AMB - S4 EXTRA',setor:'SANITARIA',funcao:'SANITARIA',order:40},
+  {code:'RADIO-01',label:'RADIO 01',setor:'CENTRAL',funcao:'RADIO',order:100},
+  {code:'RADIO-02',label:'RADIO 02',setor:'CENTRAL',funcao:'RADIO',order:110},
+  {code:'TARM-01',label:'TARM 01',setor:'CENTRAL',funcao:'TARM',order:120},
+  {code:'TARM-02',label:'TARM 02',setor:'CENTRAL',funcao:'TARM',order:130},
+  {code:'TARM-03',label:'TARM 03',setor:'CENTRAL',funcao:'TARM',order:140},
+  {code:'LAVADOR-01',label:'LAVADOR 01',setor:'CENTRAL',funcao:'LAVADOR',order:150},
+  {code:'LAVADOR-02',label:'LAVADOR 02',setor:'CENTRAL',funcao:'LAVADOR',order:160}
+];
 
 const esc = v => String(v ?? '').replace(/[&<>"']/g, c => ({
   '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'
@@ -226,6 +242,9 @@ function openPage(id){
     renderTeamPreview();
     loadExpressScale();
     renderRegistry();
+  }
+  if(id==='book'){
+    loadBookData().then(renderBook).catch(e=>alert(e.message||e));
   }
 }
 window.openPage=openPage;
