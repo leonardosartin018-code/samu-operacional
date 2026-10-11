@@ -264,22 +264,39 @@ async function ensureProfessionals(){
   return professionals;
 }
 
-async function choosePlantao(preferredDate){
-  const date=preferredDate||localTodayIso();
-  const {data,error}=await supabase.from('plantoes')
-    .select('*')
-    .eq('data_plantao',date)
-    .order('iniciado_em',{ascending:false});
+async function choosePlantao(preferredDate,preferredTurno=null,preferredAla=null){
+  const date=preferredDate||operationalShiftContext().date;
+  let q=supabase.from('plantoes').select('*').eq('data_plantao',date);
+  if(preferredTurno)q=q.eq('turno',normalizeTurno(preferredTurno));
+  if(preferredAla)q=q.eq('ala',norm(preferredAla));
+  const {data,error}=await q.order('iniciado_em',{ascending:false});
   if(error)throw error;
   const list=data||[];
   return list.find(x=>norm(x.status)==='ABERTO') || list[0] || null;
 }
+async function ensureOperationalPlantao(date,turno,ala){
+  const exact=await choosePlantao(date,turno,ala);
+  if(exact)return exact;
+  const payload={
+    data_plantao:date,turno:normalizeTurno(turno),ala:norm(ala),status:'ABERTO',
+    iniciado_em:new Date().toISOString(),tipo_plantao:'OPERACIONAL',operador_abertura:profile?.nome||null
+  };
+  let {data,error}=await supabase.from('plantoes').insert(payload).select().single();
+  if(error&&String(error.code)==='23505'){
+    return await choosePlantao(date,turno,ala);
+  }
+  if(error)throw error;
+  return data;
+}
 
 async function loadAll(preferredDate=null){
-  const date=preferredDate||selectedDate()||operationalShiftContext().date;
+  const ctx=operationalShiftContext();
+  const date=preferredDate||selectedDate()||ctx.date;
   const initialShift=syncDateAndAla(date);
   const ala=initialShift.ala;
-  setSync('Atualizando dados do banco...','warn');
+  const turno=(date===ctx.date)?ctx.turno:initialShift.turno;
+  const isCurrentShift=date===ctx.date;
+  setSync('Identificando plantão atual e pré-carregando escalas...','warn');
 
   currentPlantao=null;
   vehicles=[];team=[];occurrences=[];rotation=[];occurrenceTeam=[];
@@ -287,12 +304,15 @@ async function loadAll(preferredDate=null){
 
   try{
     try{
-      currentPlantao=await choosePlantao(date);
-      syncDateAndAla(date,currentPlantao?.turno||initialShift.turno);
+      currentPlantao=await choosePlantao(date,turno,ala);
+      if(!currentPlantao&&isCurrentShift){
+        currentPlantao=await ensureOperationalPlantao(date,turno,ala);
+      }
+      syncDateAndAla(date,currentPlantao?.turno||turno);
     }catch(e){
       console.warn('Falha ao carregar plantão',e);
       warnings.push('plantão');
-      syncDateAndAla(date,initialShift.turno);
+      syncDateAndAla(date,turno);
     }
 
     // A frota e as bases são carregadas primeiro e de forma independente.
@@ -314,6 +334,16 @@ async function loadAll(preferredDate=null){
       professionals=[];
     }
     const profMap=new Map(professionals.map(p=>[p.id,p]));
+
+    if(currentPlantao&&isCurrentShift){
+      try{
+        await ensureOperationalScaleFromFixed();
+        await loadBookData();
+      }catch(e){
+        console.warn('Falha ao pré-carregar escalas do plantão',e);
+        warnings.push('pré-carga das escalas');
+      }
+    }
 
     if(currentPlantao){
       const [tr,or,rr]=await Promise.all([
@@ -1252,7 +1282,7 @@ function expressCard(r){
     '<div class="express-current-label">EM SERVIÇO</div><div class="express-current-name">'+esc(currentName)+'</div>'+
     (st.state==='permuta'?'<div class="express-permuta-note">SUBSTITUINDO: '+esc(titular||'TITULAR')+'</div>':'')+
     '<div class="express-driver-actions">'+
-      '<button class="fixed '+(st.state==='fixed'?'active':'')+'" data-exp-fixed="'+r.id+'">✓ FIXO</button>'+
+      '<button title="'+(st.state==='fixed'?'Clique novamente para desescalar':'Clique para escalar o titular')+'" class="fixed '+(st.state==='fixed'?'active':'')+'" data-exp-fixed="'+r.id+'">'+(st.state==='fixed'?'✓ ESCALADO':'✓ ESCALAR')+'</button>'+
       '<button class="swap '+(st.state==='permuta'?'active':'')+'" data-exp-swap="'+r.id+'">⇄ PERMUTA</button>'+
       '<button class="rotation '+(st.state==='rotation'?'active':'')+'" data-exp-rotation="'+r.id+'">↻ REVEZ.</button>'+
       '<button class="vacant '+(st.state==='vacant'||st.state==='unresolved'?'active':'')+'" data-exp-vacant="'+r.id+'">□ VAGO</button>'+
@@ -1277,7 +1307,28 @@ async function expressUseFixed(rowId){
   if(!currentPlantao)await ensurePlantaoForBook();
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
   if(!r?.profissional_id||!v)return alert('Titular ou viatura não vinculado ao banco.');
-  try{await assignProfessionalToVehicle(r.profissional_id,v.id,'Condutor','ESCALA_EXPRESSA');await loadAll(selectedDate());await loadExpressScale()}catch(e){alert(e.message||e)}
+  try{
+    const st=expressRowState(r);
+    if(st.state==='fixed'&&st.current){
+      const {error}=await supabase.from('equipe_plantao').update({
+        status:'INATIVO',saiu_em:new Date().toISOString(),tipo_alteracao_escala:'DESESCALADO'
+      }).eq('id',st.current.id);
+      if(error)throw error;
+    }else{
+      await assignProfessionalToVehicle(r.profissional_id,v.id,'Condutor','ESCALA_EXPRESSA');
+      const cur=activeTeamRows().find(m=>m.viatura_id===v.id&&m.profissional_id===r.profissional_id&&teamRoleKey(m)==='driver');
+      if(cur){
+        await supabase.from('equipe_plantao').update({
+          titular_profissional_id:r.profissional_id,
+          nome_titular_escala:r.nome_referencia,
+          tipo_alteracao_escala:'FIXO',
+          ala_escala:currentPlantao.ala,
+          turno_escala:currentPlantao.turno
+        }).eq('id',cur.id);
+      }
+    }
+    await loadAll(selectedDate());await loadExpressScale();
+  }catch(e){alert(e.message||e)}
 }
 function expressSwap(rowId){
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
@@ -1461,6 +1512,78 @@ async function registerProfessional(){
 }
 
 
+async function ensureOperationalScaleFromFixed(){
+  if(!currentPlantao||!vehicles.length||!professionals.length)return;
+  const ala=currentPlantao.ala||alaForDate(currentPlantao.data_plantao);
+  const turno=normalizeTurno(currentPlantao.turno||operationalShiftContext().turno);
+  const [fixRes,teamRes]=await Promise.all([
+    supabase.from('escala_fixa_anapolis').select('*').eq('ala',ala).eq('turno',turno).eq('ativo',true).order('ordem'),
+    supabase.from('equipe_plantao').select('*').eq('plantao_id',currentPlantao.id)
+  ]);
+  if(fixRes.error)throw fixRes.error;
+  if(teamRes.error)throw teamRes.error;
+  const fixedRows=fixRes.data||[];
+  const existing=teamRes.data||[];
+  const now=new Date().toISOString();
+
+  for(const fixed of fixedRows){
+    const v=vehicleByCode(fixed.codigo_viatura);
+    if(!v||!fixed.profissional_id)continue;
+
+    const historicalPosition=existing.find(m=>
+      (m.titular_profissional_id===fixed.profissional_id && norm(m.ala_escala)===norm(ala) && norm(m.turno_escala)===norm(turno)) ||
+      (norm(m.origem_escala)==='AUTO_ESCALA_FIXA' && norm(m.nome_titular_escala)===norm(fixed.nome_referencia))
+    );
+    if(historicalPosition)continue;
+
+    const activeAtVehicle=existing.find(m=>norm(m.status)==='ATIVO'&&m.viatura_id===v.id&&norm(m.funcao).includes('CONDUTOR'));
+    if(activeAtVehicle){
+      const tipo=activeAtVehicle.profissional_id===fixed.profissional_id?'FIXO':'PERMUTA';
+      const {error}=await supabase.from('equipe_plantao').update({
+        titular_profissional_id:fixed.profissional_id,
+        nome_titular_escala:fixed.nome_referencia,
+        tipo_alteracao_escala:tipo,
+        ala_escala:ala,turno_escala:turno
+      }).eq('id',activeAtVehicle.id);
+      if(error)throw error;
+      continue;
+    }
+
+    const activeTitular=existing.find(m=>norm(m.status)==='ATIVO'&&m.profissional_id===fixed.profissional_id);
+    if(activeTitular){
+      const {error}=await supabase.from('equipe_plantao').update({
+        titular_profissional_id:fixed.profissional_id,
+        nome_titular_escala:fixed.nome_referencia,
+        ala_escala:ala,turno_escala:turno
+      }).eq('id',activeTitular.id);
+      if(error)throw error;
+      continue;
+    }
+
+    const pro=professionals.find(p=>p.id===fixed.profissional_id);
+    const {data:inserted,error}=await supabase.from('equipe_plantao').insert({
+      plantao_id:currentPlantao.id,
+      profissional_id:fixed.profissional_id,
+      nome_snapshot:pro?.nome_completo||fixed.nome_referencia,
+      funcao:'Condutor',
+      tipo_escala:'FIXO EM VIATURA',
+      viatura_id:v.id,
+      viatura_snapshot:v.nome,
+      status:'ATIVO',
+      entrou_em:currentPlantao.iniciado_em||now,
+      ocorrencias_validas:0,
+      origem_escala:'AUTO_ESCALA_FIXA',
+      titular_profissional_id:fixed.profissional_id,
+      nome_titular_escala:fixed.nome_referencia,
+      tipo_alteracao_escala:'FIXO',
+      ala_escala:ala,
+      turno_escala:turno
+    }).select('*').single();
+    if(error)throw error;
+    if(inserted)existing.push(inserted);
+  }
+}
+
 /* ---------- livro do plantão / serviço interno ---------- */
 function showTeamScope(scope){
   const internal=scope==='internal';
@@ -1495,15 +1618,13 @@ function findProfessionalByReference(name){
 }
 async function ensurePlantaoForBook(){
   if(currentPlantao)return currentPlantao;
-  const ctx=operationalShiftContext(),date=selectedDate()||ctx.date,ala=alaForDate(date),turno=(date===ctx.date?ctx.turno:ctx.turno);
-  const existing=await choosePlantao(date);
-  if(existing){currentPlantao=existing;return existing}
-  const {data,error}=await supabase.from('plantoes').insert({
-    data_plantao:date,turno,ala,status:'ABERTO',iniciado_em:new Date().toISOString(),tipo_plantao:'OPERACIONAL',operador_abertura:profile?.nome||null
-  }).select().single();
-  if(error)throw error;
-  currentPlantao=data;
-  return data;
+  const ctx=operationalShiftContext();
+  const date=selectedDate()||ctx.date;
+  const ala=alaForDate(date);
+  const turno=(date===ctx.date)?ctx.turno:ctx.turno;
+  currentPlantao=await ensureOperationalPlantao(date,turno,ala);
+  syncDateAndAla(date,currentPlantao.turno||turno);
+  return currentPlantao;
 }
 async function loadBookData(){
   await ensureProfessionals();
@@ -1637,7 +1758,7 @@ function internalSlotHtml(slot){
     '<input type="hidden" data-int-type="'+slot.code+'" value="'+status+'">'+
     '<input type="hidden" data-int-id="'+slot.code+'" value="'+esc(row?.profissional_id||'')+'">'+
     '<div class="internal-status-actions">'+
-      '<button type="button" class="escalado '+(status==='ESCALADO'?'active':'')+'" data-int-status="'+slot.code+'" data-value="ESCALADO">✓ ESCALADO</button>'+
+      '<button title="'+(status==='ESCALADO'?'Clique novamente para desescalar':'Clique para escalar')+'" type="button" class="escalado '+(status==='ESCALADO'?'active':'')+'" data-int-status="'+slot.code+'" data-value="ESCALADO">'+(status==='ESCALADO'?'✓ ESCALADO':'✓ ESCALAR')+'</button>'+
       '<button type="button" class="ausente '+(status==='AUSENTE'?'active':'')+'" data-int-status="'+slot.code+'" data-value="AUSENTE">✕ AUSENTE</button>'+
       '<button type="button" class="permuta '+(status==='PERMUTA'?'active':'')+'" data-int-status="'+slot.code+'" data-value="PERMUTA">⇄ PERMUTA</button>'+
     '</div>'+
@@ -1669,12 +1790,17 @@ function renderInternalEditorTo(selector){
     '</section>';
   }).join('');
   el.querySelectorAll('[data-int-status]').forEach(b=>b.onclick=()=>{
-    const code=b.dataset.intStatus,value=b.dataset.value,card=el.querySelector('[data-internal-slot="'+code+'"]');
-    card.querySelector('[data-int-type="'+code+'"]').value=value;
-    card.querySelectorAll('[data-int-status="'+code+'"]').forEach(x=>x.classList.toggle('active',x.dataset.value===value));
+    const code=b.dataset.intStatus,card=el.querySelector('[data-internal-slot="'+code+'"]');
+    const typeEl=card.querySelector('[data-int-type="'+code+'"]');
+    let value=b.dataset.value;
+    if(value==='ESCALADO'&&typeEl.value==='ESCALADO')value='VAGO';
+    typeEl.value=value;
+    card.querySelectorAll('[data-int-status="'+code+'"]').forEach(x=>x.classList.toggle('active',value!=='VAGO'&&x.dataset.value===value));
     card.querySelector('[data-int-permuta="'+code+'"]').classList.toggle('show',value==='PERMUTA');
     card.classList.remove('status-escalado','status-ausente','status-permuta','status-vago');
     card.classList.add('status-'+value.toLowerCase());
+    const footer=card.querySelector('.internal-card-footer small');
+    if(footer)footer.innerHTML='Situação atual: <b>'+value+'</b>';
     if(value!=='PERMUTA'){
       card.querySelector('[data-int-id="'+code+'"]').value='';
       const search=card.querySelector('[data-int-search="'+code+'"]');if(search)search.value='';
