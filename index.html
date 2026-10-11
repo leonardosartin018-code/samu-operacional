@@ -185,7 +185,7 @@
             <div>
               <div class="express-kicker">ESCALA DE PLANTÃO • ANÁPOLIS</div>
               <div class="express-title">Escala Expressa</div>
-              <div class="express-sub">Carregue Ala e turno, confira os fixos e altere somente as exceções. Permutas, revezamentos e vagas ficam identificados antes da confirmação.</div>
+              <div class="express-sub">A Ala e o turno são identificados automaticamente pelo plantão atual. Confira os titulares e altere somente as exceções antes de confirmar.</div>
             </div>
             <div class="express-head-side">
               <div class="express-badge">CONDUTOR • TÉCNICO • ENFERMEIRO</div>
@@ -194,7 +194,7 @@
           </div>
 
           <div class="express-controls">
-            <label>Ala
+            <label>Ala do plantão
               <select id="expressAla">
                 <option value="ALFA">ALA ALFA</option>
                 <option value="BRAVO">ALA BRAVO</option>
@@ -202,13 +202,13 @@
                 <option value="DELTA">ALA DELTA</option>
               </select>
             </label>
-            <label>Turno
+            <label>Período
               <select id="expressTurno">
                 <option value="DIURNO">DIURNO</option>
                 <option value="NOTURNO">NOTURNO</option>
               </select>
             </label>
-            <button id="loadScaleBtn" class="express-load-btn">CARREGAR ESCALA FIXA</button>
+            <button id="loadScaleBtn" class="express-load-btn">ATUALIZAR ESCALA DO PLANTÃO</button>
           </div>
 
           <div id="expressStatus" class="express-status">Escolha a Ala e o turno e clique em <b>CARREGAR ESCALA FIXA</b>.</div>
@@ -613,6 +613,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261011-14-layout"></script>
+<script type="module" src="./app.js?v=20261011-15-autoshift"></script>
 </body>
 </html>
