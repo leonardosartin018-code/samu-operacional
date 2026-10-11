@@ -421,8 +421,8 @@ function openPage(id){
       if(!confirmUnsavedRisk({includeInternal:true,includeBook:true,action:'sair do LIVRO'}))return false;
     }
   }
-  $('.page').forEach(x=>x.classList.remove('active'));
-  $('.tab').forEach(x=>x.classList.remove('active'));
+  [...document.querySelectorAll('.page')].forEach(x=>x.classList.remove('active'));
+  [...document.querySelectorAll('.tab')].forEach(x=>x.classList.remove('active'));
   $('#'+id)?.classList.add('active');
   document.querySelector('.tab[data-page="'+id+'"]')?.classList.add('active');
   if(id==='history') renderHistory();
