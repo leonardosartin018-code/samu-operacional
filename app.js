@@ -972,11 +972,12 @@ function bindOccurrenceActions(root){
 /* ---------- quick team ---------- */
 function allowedForField(p,key){
   const r=professionalRoleKey(p);
-  if(key==='driver') return r==='driver';
+  if(key==='driver') return canDriveProfessional(p);
   if(key==='tech') return r==='tech'||r==='nurse';
   if(key==='nurse') return r==='nurse';
   if(key==='doctor') return r==='doctor';
-  return false;
+  if(key==='moto') return canDriveProfessional(p);
+  return true;
 }
 function currentByRole(vId,key){
   return activeTeamRows().find(m=>m.viatura_id===vId && (teamRoleKey(m)===key || (key==='tech'&&teamRoleKey(m)==='nurse'&&norm(m.funcao).includes('TECN')))) || null;
@@ -990,7 +991,9 @@ function quickCfg(){
   };
 }
 function professionalLabel(p,key){
-  return key==='driver'&&p.nome_de_guerra ? p.nome_de_guerra.toUpperCase()+' — '+p.nome_completo : p.nome_completo;
+  const short=displayName(p);
+  const full=(p?.nome_completo||'').toUpperCase();
+  return short===full ? full : short+' — '+full;
 }
 function showAutocomplete(box,list,key,input,hidden){
   box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-prof="'+p.id+'"><b>'+esc(professionalLabel(p,key))+'</b><small>'+esc(p.funcao_sistema||'')+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado para este campo.</div>';
