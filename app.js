@@ -28,6 +28,7 @@ let selectedEditOccurrence = null;
 let selectedAssignProfessional = null;
 let selectedIndividualMember = null;
 let selectedExpressPermutaRow = null;
+let pendingQuickRegistration = null;
 let realtimeChannel = null;
 let reloadTimer = null;
 let expressTechSelected = new Map();
@@ -89,22 +90,26 @@ function setSync(text,type='ok'){
   el.className='sync-strip'+(type==='ok'?'':' '+type);
   el.innerHTML='<span class="sync-dot"></span><span>'+esc(text)+'</span>';
 }
+function firstTwoNames(name){
+  const parts=String(name||'').trim().split(/\s+/).filter(Boolean);
+  return parts.slice(0,2).join(' ') || '—';
+}
 function displayName(p){
   if(!p) return '—';
-  const f=norm(p.funcao_sistema);
-  if(f.includes('CONDUTOR')){
-    return (p.nome_de_guerra || p.nome_completo?.trim().split(/\s+/)[0] || '—').toUpperCase();
-  }
-  return (p.nome_completo || '—').toUpperCase();
+  return (p.nome_de_guerra || firstTwoNames(p.nome_completo)).toUpperCase();
 }
 function professionalRoleKey(p){
   const f=norm(p?.funcao_sistema);
-  if(f.includes('CONDUTOR')) return 'driver';
   if(f.includes('TECN')) return 'tech';
   if(f.includes('ENFERM')) return 'nurse';
   if(f.includes('MEDIC')) return 'doctor';
   if(f.includes('MOTOL')) return 'moto';
+  if(f.includes('CONDUTOR')) return 'driver';
   return 'other';
+}
+function canDriveProfessional(p){
+  const f=norm(p?.funcao_sistema);
+  return ['CONDUTOR','MOTOL','TARM','RADIO','LAVADOR','SANITARIA','MOTORISTA'].some(x=>f.includes(x));
 }
 function teamRoleKey(m){
   const f=norm(m?.funcao);
