@@ -281,7 +281,7 @@ function openPage(id){
     renderRegistry();
   }
   if(id==='book'){
-    loadBookData().then(renderBook).catch(e=>alert(e.message||e));
+    loadBookData().then(()=>{renderInternalEditors();renderBook();renderScaleConfirmationStates()}).catch(e=>alert(e.message||e));
   }
 }
 window.openPage=openPage;
@@ -2386,7 +2386,6 @@ function renderBook(){
   perm.forEach((p,i)=>{if(!used.has(i))rows.push(p)});
   $('#bookPermutasBody').innerHTML=rows.map(p=>'<tr><th>'+esc(p.funcao)+'</th><td>'+esc(p.substituto)+'</td><td>'+esc(p.substituido)+'</td></tr>').join('');
   $('#bookObsPreview').textContent=bookMeta?.observacoes||'';
-  renderInternalEditors();
 }
 async function saveBook(){
   if(!isOperator())return;
