@@ -319,3 +319,68 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 .internal-section-group.sanitarias{border-left:5px solid #16a34a}.internal-section-group.radio{border-left:5px solid #dc2626}.internal-section-group.tarm{border-left:5px solid #f59e0b}.internal-section-group.lavadores{border-left:5px solid #7c3aed}
 @media(max-width:1180px){.internal-section-body{grid-template-columns:repeat(2,minmax(230px,1fr))}}
 @media(max-width:720px){.internal-section-body{grid-template-columns:1fr}}
+
+/* ---------- correção de layout do Livro ---------- */
+#book .internal-scale-grid,
+#teamInternalPanel .internal-scale-grid{
+  display:block;
+  width:100%;
+  min-width:0;
+}
+#book .internal-section-group,
+#teamInternalPanel .internal-section-group{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+  overflow:hidden;
+}
+#book .internal-section-body,
+#teamInternalPanel .internal-section-body{
+  width:100%;
+  min-width:0;
+  box-sizing:border-box;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+#book .internal-slot,
+#teamInternalPanel .internal-slot{
+  min-width:0;
+  width:100%;
+  box-sizing:border-box;
+}
+#book .internal-status-actions,
+#teamInternalPanel .internal-status-actions{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+}
+#book .internal-status-actions button,
+#teamInternalPanel .internal-status-actions button{
+  min-width:0;
+  white-space:nowrap;
+}
+@media(max-width:1050px){
+  #book .internal-section-body,
+  #teamInternalPanel .internal-section-body{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:700px){
+  #book .internal-section-body,
+  #teamInternalPanel .internal-section-body{grid-template-columns:1fr}
+}
+
+/* botão LIVRO destacado */
+nav.tabs .tab.book-tab{
+  background:#f59e0b;
+  border:1px solid #d97706;
+  color:#111827;
+  font-weight:1000;
+  letter-spacing:.04em;
+  box-shadow:0 2px 5px rgba(217,119,6,.16);
+}
+nav.tabs .tab.book-tab:hover{
+  background:#fbbf24;
+  color:#111827;
+}
+nav.tabs .tab.book-tab.active{
+  background:#f97316;
+  border-color:#c2410c;
+  color:#111827;
+  box-shadow:inset 0 0 0 2px rgba(124,45,18,.12),0 2px 6px rgba(194,65,12,.18);
+}
