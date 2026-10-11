@@ -21,6 +21,7 @@ let scaleRows = [];
 let bookMeta = null;
 let internalScaleRows = [];
 let fixedInternalRows = [];
+let bookDriverFixedRows = [];
 let selectedVehicle = null;
 let selectedTeamVehicle = null;
 let selectedEditOccurrence = null;
@@ -368,6 +369,7 @@ function renderAll(){
   renderDestinations();
   renderHistory();
   renderTeamPreview();
+  if($('#book')?.classList.contains('active')) renderBook();
 }
 
 function renderSummary(){
@@ -1453,6 +1455,180 @@ async function registerProfessional(){
   setTimeout(()=>$('#registryStatus').classList.add('hidden'),2500);
 }
 
+
+/* ---------- livro do plantão ---------- */
+async function ensurePlantaoForBook(){
+  if(currentPlantao)return currentPlantao;
+  const ctx=operationalShiftContext(),date=selectedDate()||ctx.date,ala=alaForDate(date),turno=(date===ctx.date?ctx.turno:ctx.turno);
+  const existing=await choosePlantao(date);
+  if(existing){currentPlantao=existing;return existing}
+  const {data,error}=await supabase.from('plantoes').insert({
+    data_plantao:date,turno,ala,status:'ABERTO',iniciado_em:new Date().toISOString(),tipo_plantao:'OPERACIONAL',operador_abertura:profile?.nome||null
+  }).select().single();
+  if(error)throw error;
+  currentPlantao=data;
+  return data;
+}
+async function loadBookData(){
+  await ensureProfessionals();
+  if(!currentPlantao){
+    bookMeta=null;internalScaleRows=[];fixedInternalRows=[];bookDriverFixedRows=[];
+    renderBook();return;
+  }
+  const ala=currentPlantao.ala||alaForDate(currentPlantao.data_plantao);
+  const turno=normalizeTurno(currentPlantao.turno||operationalShiftContext().turno);
+  const [bm,di,fi,fd]=await Promise.all([
+    supabase.from('livro_plantao').select('*').eq('plantao_id',currentPlantao.id).maybeSingle(),
+    supabase.from('escala_interna_plantao').select('*').eq('plantao_id',currentPlantao.id).eq('status','ATIVO').order('ordem'),
+    supabase.from('escala_fixa_interna_anapolis').select('*').eq('ala',ala).eq('turno',turno).eq('ativo',true).order('ordem'),
+    supabase.from('escala_fixa_anapolis').select('*').eq('ala',ala).eq('turno',turno).eq('ativo',true).order('ordem')
+  ]);
+  if(bm.error)throw bm.error;if(di.error)throw di.error;if(fi.error)throw fi.error;if(fd.error)throw fd.error;
+  bookMeta=bm.data||null;internalScaleRows=di.data||[];fixedInternalRows=fi.data||[];bookDriverFixedRows=fd.data||[];
+}
+function internalRow(code){return internalScaleRows.find(x=>x.codigo_posicao===code)||null}
+function fixedInternalRow(code){return fixedInternalRows.find(x=>x.codigo_posicao===code)||null}
+function professionalNameById(id){const p=professionals.find(x=>x.id===id);return p?displayName(p):''}
+function internalDisplayName(row){
+  if(!row)return '------';
+  if(norm(row.tipo_alteracao)==='VAGO'||!row.profissional_id)return '------';
+  return row.nome_snapshot||professionalNameById(row.profissional_id)||'------';
+}
+function bookDriverName(code,index=0){
+  if(code==='MOTOLANCIA'){
+    const v=vehicles.find(x=>isAnapolisVehicle(x)&&vehicleType(x).includes('MOTO'));
+    const mem=v?vehicleMembers(v).filter(m=>['driver','moto'].includes(teamRoleKey(m))):[];
+    return mem[index]?displayName(mem[index].profissionais):'------';
+  }
+  const v=vehicleByCode(code);
+  if(!v)return '------';
+  const m=vehicleMembers(v).find(x=>teamRoleKey(x)==='driver');
+  if(m)return displayName(m.profissionais);
+  const q=priorityPeopleForRole('driver',vehicleType(v).includes('USA')?'USA':'USB');
+  return q.length?'REVEZAMENTO':'------';
+}
+function monthNamePt(dateIso){
+  return new Intl.DateTimeFormat('pt-BR',{month:'long',timeZone:'UTC'}).format(new Date(dateIso+'T12:00:00Z')).toUpperCase();
+}
+function renderInternalEditor(){
+  const el=$('#internalScaleEditor');if(!el)return;
+  el.innerHTML=BOOK_INTERNAL_SLOTS.map(slot=>{
+    const row=internalRow(slot.code),fixed=fixedInternalRow(slot.code);
+    const titular=fixed?.nome_referencia||professionalNameById(fixed?.profissional_id)||'Escala fixa ainda não carregada';
+    const atual=internalDisplayName(row);
+    const type=row?.tipo_alteracao||(!row&&fixed?'FIXO':'VAGO');
+    return '<div class="internal-slot '+slot.funcao.toLowerCase()+'" data-internal-slot="'+slot.code+'">'+
+      '<div class="internal-slot-head"><b>'+slot.label+'</b><span>'+slot.funcao+'</span></div>'+
+      '<div class="internal-slot-controls"><div class="autocomplete-shell"><input data-int-search="'+slot.code+'" autocomplete="off" placeholder="Digite 3 letras..."><input type="hidden" data-int-id="'+slot.code+'"><div class="autocomplete-results" data-int-results="'+slot.code+'"></div></div>'+
+      '<select data-int-type="'+slot.code+'"><option value="FIXO" '+(type==='FIXO'?'selected':'')+'>FIXO</option><option value="PERMUTA" '+(type==='PERMUTA'?'selected':'')+'>PERMUTA</option><option value="VAGO" '+(type==='VAGO'?'selected':'')+'>VAGO</option></select>'+
+      '<button class="mini-btn primary" data-int-save="'+slot.code+'">SALVAR</button></div>'+
+      '<div class="internal-slot-current"><b>Atual:</b> '+esc(atual)+'<br><b>Titular:</b> '+esc(titular)+'</div></div>';
+  }).join('');
+  el.querySelectorAll('[data-int-search]').forEach(inp=>inp.oninput=()=>internalAutocomplete(inp.dataset.intSearch,inp.value));
+  el.querySelectorAll('[data-int-save]').forEach(b=>b.onclick=()=>saveInternalSlot(b.dataset.intSave));
+}
+function internalAutocomplete(code,q){
+  const box=document.querySelector('[data-int-results="'+code+'"]'),n=norm(q);
+  if(n.length<3){box.classList.remove('show');box.innerHTML='';return}
+  const list=professionals.filter(p=>teamSearchText(p).includes(n)).slice(0,15);
+  box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-int-prof="'+p.id+'"><b>'+esc(displayName(p))+'</b><small>'+esc(p.nome_completo)+' • '+esc(p.funcao_sistema||'')+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div>';
+  box.classList.add('show');
+  box.querySelectorAll('[data-int-prof]').forEach(b=>b.onclick=()=>{
+    const p=professionals.find(x=>x.id===b.dataset.intProf);
+    document.querySelector('[data-int-search="'+code+'"]').value=p.nome_completo;
+    document.querySelector('[data-int-id="'+code+'"]').value=p.id;
+    box.classList.remove('show');
+  });
+}
+async function saveInternalSlot(code){
+  if(!isOperator())return;
+  await ensurePlantaoForBook();
+  const slot=BOOK_INTERNAL_SLOTS.find(x=>x.code===code),fixed=fixedInternalRow(code);
+  const type=document.querySelector('[data-int-type="'+code+'"]').value;
+  let proId=document.querySelector('[data-int-id="'+code+'"]').value||null;
+  if(type==='FIXO'&&!proId)proId=fixed?.profissional_id||null;
+  if(type==='PERMUTA'&&!proId)return alert('Na permuta, selecione quem está substituindo o titular.');
+  if(type==='VAGO')proId=null;
+  const pro=professionals.find(x=>x.id===proId);
+  const payload={
+    plantao_id:currentPlantao.id,escala_fixa_id:fixed?.id||null,setor:slot.setor,codigo_posicao:slot.code,funcao:slot.funcao,
+    profissional_id:proId,nome_snapshot:pro?.nome_completo||null,titular_profissional_id:fixed?.profissional_id||null,
+    titular_nome_snapshot:fixed?.nome_referencia||professionalNameById(fixed?.profissional_id)||null,tipo_alteracao:type,status:'ATIVO',ordem:slot.order,atualizado_em:new Date().toISOString()
+  };
+  const {error}=await supabase.from('escala_interna_plantao').upsert(payload,{onConflict:'plantao_id,codigo_posicao'});
+  if(error)return alert(error.message);
+  await loadBookData();renderBook();
+}
+function collectPermutas(){
+  const out=[];
+  bookDriverFixedRows.forEach(fr=>{
+    const v=vehicleByCode(fr.codigo_viatura);if(!v)return;
+    const cur=vehicleMembers(v).find(m=>teamRoleKey(m)==='driver');
+    if(cur&&fr.profissional_id&&cur.profissional_id!==fr.profissional_id){
+      out.push({funcao:'CONDUTOR',substituto:displayName(cur.profissionais),substituido:fr.nome_referencia||professionalNameById(fr.profissional_id)});
+    }
+  });
+  internalScaleRows.filter(r=>norm(r.tipo_alteracao)==='PERMUTA').forEach(r=>out.push({
+    funcao:r.funcao==='SANITARIA'?'SANITARIA':r.funcao,substituto:internalDisplayName(r),substituido:r.titular_nome_snapshot||professionalNameById(r.titular_profissional_id)||'—'
+  }));
+  return out;
+}
+function renderBook(){
+  if(!$('#bookDocument'))return;
+  const date=currentPlantao?.data_plantao||selectedDate(),ala=currentPlantao?.ala||alaForDate(date),turno=normalizeTurno(currentPlantao?.turno||operationalShiftContext().turno);
+  if($('#bookParte'))$('#bookParte').value=bookMeta?.parte_diaria||'';
+  if($('#bookChefe'))$('#bookChefe').value=bookMeta?.chefe_servico||'';
+  if($('#bookObs'))$('#bookObs').value=bookMeta?.observacoes||'';
+  $('#bookAlaTurno').textContent='ALA '+ala+' '+turno;
+  $('#bookPartePreview').textContent=bookMeta?.parte_diaria||'—';
+  $('#bookAnoPreview').textContent=bookMeta?.ano||date.slice(0,4);
+  $('#bookDayPreview').textContent=String(Number(date.slice(8,10)));
+  $('#bookMonthPreview').textContent=monthNamePt(date);
+  $('#bookChefePreview').textContent='Sr. '+(bookMeta?.chefe_servico||'—');
+
+  const r1=internalRow('RADIO-01'),r2=internalRow('RADIO-02');
+  $('#bookRadio1').textContent=internalDisplayName(r1);$('#bookRadio2').textContent=internalDisplayName(r2);
+
+  const driverRows=[
+    ['MOTOLANCIA',bookDriverName('MOTOLANCIA',0)],['MOTOLANCIA',bookDriverName('MOTOLANCIA',1)],
+    ['USA 01',bookDriverName('USA01')],['USA 02',bookDriverName('USA02')],['USA 06',bookDriverName('USA06')],
+    ['USB 01',bookDriverName('USB01')],['USB 02',bookDriverName('USB02')],['USB 03',bookDriverName('USB03')],
+    ['USB 04',bookDriverName('USB04')],['USB 05',bookDriverName('USB05')],['USB 06',bookDriverName('USB06')],
+    ['',''],['AMB - S1',internalDisplayName(internalRow('AMB-S1'))],['AMB - S2',internalDisplayName(internalRow('AMB-S2'))],
+    ['AMB - 03 EXTRA',internalDisplayName(internalRow('AMB-03-EXTRA'))],['AMB - S4 EXTRA',internalDisplayName(internalRow('AMB-S4-EXTRA'))]
+  ];
+  $('#bookDriversBody').innerHTML=driverRows.map(r=>'<tr><td>'+esc(r[0])+'</td><td>'+esc(r[1])+'</td></tr>').join('');
+
+  const central=BOOK_INTERNAL_SLOTS.filter(x=>x.setor==='CENTRAL');
+  $('#bookInternalBody').innerHTML=central.map(s=>'<tr><td>'+esc(s.label)+'</td><td>'+esc(internalDisplayName(internalRow(s.code)))+'</td></tr>').join('');
+
+  const perm=collectPermutas(),template=['CONDUTOR','CONDUTOR','RADIO','RADIO','SANITARIA','SANITARIA','LAVADOR','LAVADOR'];
+  const used=new Set();
+  const rows=template.map(fn=>{
+    const idx=perm.findIndex((p,i)=>!used.has(i)&&norm(p.funcao)===norm(fn));
+    if(idx>=0){used.add(idx);return perm[idx]}
+    return {funcao:fn,substituto:'',substituido:''};
+  });
+  perm.forEach((p,i)=>{if(!used.has(i))rows.push(p)});
+  $('#bookPermutasBody').innerHTML=rows.map(p=>'<tr><th>'+esc(p.funcao)+'</th><td>'+esc(p.substituto)+'</td><td>'+esc(p.substituido)+'</td></tr>').join('');
+  $('#bookObsPreview').textContent=bookMeta?.observacoes||'';
+  renderInternalEditor();
+}
+async function saveBook(){
+  if(!isOperator())return;
+  await ensurePlantaoForBook();
+  const r1=internalRow('RADIO-01'),r2=internalRow('RADIO-02');
+  const payload={
+    plantao_id:currentPlantao.id,parte_diaria:$('#bookParte').value.trim()||null,ano:Number(currentPlantao.data_plantao.slice(0,4)),
+    chefe_servico:$('#bookChefe').value.trim()||null,radio_1_profissional_id:r1?.profissional_id||null,radio_1_nome_snapshot:internalDisplayName(r1),
+    radio_2_profissional_id:r2?.profissional_id||null,radio_2_nome_snapshot:internalDisplayName(r2),observacoes:$('#bookObs').value.trim()||null,
+    atualizado_por:profile?.nome||null,atualizado_em:new Date().toISOString()
+  };
+  const {error}=await supabase.from('livro_plantao').upsert(payload,{onConflict:'plantao_id'});
+  if(error)return alert(error.message);
+  await loadBookData();renderBook();alert('Livro salvo.');
+}
+
 /* ---------- shift ---------- */
 async function endShift(){
   if(!isOperator()||!currentPlantao)return;
@@ -1547,6 +1723,7 @@ $('#teamSearch').oninput=e=>renderTeamSearch(e.target.value);$('#clearTeamSearch
 $('#assignMode').onchange=()=>$('#assignVehicleWrap').classList.toggle('hidden',$('#assignMode').value!=='FIXO');
 $('#confirmAssignBtn').onclick=confirmAssign;$('#saveIndividualOccBtn').onclick=saveIndividualOccurrence;
 $('#regRole').onchange=renderRegistry;$('#registerProfessionalBtn').onclick=registerProfessional;
+$('#saveBookBtn').onclick=saveBook;$('#printBookBtn').onclick=()=>window.print();
 
 supabase.auth.onAuthStateChange((_,s)=>applySession(s));
 const {data:{session:initialSession}}=await supabase.auth.getSession();
