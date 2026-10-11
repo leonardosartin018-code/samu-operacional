@@ -161,12 +161,33 @@ const ALA_CYCLE=['ALFA','BRAVO','CHARLIE','DELTA'];
 const ALA_REFERENCE_DATE='2026-09-29';
 const ALA_REFERENCE_INDEX=2; // 29/09/2026 = CHARLIE, referência do sistema anterior
 
-function localTodayIso(){
+function saoPauloNowParts(){
   const parts=new Intl.DateTimeFormat('en-US',{
-    timeZone:'America/Sao_Paulo',year:'numeric',month:'2-digit',day:'2-digit'
+    timeZone:'America/Sao_Paulo',
+    year:'numeric',month:'2-digit',day:'2-digit',
+    hour:'2-digit',minute:'2-digit',hourCycle:'h23'
   }).formatToParts(new Date());
-  const obj=Object.fromEntries(parts.map(p=>[p.type,p.value]));
-  return obj.year+'-'+obj.month+'-'+obj.day;
+  return Object.fromEntries(parts.map(p=>[p.type,p.value]));
+}
+function addDaysIso(dateIso,delta){
+  const d=new Date(dateIso+'T12:00:00Z');
+  d.setUTCDate(d.getUTCDate()+delta);
+  return d.toISOString().slice(0,10);
+}
+function operationalShiftContext(){
+  const p=saoPauloNowParts();
+  const calendarDate=p.year+'-'+p.month+'-'+p.day;
+  const hour=Number(p.hour||0);
+  if(hour<7){
+    return {date:addDaysIso(calendarDate,-1),turno:'NOTURNO',calendarDate,hour};
+  }
+  if(hour<19){
+    return {date:calendarDate,turno:'DIURNO',calendarDate,hour};
+  }
+  return {date:calendarDate,turno:'NOTURNO',calendarDate,hour};
+}
+function localTodayIso(){
+  return operationalShiftContext().date;
 }
 function alaForDate(dateIso){
   if(!/^\d{4}-\d{2}-\d{2}$/.test(String(dateIso||'')))return '—';
@@ -176,16 +197,23 @@ function alaForDate(dateIso){
   const idx=((ALA_REFERENCE_INDEX+diff)%ALA_CYCLE.length+ALA_CYCLE.length)%ALA_CYCLE.length;
   return ALA_CYCLE[idx];
 }
-function syncDateAndAla(dateIso){
-  const date=dateIso||localTodayIso();
-  $('#shiftDate').value=date;
+function normalizeTurno(value){
+  const t=norm(value);
+  return t.includes('NOT')?'NOTURNO':'DIURNO';
+}
+function syncDateAndAla(dateIso,turnoOverride=null){
+  const ctx=operationalShiftContext();
+  const date=dateIso||ctx.date;
   const ala=alaForDate(date);
-  $('#dayAlaBadge').textContent='ALA DO DIA: '+ala;
+  const turno=turnoOverride?normalizeTurno(turnoOverride):(date===ctx.date?ctx.turno:ctx.turno);
+  $('#shiftDate').value=date;
+  $('#dayAlaBadge').textContent='ALA DO DIA: '+ala+' • '+turno;
   if($('#expressAla'))$('#expressAla').value=ala;
-  return ala;
+  if($('#expressTurno'))$('#expressTurno').value=turno;
+  return {ala,turno,date};
 }
 function selectedDate(){
-  return $('#shiftDate').value || currentPlantao?.data_plantao || localTodayIso();
+  return $('#shiftDate').value || currentPlantao?.data_plantao || operationalShiftContext().date;
 }
 
 function openPage(id){
@@ -228,8 +256,9 @@ async function choosePlantao(preferredDate){
 }
 
 async function loadAll(preferredDate=null){
-  const date=preferredDate||selectedDate()||localTodayIso();
-  const ala=syncDateAndAla(date);
+  const date=preferredDate||selectedDate()||operationalShiftContext().date;
+  const initialShift=syncDateAndAla(date);
+  const ala=initialShift.ala;
   setSync('Atualizando dados do banco...','warn');
 
   currentPlantao=null;
@@ -239,9 +268,11 @@ async function loadAll(preferredDate=null){
   try{
     try{
       currentPlantao=await choosePlantao(date);
+      syncDateAndAla(date,currentPlantao?.turno||initialShift.turno);
     }catch(e){
       console.warn('Falha ao carregar plantão',e);
       warnings.push('plantão');
+      syncDateAndAla(date,initialShift.turno);
     }
 
     // A frota e as bases são carregadas primeiro e de forma independente.
@@ -291,9 +322,10 @@ async function loadAll(preferredDate=null){
     syncRotationCriterionFromPlantao();
     renderAll();
     if(currentPlantao){
-      $('#plantaoInfo').textContent='Plantão '+(currentPlantao.legacy_id||'')+' • '+fmtDate(date)+' • ALA '+(currentPlantao.ala||ala)+' • '+currentPlantao.status;
+      const turno=normalizeTurno(currentPlantao.turno||initialShift.turno);
+      $('#plantaoInfo').textContent='Plantão '+(currentPlantao.legacy_id||'')+' • '+fmtDate(date)+' • ALA '+(currentPlantao.ala||ala)+' • '+turno+' • '+currentPlantao.status;
     }else{
-      $('#plantaoInfo').textContent=fmtDate(date)+' • ALA '+ala+' • ainda não há plantão aberto para esta data no novo banco';
+      $('#plantaoInfo').textContent=fmtDate(date)+' • ALA '+ala+' • '+initialShift.turno+' • ainda não há plantão aberto para esta data no novo banco';
     }
 
     if(warnings.length){
@@ -1449,10 +1481,11 @@ async function applySession(s){
   $('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
   $('#endShiftBtn').disabled=!isOperator();$('#manualOccBtn').disabled=!isOperator();
 
-  // Sempre abre no dia atual de São Paulo, e não em um plantão antigo que ficou ABERTO.
-  const today=localTodayIso();
-  syncDateAndAla(today);
-  await loadAll(today);
+  // O plantão operacional muda às 07:00. Entre 00:00 e 06:59,
+  // continuamos no NOTURNO iniciado às 19:00 do dia anterior.
+  const shift=operationalShiftContext();
+  syncDateAndAla(shift.date,shift.turno);
+  await loadAll(shift.date);
   subscribeRealtime();
 }
 
@@ -1480,7 +1513,7 @@ $$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page));
 $$('[data-open-page]').forEach(b=>b.onclick=()=>openPage(b.dataset.openPage));
 $$('[data-close-modal]').forEach(b=>b.onclick=()=>closeModal(b.dataset.closeModal));
 $$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModal(m.id)}));
-$('#shiftDate').onchange=()=>{syncDateAndAla($('#shiftDate').value);loadAll($('#shiftDate').value)};
+$('#shiftDate').onchange=()=>{syncDateAndAla($('#shiftDate').value,operationalShiftContext().turno);loadAll($('#shiftDate').value)};
 $('#exportBtn').onclick=exportCSV;$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
 $('#regionalBtn').onclick=()=>$('#regionalIntegrated').scrollIntoView({behavior:'smooth',block:'start'});
 $('#rotationCriterion').onchange=e=>persistRotationCriterion(e.target.value);
