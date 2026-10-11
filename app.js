@@ -148,13 +148,39 @@ function expectedRoles(v){
   if(t.includes('MOTO')) return ['moto'];
   return [];
 }
+function requiredDispatchRoles(v){
+  const t=vehicleType(v);
+  if(t.includes('USA')) return ['driver','nurse'];
+  if(t.includes('USB')) return ['driver','tech'];
+  // Motolância terá dois pilotos visíveis, mas a exigência mínima de empenho
+  // não foi definida operacionalmente ainda, então não bloqueamos aqui.
+  return [];
+}
+function crewHasRole(mem,role){
+  return mem.some(m=>teamRoleKey(m)===role || (role==='tech' && teamRoleKey(m)==='nurse' && norm(m.funcao).includes('TECN')));
+}
 function crewCompleteness(v,mem=vehicleMembers(v)){
-  const exp=expectedRoles(v);
+  const req=requiredDispatchRoles(v);
   if(!mem.length) return {state:'empty',label:'SEM EQUIPE'};
-  if(!exp.length) return {state:'complete',label:'EQUIPE DEFINIDA'};
-  const present=new Set(mem.map(teamRoleKey));
-  const ok=exp.every(r=>present.has(r) || (r==='tech' && present.has('nurse')));
-  return ok?{state:'complete',label:'EQUIPE COMPLETA'}:{state:'partial',label:'EQUIPE PARCIAL'};
+  if(!req.length) return {state:'complete',label:'EQUIPE DEFINIDA'};
+  const ok=req.every(r=>crewHasRole(mem,r));
+  return ok?{state:'complete',label:'APTA PARA EMPENHO'}:{state:'partial',label:'EQUIPE PARCIAL'};
+}
+function dispatchRequirementText(v){
+  const t=vehicleType(v);
+  if(t.includes('USA')) return 'CONDUTOR + ENFERMEIRO';
+  if(t.includes('USB')) return 'CONDUTOR + TÉCNICO/ENFERMEIRO';
+  return '';
+}
+function validateDispatchCrew(v){
+  if(!v)return true;
+  const req=requiredDispatchRoles(v);
+  if(!req.length)return true;
+  const crew=automaticDispatchCrew(v);
+  const missing=req.filter(r=>!crewHasRole(crew,r));
+  if(!missing.length)return true;
+  alert('Não é possível empenhar '+(v.nome||v.codigo)+'.\n\nEquipe mínima obrigatória: '+dispatchRequirementText(v)+'.\n\nComplete a equipe ou coloque os profissionais necessários no revezamento antes de acionar a viatura.');
+  return false;
 }
 function activeOccurrence(v){
   return occurrences.find(o=>o.viatura_id===v.id && !['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status)));
@@ -433,6 +459,9 @@ function memberSlotHtml(m){
   if(!m) return '<div class="crew-slot"><div class="crew-role">VAGA</div><div class="crew-name">—</div></div>';
   return '<div class="crew-slot"><div class="crew-role">'+esc(roleLabel(teamRoleKey(m)))+'</div><div class="crew-name">'+esc(displayName(m.profissionais))+'</div></div>';
 }
+function namedMemberSlotHtml(m,label){
+  return '<div class="crew-slot"><div class="crew-role">'+esc(label)+'</div><div class="crew-name">'+esc(m?displayName(m.profissionais):'—')+'</div></div>';
+}
 function rotationPreviewSlotHtml(m,role){
   if(!m)return memberSlotHtml(null);
   return '<div class="crew-slot rotation-preview"><div class="crew-role">'+esc(roleLabel(role))+'</div><div class="crew-name">'+esc(displayName(m.profissionais))+'</div></div>';
@@ -451,7 +480,14 @@ function crewGridHtml(v){
   const exp=expectedRoles(v);
   const used=new Set(mem.map(m=>m.profissional_id));
   let slots=[];
-  if(exp.length){
+  if(vehicleType(v).includes('MOTO')){
+    const m1=mem.find(m=>norm(m.funcao)==='MOTOLANCIA 1')||null;
+    const m2=mem.find(m=>norm(m.funcao)==='MOTOLANCIA 2')||null;
+    slots=[
+      namedMemberSlotHtml(m1,'MOTOLÂNCIA 1'),
+      namedMemberSlotHtml(m2,'MOTOLÂNCIA 2')
+    ];
+  }else if(exp.length){
     slots=exp.map(role=>{
       const m=mem.find(x=>teamRoleKey(x)===role || (role==='tech'&&teamRoleKey(x)==='nurse'&&norm(x.funcao).includes('TECN')));
       if(m)return memberSlotHtml(m);
@@ -760,7 +796,7 @@ function availableUsaTeams(){
     const nurse=dispatchCandidateForVehicleRole(v,'nurse',used);if(nurse)used.add(nurse.profissional_id);
     const doctor=dispatchCandidateForVehicleRole(v,'doctor',used);
     return {
-      v,driver,nurse,doctor,complete:!!driver&&!!nurse&&!!doctor,
+      v,driver,nurse,doctor,complete:!!driver&&!!nurse,
       base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)
     };
   }).filter(x=>x.complete).sort((a,b)=>{
@@ -779,7 +815,7 @@ function usaTeamRotationCard(){
   let html='<div class="priority-card vehicle-priority"><div class="priority-card-title"><span>USA — Equipe / viatura da vez</span><small>'+fila.length+' completa(s)</small></div>';
   if(first){
     html+='<div class="priority-next"><b>'+esc(first.v.nome||first.v.codigo)+'</b><span>USA DA VEZ</span>'+
-      '<div class="priority-assignment">Condutor '+esc(displayName(first.driver.profissionais))+' • Enfermeiro '+esc(displayName(first.nurse.profissionais))+' • Médico '+esc(displayName(first.doctor.profissionais))+'</div>'+
+      '<div class="priority-assignment">Condutor '+esc(displayName(first.driver.profissionais))+' • Enfermeiro '+esc(displayName(first.nurse.profissionais))+' • Médico '+(first.doctor?esc(displayName(first.doctor.profissionais)):'não escalado (opcional)')+'</div>'+
       '<div class="priority-next-meta"><span class="priority-pill">'+esc(fmtMinutes(first.base))+' na base</span><span class="priority-pill">'+first.occ+' ocorrência(s)</span></div>'+
       '<div class="priority-reason">'+(currentRotationCriterion()==='occurrences'?'Menor nº de ocorrências; empate pelo maior tempo na base.':'Maior tempo na base; empate pelo menor nº de ocorrências.')+'</div></div>';
     html+=fila.slice(1,5).map((x,i)=>'<div class="priority-line"><div class="priority-line-main"><b>'+(i+2)+'. '+esc(x.v.nome||x.v.codigo)+'</b><small>Equipe completa disponível</small></div><div class="priority-line-metric">'+esc(fmtMinutes(x.base))+' • '+x.occ+' oc.</div></div>').join('');
@@ -957,7 +993,11 @@ function bindVehicleActions(root){
       openTeamModal(card.dataset.v);
     };
   });
-  root.querySelectorAll('[data-act="dispatch"]').forEach(b=>b.onclick=()=>openOccurrenceModal(b.dataset.v));
+  root.querySelectorAll('[data-act="dispatch"]').forEach(b=>b.onclick=()=>{
+    const v=vehicleById(b.dataset.v);
+    if(!validateDispatchCrew(v))return;
+    openOccurrenceModal(b.dataset.v);
+  });
   root.querySelectorAll('[data-act="qth"]').forEach(b=>b.onclick=()=>setOccurrenceQth(b.dataset.o));
   root.querySelectorAll('[data-act="qta"]').forEach(b=>b.onclick=()=>setOccurrenceQta(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="return"]').forEach(b=>b.onclick=()=>setReturning(b.dataset.o,b.dataset.v));
@@ -992,6 +1032,49 @@ function quickCfg(){
     doctor:{input:'#qtDoctor',hidden:'#qtDoctorId',results:'#qtDoctorResults',current:'#qtDoctorCurrent',remove:'#qtDoctorRemove'}
   };
 }
+function quickModalMode(v){
+  const t=vehicleType(v);
+  if(t.includes('MOTO'))return 'moto';
+  if(t.includes('USA'))return 'usa';
+  if(t.includes('USB'))return 'usb';
+  return 'generic';
+}
+function effectiveQuickRole(key){
+  const v=vehicleById(selectedTeamVehicle);
+  return quickModalMode(v)==='moto' && (key==='driver'||key==='tech') ? 'moto' : key;
+}
+function currentQuickMember(vId,key){
+  const v=vehicleById(vId);
+  if(quickModalMode(v)==='moto'){
+    const fn=key==='driver'?'MOTOLANCIA 1':key==='tech'?'MOTOLANCIA 2':null;
+    if(!fn)return null;
+    return activeTeamRows().find(m=>m.viatura_id===vId && norm(m.funcao)===fn)||null;
+  }
+  return currentByRole(vId,key);
+}
+function configureQuickTeamFields(v){
+  const mode=quickModalMode(v);
+  const fields={
+    driver:document.querySelector('#teamModal [data-role="driver"]'),
+    tech:document.querySelector('#teamModal [data-role="tech"]'),
+    nurse:document.querySelector('#teamModal [data-role="nurse"]'),
+    doctor:document.querySelector('#teamModal [data-role="doctor"]')
+  };
+  const visible=mode==='moto'?['driver','tech']:mode==='usa'?['driver','nurse','doctor']:mode==='usb'?['driver','tech']:Object.keys(fields);
+  Object.entries(fields).forEach(([k,el])=>el?.classList.toggle('hidden',!visible.includes(k)));
+
+  if(mode==='moto'){
+    fields.driver.querySelector('label').textContent='MOTOLÂNCIA 1';
+    fields.tech.querySelector('label').textContent='MOTOLÂNCIA 2';
+    $('#qtDriver').placeholder='Digite o nome do piloto 1';
+    $('#qtTech').placeholder='Digite o nome do piloto 2';
+  }else{
+    fields.driver.querySelector('label').textContent='CONDUTOR';
+    fields.tech.querySelector('label').textContent='TÉCNICO DE ENFERMAGEM';
+    $('#qtDriver').placeholder='Digite o nome do condutor';
+    $('#qtTech').placeholder='Digite o nome do técnico ou enfermeiro';
+  }
+}
 function professionalLabel(p,key){
   const short=displayName(p);
   const full=(p?.nome_completo||'').toUpperCase();
@@ -1023,10 +1106,11 @@ function showAutocomplete(box,list,key,input,hidden){
 }
 function quickAutocomplete(key){
   const cfg=quickCfg()[key],input=$(cfg.input),hidden=$(cfg.hidden),box=$(cfg.results),q=norm(input.value);
+  const role=effectiveQuickRole(key);
   hidden.value='';
   if(q.length<3){box.classList.remove('show');box.innerHTML='';return}
-  const list=professionals.filter(p=>allowedForField(p,key)&&teamSearchText(p).includes(q)).slice(0,15);
-  showAutocomplete(box,list,key,input,hidden);
+  const list=professionals.filter(p=>allowedForField(p,role)&&teamSearchText(p).includes(q)).slice(0,15);
+  showAutocomplete(box,list,role,input,hidden);
 }
 function bindQuickInputs(){
   Object.entries(quickCfg()).forEach(([key,cfg])=>{
@@ -1053,8 +1137,9 @@ async function openTeamModal(vId){
   const v=vehicleById(vId);
   $('#teamModalTitle').textContent='Equipe rápida — '+(v?.nome||v?.codigo||'Viatura');
   bindQuickInputs();
+  configureQuickTeamFields(v);
   Object.entries(quickCfg()).forEach(([key,cfg])=>{
-    const cur=currentByRole(vId,key);
+    const cur=currentQuickMember(vId,key);
     $(cfg.input).value='';
     $(cfg.hidden).value='';
     $(cfg.results).innerHTML='';
@@ -1103,24 +1188,42 @@ async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPID
 }
 async function saveQuickTeam(){
   if(!isOperator()||!currentPlantao||!selectedTeamVehicle)return;
-  const rows=[
-    ['driver','#qtDriverId','Condutor'],
-    ['tech','#qtTechId','Técnico de Enfermagem'],
-    ['nurse','#qtNurseId','Enfermeiro'],
-    ['doctor','#qtDoctorId','Médico']
-  ];
+  const v=vehicleById(selectedTeamVehicle);
+  const mode=quickModalMode(v);
+  const rows=mode==='moto'
+    ? [
+        ['driver','#qtDriverId','Motolância 1','moto'],
+        ['tech','#qtTechId','Motolância 2','moto']
+      ]
+    : mode==='usa'
+      ? [
+          ['driver','#qtDriverId','Condutor','driver'],
+          ['nurse','#qtNurseId','Enfermeiro','nurse'],
+          ['doctor','#qtDoctorId','Médico','doctor']
+        ]
+      : mode==='usb'
+        ? [
+            ['driver','#qtDriverId','Condutor','driver'],
+            ['tech','#qtTechId','Técnico de Enfermagem','tech']
+          ]
+        : [
+            ['driver','#qtDriverId','Condutor','driver'],
+            ['tech','#qtTechId','Técnico de Enfermagem','tech'],
+            ['nurse','#qtNurseId','Enfermeiro','nurse'],
+            ['doctor','#qtDoctorId','Médico','doctor']
+          ];
   $('#saveTeam').disabled=true;$('#saveTeam').textContent='SALVANDO...';
   try{
-    for(const [key,idSel,funcao] of rows){
+    for(const [key,idSel,funcao,allowedKey] of rows){
       const value=$(idSel).value;
       if(!value)continue;
-      const cur=currentByRole(selectedTeamVehicle,key);
+      const cur=currentQuickMember(selectedTeamVehicle,key);
       if(value==='__REMOVE__'){
         if(cur)await deactivateTeamRow(cur,new Date().toISOString());
         continue;
       }
       const pro=professionals.find(p=>p.id===value);
-      if(!pro||!allowedForField(pro,key))throw new Error('Profissional inválido para o campo '+roleLabel(key)+'.');
+      if(!pro||!allowedForField(pro,allowedKey))throw new Error('Profissional inválido para o campo '+(mode==='moto'?funcao:roleLabel(allowedKey))+'.');
       await assignProfessionalToVehicle(value,selectedTeamVehicle,funcao);
     }
     closeModal('teamModal');
@@ -1149,6 +1252,7 @@ async function saveOccurrence(){
   if(!isOperator()||!currentPlantao)return;
   const vId=$('#occVehicleSelect').value||null;
   const v=vehicleById(vId);
+  if(vId&&!validateDispatchCrew(v))return;
   const now=localDateTimeIso(currentPlantao.data_plantao,$('#occStart').value||nowLocalTime());
   const crit=currentRotationCriterion();
   const autoCrew=v?automaticDispatchCrew(v):[];
