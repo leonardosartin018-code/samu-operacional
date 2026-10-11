@@ -705,3 +705,45 @@ nav.tabs .tab.book-tab.active{
   font-size:.58rem;
   min-height:36px;
 }
+
+/* ---------- Equipe rápida de revezamento: bloco azul SAMU ---------- */
+.express-quick-wrap{
+  background:linear-gradient(145deg,#064d73 0%,#073955 100%);
+  border-color:#0e7490;
+  box-shadow:0 7px 18px rgba(7,57,85,.16);
+}
+.express-quick-title{
+  color:#fff;
+  font-size:.84rem;
+}
+.express-quick-sub{
+  color:#cceaf6;
+}
+.express-quick-card{
+  background:rgba(255,255,255,.10);
+  border-color:rgba(255,255,255,.28);
+  box-shadow:inset 0 1px 0 rgba(255,255,255,.06);
+}
+.express-quick-card h3{
+  color:#fff;
+  font-size:.72rem;
+}
+.express-quick-card h3 span{
+  background:#f59e0b;
+  color:#111827;
+  border:1px solid #fbbf24;
+}
+.express-quick-wrap .autocomplete-shell input{
+  border-color:#8ec5dc;
+  background:#fff;
+  color:#163244;
+}
+.express-quick-wrap .autocomplete-shell input:focus{
+  border-color:#38bdf8;
+  box-shadow:0 0 0 3px rgba(56,189,248,.22);
+}
+.express-quick-wrap .selected-chip{
+  background:#e0f2fe;
+  border-color:#7dd3fc;
+  color:#075985;
+}
