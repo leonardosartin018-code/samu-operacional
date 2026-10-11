@@ -163,6 +163,11 @@
     </section>
 
     <section id="team" class="page">
+      <div class="scale-scope-tabs">
+        <button class="scale-scope-btn active" data-team-scope="operational">ESCALA OPERACIONAL</button>
+        <button class="scale-scope-btn" data-team-scope="internal">SERVIÇO INTERNO</button>
+      </div>
+      <div id="teamOperationalPanel">
       <section class="section section-scale">
         <div class="head">
           <div>
@@ -299,6 +304,27 @@
           </div>
         </details>
       </section>
+      </div>
+
+      <div id="teamInternalPanel" class="hidden">
+        <section class="section section-internal">
+          <div class="head">
+            <div>
+              <div class="express-kicker">SERVIÇO INTERNO • ANÁPOLIS</div>
+              <h2>Escala interna do plantão</h2>
+              <p>Rádio-operadores, TARM, ambulâncias sanitárias e lavadores. A escala fixa vem pré-carregada pela Ala e turno; altere somente ausências e permutas.</p>
+            </div>
+            <div class="internal-head-actions">
+              <span id="internalAlaTurnoBadge" class="count-badge">—</span>
+              <button id="internalReloadBtn" class="btn">ATUALIZAR</button>
+            </div>
+          </div>
+          <div class="internal-guidance">
+            <b>Fluxo:</b> primeiro confirme os condutores na Escala Operacional. Depois confira o Serviço Interno. Em cada posição use <b>ESCALADO</b>, <b>AUSENTE</b> ou <b>PERMUTA</b>. Ao marcar PERMUTA, o campo para selecionar o substituto aparece automaticamente.
+          </div>
+          <div id="teamInternalEditor" class="internal-scale-grid"></div>
+        </section>
+      </div>
     </section>
 
     <section id="book" class="page">
