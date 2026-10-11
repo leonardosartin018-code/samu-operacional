@@ -337,10 +337,10 @@ async function loadAll(preferredDate=null){
 
     if(currentPlantao&&isCurrentShift){
       try{
-        await ensureOperationalScaleFromFixed();
+        // Pré-carrega apenas as referências da escala. Ninguém entra como ATIVO automaticamente.
         await loadBookData();
       }catch(e){
-        console.warn('Falha ao pré-carregar escalas do plantão',e);
+        console.warn('Falha ao pré-carregar referências da escala',e);
         warnings.push('pré-carga das escalas');
       }
     }
@@ -1598,9 +1598,10 @@ function internalStatusValue(row,fixed){
   const t=norm(row?.tipo_alteracao||'');
   if(t==='PERMUTA')return 'PERMUTA';
   if(t==='AUSENTE')return 'AUSENTE';
-  if(t==='VAGO')return 'VAGO';
+  if(t==='VAGO'||t==='DESESCALADO')return 'VAGO';
   if(t==='FIXO'||t==='ESCALADO')return 'ESCALADO';
-  return fixed?'ESCALADO':'VAGO';
+  // O titular previsto aparece pré-carregado, mas só fica escalado após confirmação do rádio-operador.
+  return 'VAGO';
 }
 function findProfessionalByReference(name){
   const n=norm(name);
@@ -1640,7 +1641,7 @@ async function loadBookData(){
   if(bm.error)throw bm.error;if(di.error)throw di.error;if(fi.error)throw fi.error;if(fd.error)throw fd.error;
   bookMeta=bm.data||null;internalScaleRows=di.data||[];fixedInternalRows=fi.data||[];bookDriverFixedRows=fd.data||[];
 
-  await ensureInternalScaleFromFixed();
+  // A escala fixa é apenas referência visual. A equipe ativa nasce somente após clique/confirmacão do operador.
   await ensureAutomaticBookNumber();
 }
 async function ensureInternalScaleFromFixed(){
