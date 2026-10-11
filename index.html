@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261011-9-layout">
+  <link rel="stylesheet" href="./styles.css?v=20261011-10-qth">
 </head>
 <body>
 
@@ -438,7 +438,7 @@
             <thead>
               <tr>
                 <th>Oc.</th><th>Viatura</th><th>Natureza</th><th>Bairro</th><th>Destino</th><th>Endereço</th><th>Equipe</th>
-                <th>Saída</th><th>QTH</th><th>Tempo até QTH</th><th>Início retorno</th><th>Chegada base</th><th>Tempo retorno</th><th>Tempo total</th><th>Observação</th><th>Ações</th>
+                <th>Início / saída</th><th>Chegada QTH</th><th>Tempo até QTH</th><th>Início retorno</th><th>Chegada base</th><th>Tempo retorno</th><th>Tempo total</th><th>Observação</th><th>Ações</th>
               </tr>
             </thead>
             <tbody id="historyTable"></tbody>
@@ -460,7 +460,7 @@
     <div class="form-grid">
       <label>Viatura<select id="occVehicleSelect"></select></label>
       <label>Nº ocorrência<input id="occNumber" inputmode="numeric"></label>
-      <label>Hora saída<input id="occStart" type="time"></label>
+      <label>Hora início / saída<input id="occStart" type="time"></label>
       <label>Natureza<input id="occNature" placeholder="Ex.: Colisão, clínico, transferência"></label>
       <label>Bairro<input id="occBairro" placeholder="Ex.: Jundiaí, Jaiara, Centro"></label>
       <label>Destino<input id="occDestino" placeholder="Ex.: HEANA, HUGO, UPA"></label>
@@ -613,6 +613,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261011-15-autoshift"></script>
+<script type="module" src="./app.js?v=20261011-16-qth"></script>
 </body>
 </html>
