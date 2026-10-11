@@ -62,6 +62,7 @@
     <button class="tab active" data-page="base">Painel Operacional</button>
     <button class="tab" data-page="team">Equipe / Escala</button>
     <button class="tab" data-page="history">Histórico</button>
+    <button class="tab" data-page="book">Livro</button>
   </nav>
 
   <main>
@@ -297,6 +298,89 @@
             </div>
           </div>
         </details>
+      </section>
+    </section>
+
+    <section id="book" class="page">
+      <section class="section book-workspace">
+        <div class="head">
+          <div>
+            <h2>Livro do Plantão</h2>
+            <p>Documento oficial do serviço de dia. Condutores entram primeiro; depois complete a escala interna e registre as permutas.</p>
+          </div>
+          <div class="book-actions">
+            <button class="btn" data-open-page="team">1. ESCALAR CONDUTORES</button>
+            <button id="saveBookBtn" class="btn primary">SALVAR LIVRO</button>
+            <button id="printBookBtn" class="btn">IMPRIMIR / PDF</button>
+          </div>
+        </div>
+
+        <div class="book-flow">
+          <div><b>1</b><span>Condutores</span><small>Prioridade no início do plantão</small></div>
+          <div><b>2</b><span>Serviço interno</span><small>Sanitárias, rádio, TARM e lavadores</small></div>
+          <div><b>3</b><span>Permutas</span><small>Titular e substituto registrados</small></div>
+          <div><b>4</b><span>Livro oficial</span><small>Revisar, salvar e imprimir</small></div>
+        </div>
+
+        <div class="book-config-grid">
+          <label>Parte Diária Nº<input id="bookParte" placeholder="Ex.: 559"></label>
+          <label>Chefe / responsável<input id="bookChefe" placeholder="Ex.: MAJ BAZÍLIO"></label>
+          <label class="book-config-wide">Observações do plantão<textarea id="bookObs" placeholder="Registre aqui as observações oficiais do plantão."></textarea></label>
+        </div>
+
+        <div class="book-internal-editor">
+          <div class="head"><div><h2>Escala interna do plantão</h2><p>Digite 3 letras para localizar o profissional. Quando houver permuta, selecione PERMUTA e informe quem está substituindo o titular.</p></div></div>
+          <div id="internalScaleEditor" class="internal-scale-grid"></div>
+        </div>
+
+        <div class="book-preview-title"><h2>Prévia oficial</h2><span>Modelo baseado no livro enviado</span></div>
+        <div id="bookDocument" class="book-document">
+          <section class="book-page">
+            <div class="book-letterhead">
+              <div class="book-logo placeholder" id="bookLogoFire">BOMBEIROS<br>GOIÁS</div>
+              <div class="book-titleblock">
+                <b>ESTADO DE GOIÁS</b><b>PREFEITURA DE ANÁPOLIS</b><b>CORPO DE BOMBEIROS MILITAR</b><b>CONVÊNIO SAMU / CBM-GO</b>
+                <div class="book-service">SERVIÇO DE DIA</div><strong id="bookAlaTurno">ALA —</strong>
+              </div>
+              <div class="book-logo placeholder samu" id="bookLogoSamu">SAMU<br><strong>192</strong></div>
+            </div>
+            <table class="official-table">
+              <tbody>
+                <tr><th>Parte Diária Nº:</th><td id="bookPartePreview">—</td><td id="bookAnoPreview">—</td></tr>
+                <tr><th rowspan="2">Do Rádio:</th><td>1º Horário</td><td id="bookRadio1">—</td></tr>
+                <tr><td>2º Horário</td><td id="bookRadio2">—</td></tr>
+                <tr><th colspan="3" id="bookChefePreview">Sr. —</th></tr>
+                <tr class="official-red"><th colspan="3">*OBS: A responsabilidade pelo fechamento e por salvar o livro é do rádio operador do 2º horário.</th></tr>
+                <tr><td colspan="3" class="center">Informando a Escala e Alterações verificadas no decorrer do serviço do</td></tr>
+                <tr><th>Dia</th><th id="bookDayPreview">—</th><th id="bookMonthPreview">—</th></tr>
+                <tr class="official-red"><th colspan="3">I - PARTE: SERVIÇO INTERNO</th></tr>
+                <tr class="official-gray"><th colspan="3">A) ESCALA DE SERVIÇO:</th></tr>
+                <tr class="official-gray"><th colspan="3">CONDUTORES</th></tr>
+              </tbody>
+            </table>
+            <table class="official-table book-roster-table">
+              <thead><tr><th>VTR</th><th>NOME</th></tr></thead>
+              <tbody id="bookDriversBody"></tbody>
+            </table>
+            <table class="official-table">
+              <tbody><tr class="official-gray"><th colspan="2">A.3) TARM´s, RÁDIO OPERADORES, LAVADORES</th></tr><tr class="official-gray"><th>FUNÇÃO</th><th>NOME</th></tr></tbody>
+            </table>
+          </section>
+
+          <section class="book-page">
+            <table class="official-table book-internal-table"><tbody id="bookInternalBody"></tbody></table>
+            <table class="official-table">
+              <tbody>
+                <tr class="official-gray"><th colspan="3">PERMUTAS</th></tr>
+                <tr class="official-perm-head"><th>FUNÇÕES</th><th>SUBSTITUTO</th><th>SUBSTITUÍDO</th></tr>
+              </tbody>
+              <tbody id="bookPermutasBody"></tbody>
+            </table>
+            <div id="bookObsPreview" class="official-observations"></div>
+            <div class="official-red-bar"></div>
+            <div class="official-footer-text">Faço ao meu substituto legal a quem transmito todas ordens em vigor, bem como todas as alterações verificadas no decorrer do serviço.</div>
+          </section>
+        </div>
       </section>
     </section>
 
