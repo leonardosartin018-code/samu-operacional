@@ -1456,7 +1456,38 @@ async function registerProfessional(){
 }
 
 
-/* ---------- livro do plantão ---------- */
+/* ---------- livro do plantão / serviço interno ---------- */
+function showTeamScope(scope){
+  const internal=scope==='internal';
+  $('#teamOperationalPanel')?.classList.toggle('hidden',internal);
+  $('#teamInternalPanel')?.classList.toggle('hidden',!internal);
+  $$('.scale-scope-btn').forEach(b=>b.classList.toggle('active',b.dataset.teamScope===scope));
+  if(internal){
+    loadBookData().then(()=>{renderInternalEditors();renderBook()}).catch(e=>alert(e.message||e));
+  }
+}
+function internalStatusValue(row,fixed){
+  const t=norm(row?.tipo_alteracao||'');
+  if(t==='PERMUTA')return 'PERMUTA';
+  if(t==='AUSENTE')return 'AUSENTE';
+  if(t==='VAGO')return 'VAGO';
+  if(t==='FIXO'||t==='ESCALADO')return 'ESCALADO';
+  return fixed?'ESCALADO':'VAGO';
+}
+function findProfessionalByReference(name){
+  const n=norm(name);
+  if(!n)return null;
+  let exact=professionals.find(p=>norm(p.nome_completo)===n);
+  if(exact)return exact;
+  const tokens=n.split(' ').filter(x=>x.length>2 && !['DOS','DAS','DE','DA'].includes(x));
+  let best=null,bestScore=0;
+  professionals.forEach(p=>{
+    const pn=norm(p.nome_completo),pt=pn.split(' ');
+    const score=tokens.filter(t=>pt.includes(t)).length/Math.max(tokens.length,1);
+    if(score>bestScore){best=p;bestScore=score}
+  });
+  return bestScore>=.72?best:null;
+}
 async function ensurePlantaoForBook(){
   if(currentPlantao)return currentPlantao;
   const ctx=operationalShiftContext(),date=selectedDate()||ctx.date,ala=alaForDate(date),turno=(date===ctx.date?ctx.turno:ctx.turno);
@@ -1473,7 +1504,7 @@ async function loadBookData(){
   await ensureProfessionals();
   if(!currentPlantao){
     bookMeta=null;internalScaleRows=[];fixedInternalRows=[];bookDriverFixedRows=[];
-    renderBook();return;
+    renderBook();renderInternalEditors();return;
   }
   const ala=currentPlantao.ala||alaForDate(currentPlantao.data_plantao);
   const turno=normalizeTurno(currentPlantao.turno||operationalShiftContext().turno);
@@ -1489,9 +1520,23 @@ async function loadBookData(){
 function internalRow(code){return internalScaleRows.find(x=>x.codigo_posicao===code)||null}
 function fixedInternalRow(code){return fixedInternalRows.find(x=>x.codigo_posicao===code)||null}
 function professionalNameById(id){const p=professionals.find(x=>x.id===id);return p?displayName(p):''}
+function internalTitularName(code){
+  const fixed=fixedInternalRow(code);
+  return fixed?.nome_referencia||professionalNameById(fixed?.profissional_id)||'';
+}
+function internalDisplayNameByCode(code){
+  const row=internalRow(code),fixed=fixedInternalRow(code),status=internalStatusValue(row,fixed);
+  if(status==='AUSENTE')return 'AUSENTE';
+  if(status==='VAGO')return '------';
+  if(status==='PERMUTA'){
+    return row?.nome_snapshot||professionalNameById(row?.profissional_id)||'------';
+  }
+  return row?.nome_snapshot||professionalNameById(row?.profissional_id)||fixed?.nome_referencia||professionalNameById(fixed?.profissional_id)||'------';
+}
 function internalDisplayName(row){
   if(!row)return '------';
-  if(norm(row.tipo_alteracao)==='VAGO'||!row.profissional_id)return '------';
+  if(norm(row.tipo_alteracao)==='AUSENTE')return 'AUSENTE';
+  if(norm(row.tipo_alteracao)==='VAGO')return '------';
   return row.nome_snapshot||professionalNameById(row.profissional_id)||'------';
 }
 function bookDriverName(code,index=0){
@@ -1504,72 +1549,122 @@ function bookDriverName(code,index=0){
   if(!v)return '------';
   const m=vehicleMembers(v).find(x=>teamRoleKey(x)==='driver');
   if(m)return displayName(m.profissionais);
+  const fixed=bookDriverFixedRows.find(x=>norm(x.codigo_viatura).replace(/\s/g,'')===norm(code).replace(/\s/g,''));
+  if(fixed?.nome_referencia)return fixed.nome_referencia;
   const q=priorityPeopleForRole('driver',vehicleType(v).includes('USA')?'USA':'USB');
   return q.length?'REVEZAMENTO':'------';
 }
 function monthNamePt(dateIso){
   return new Intl.DateTimeFormat('pt-BR',{month:'long',timeZone:'UTC'}).format(new Date(dateIso+'T12:00:00Z')).toUpperCase();
 }
-function renderInternalEditor(){
-  const el=$('#internalScaleEditor');if(!el)return;
-  el.innerHTML=BOOK_INTERNAL_SLOTS.map(slot=>{
-    const row=internalRow(slot.code),fixed=fixedInternalRow(slot.code);
-    const titular=fixed?.nome_referencia||professionalNameById(fixed?.profissional_id)||'Escala fixa ainda não carregada';
-    const atual=internalDisplayName(row);
-    const type=row?.tipo_alteracao||(!row&&fixed?'FIXO':'VAGO');
-    return '<div class="internal-slot '+slot.funcao.toLowerCase()+'" data-internal-slot="'+slot.code+'">'+
-      '<div class="internal-slot-head"><b>'+slot.label+'</b><span>'+slot.funcao+'</span></div>'+
-      '<div class="internal-slot-controls"><div class="autocomplete-shell"><input data-int-search="'+slot.code+'" autocomplete="off" placeholder="Digite 3 letras..."><input type="hidden" data-int-id="'+slot.code+'"><div class="autocomplete-results" data-int-results="'+slot.code+'"></div></div>'+
-      '<select data-int-type="'+slot.code+'"><option value="FIXO" '+(type==='FIXO'?'selected':'')+'>FIXO</option><option value="PERMUTA" '+(type==='PERMUTA'?'selected':'')+'>PERMUTA</option><option value="VAGO" '+(type==='VAGO'?'selected':'')+'>VAGO</option></select>'+
-      '<button class="mini-btn primary" data-int-save="'+slot.code+'">SALVAR</button></div>'+
-      '<div class="internal-slot-current"><b>Atual:</b> '+esc(atual)+'<br><b>Titular:</b> '+esc(titular)+'</div></div>';
-  }).join('');
-  el.querySelectorAll('[data-int-search]').forEach(inp=>inp.oninput=()=>internalAutocomplete(inp.dataset.intSearch,inp.value));
-  el.querySelectorAll('[data-int-save]').forEach(b=>b.onclick=()=>saveInternalSlot(b.dataset.intSave));
+function internalSlotHtml(slot){
+  const row=internalRow(slot.code),fixed=fixedInternalRow(slot.code);
+  const titular=fixed?.nome_referencia||professionalNameById(fixed?.profissional_id)||'SEM TITULAR PREVISTO';
+  const status=internalStatusValue(row,fixed);
+  const substitute=status==='PERMUTA'?(row?.nome_snapshot||professionalNameById(row?.profissional_id)||''):'';
+  const statusClass=status.toLowerCase();
+  return '<div class="internal-slot '+slot.funcao.toLowerCase()+' status-'+statusClass+'" data-internal-slot="'+slot.code+'">'+
+    '<div class="internal-slot-head"><b>'+esc(slot.label)+'</b><span>'+esc(slot.funcao)+'</span></div>'+
+    '<div class="internal-fixed-label">ESCALADO NA ESCALA FIXA</div>'+
+    '<div class="internal-fixed-name '+(!fixed?'internal-empty-fixed':'')+'">'+esc(titular)+'</div>'+
+    '<input type="hidden" data-int-type="'+slot.code+'" value="'+status+'">'+
+    '<input type="hidden" data-int-id="'+slot.code+'" value="'+esc(row?.profissional_id||'')+'">'+
+    '<div class="internal-status-actions">'+
+      '<button type="button" class="escalado '+(status==='ESCALADO'?'active':'')+'" data-int-status="'+slot.code+'" data-value="ESCALADO">✓ ESCALADO</button>'+
+      '<button type="button" class="ausente '+(status==='AUSENTE'?'active':'')+'" data-int-status="'+slot.code+'" data-value="AUSENTE">✕ AUSENTE</button>'+
+      '<button type="button" class="permuta '+(status==='PERMUTA'?'active':'')+'" data-int-status="'+slot.code+'" data-value="PERMUTA">⇄ PERMUTA</button>'+
+    '</div>'+
+    '<div class="internal-permuta-box '+(status==='PERMUTA'?'show':'')+'" data-int-permuta="'+slot.code+'">'+
+      '<label>QUEM ESTÁ NO LUGAR DE '+esc(titular)+'</label>'+
+      '<div class="autocomplete-shell"><input data-int-search="'+slot.code+'" autocomplete="off" placeholder="Digite 3 letras do substituto..." value="'+esc(substitute)+'"><div class="autocomplete-results" data-int-results="'+slot.code+'"></div></div>'+
+      '<div class="internal-permuta-selected">'+(substitute?'Substituto: '+esc(substitute):'Selecione o substituto para registrar a permuta.')+'</div>'+
+    '</div>'+
+    '<div class="internal-card-footer"><small>Situação atual: <b>'+status+'</b></small><button class="internal-save-btn" data-int-save="'+slot.code+'">SALVAR</button></div>'+
+  '</div>';
 }
-function internalAutocomplete(code,q){
-  const box=document.querySelector('[data-int-results="'+code+'"]'),n=norm(q);
+function renderInternalEditorTo(selector){
+  const el=$(selector);if(!el)return;
+  el.innerHTML=BOOK_INTERNAL_SLOTS.map(internalSlotHtml).join('');
+  el.querySelectorAll('[data-int-status]').forEach(b=>b.onclick=()=>{
+    const code=b.dataset.intStatus,value=b.dataset.value,card=el.querySelector('[data-internal-slot="'+code+'"]');
+    card.querySelector('[data-int-type="'+code+'"]').value=value;
+    card.querySelectorAll('[data-int-status="'+code+'"]').forEach(x=>x.classList.toggle('active',x.dataset.value===value));
+    card.querySelector('[data-int-permuta="'+code+'"]').classList.toggle('show',value==='PERMUTA');
+    card.classList.remove('status-escalado','status-ausente','status-permuta','status-vago');
+    card.classList.add('status-'+value.toLowerCase());
+    if(value!=='PERMUTA'){
+      card.querySelector('[data-int-id="'+code+'"]').value='';
+      const search=card.querySelector('[data-int-search="'+code+'"]');if(search)search.value='';
+    }
+  });
+  el.querySelectorAll('[data-int-search]').forEach(inp=>inp.oninput=()=>internalAutocomplete(inp.dataset.intSearch,inp.value,el));
+  el.querySelectorAll('[data-int-save]').forEach(b=>b.onclick=()=>saveInternalSlot(b.dataset.intSave,el));
+}
+function renderInternalEditors(){
+  const ala=currentPlantao?.ala||alaForDate(selectedDate());
+  const turno=normalizeTurno(currentPlantao?.turno||operationalShiftContext().turno);
+  if($('#internalAlaTurnoBadge'))$('#internalAlaTurnoBadge').textContent='ALA '+ala+' • '+turno;
+  renderInternalEditorTo('#teamInternalEditor');
+  renderInternalEditorTo('#internalScaleEditor');
+}
+function internalAutocomplete(code,q,root=document){
+  const box=root.querySelector('[data-int-results="'+code+'"]'),n=norm(q);
+  if(!box)return;
+  const hidden=root.querySelector('[data-int-id="'+code+'"]');
+  if(hidden)hidden.value='';
   if(n.length<3){box.classList.remove('show');box.innerHTML='';return}
   const list=professionals.filter(p=>teamSearchText(p).includes(n)).slice(0,15);
   box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-int-prof="'+p.id+'"><b>'+esc(displayName(p))+'</b><small>'+esc(p.nome_completo)+' • '+esc(p.funcao_sistema||'')+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div>';
   box.classList.add('show');
   box.querySelectorAll('[data-int-prof]').forEach(b=>b.onclick=()=>{
     const p=professionals.find(x=>x.id===b.dataset.intProf);
-    document.querySelector('[data-int-search="'+code+'"]').value=p.nome_completo;
-    document.querySelector('[data-int-id="'+code+'"]').value=p.id;
-    box.classList.remove('show');
+    const input=root.querySelector('[data-int-search="'+code+'"]'),idEl=root.querySelector('[data-int-id="'+code+'"]');
+    input.value=p.nome_completo;if(idEl)idEl.value=p.id;box.classList.remove('show');
+    const selected=input.closest('.internal-permuta-box')?.querySelector('.internal-permuta-selected');
+    if(selected)selected.textContent='Substituto: '+p.nome_completo;
   });
 }
-async function saveInternalSlot(code){
+async function saveInternalSlot(code,root=document){
   if(!isOperator())return;
   await ensurePlantaoForBook();
   const slot=BOOK_INTERNAL_SLOTS.find(x=>x.code===code),fixed=fixedInternalRow(code);
-  const type=document.querySelector('[data-int-type="'+code+'"]').value;
-  let proId=document.querySelector('[data-int-id="'+code+'"]').value||null;
-  if(type==='FIXO'&&!proId)proId=fixed?.profissional_id||null;
-  if(type==='PERMUTA'&&!proId)return alert('Na permuta, selecione quem está substituindo o titular.');
-  if(type==='VAGO')proId=null;
-  const pro=professionals.find(x=>x.id===proId);
+  const type=root.querySelector('[data-int-type="'+code+'"]')?.value||'ESCALADO';
+  let proId=root.querySelector('[data-int-id="'+code+'"]')?.value||null;
+  let snapshot=null;
+  if(type==='ESCALADO'){
+    const fixedPro=fixed?.profissional_id?professionals.find(x=>x.id===fixed.profissional_id):findProfessionalByReference(fixed?.nome_referencia);
+    proId=fixedPro?.id||fixed?.profissional_id||null;
+    snapshot=fixedPro?.nome_completo||fixed?.nome_referencia||null;
+  }
+  if(type==='PERMUTA'){
+    if(!proId)return alert('Selecione quem está substituindo '+(fixed?.nome_referencia||'o titular')+'.');
+    snapshot=professionals.find(x=>x.id===proId)?.nome_completo||null;
+  }
+  if(type==='AUSENTE'||type==='VAGO'){proId=null;snapshot=null}
+  const titularPro=fixed?.profissional_id?professionals.find(x=>x.id===fixed.profissional_id):findProfessionalByReference(fixed?.nome_referencia);
   const payload={
     plantao_id:currentPlantao.id,escala_fixa_id:fixed?.id||null,setor:slot.setor,codigo_posicao:slot.code,funcao:slot.funcao,
-    profissional_id:proId,nome_snapshot:pro?.nome_completo||null,titular_profissional_id:fixed?.profissional_id||null,
-    titular_nome_snapshot:fixed?.nome_referencia||professionalNameById(fixed?.profissional_id)||null,tipo_alteracao:type,status:'ATIVO',ordem:slot.order,atualizado_em:new Date().toISOString()
+    profissional_id:proId,nome_snapshot:snapshot,titular_profissional_id:titularPro?.id||fixed?.profissional_id||null,
+    titular_nome_snapshot:fixed?.nome_referencia||titularPro?.nome_completo||null,tipo_alteracao:type,status:'ATIVO',ordem:slot.order,atualizado_em:new Date().toISOString()
   };
   const {error}=await supabase.from('escala_interna_plantao').upsert(payload,{onConflict:'plantao_id,codigo_posicao'});
   if(error)return alert(error.message);
-  await loadBookData();renderBook();
+  await loadBookData();renderInternalEditors();renderBook();
 }
 function collectPermutas(){
   const out=[];
   bookDriverFixedRows.forEach(fr=>{
     const v=vehicleByCode(fr.codigo_viatura);if(!v)return;
     const cur=vehicleMembers(v).find(m=>teamRoleKey(m)==='driver');
-    if(cur&&fr.profissional_id&&cur.profissional_id!==fr.profissional_id){
-      out.push({funcao:'CONDUTOR',substituto:displayName(cur.profissionais),substituido:fr.nome_referencia||professionalNameById(fr.profissional_id)});
+    const titular=fr.nome_referencia||professionalNameById(fr.profissional_id);
+    if(cur&&titular&&norm(displayName(cur.profissionais))!==norm(titular)&&norm(cur.profissionais?.nome_completo)!==norm(titular)){
+      out.push({funcao:'CONDUTOR',substituto:cur.profissionais?.nome_completo||displayName(cur.profissionais),substituido:titular});
     }
   });
   internalScaleRows.filter(r=>norm(r.tipo_alteracao)==='PERMUTA').forEach(r=>out.push({
-    funcao:r.funcao==='SANITARIA'?'SANITARIA':r.funcao,substituto:internalDisplayName(r),substituido:r.titular_nome_snapshot||professionalNameById(r.titular_profissional_id)||'—'
+    funcao:r.funcao==='SANITARIA'?'SANITARIA':r.funcao,
+    substituto:r.nome_snapshot||professionalNameById(r.profissional_id)||'—',
+    substituido:r.titular_nome_snapshot||professionalNameById(r.titular_profissional_id)||'—'
   }));
   return out;
 }
@@ -1586,21 +1681,21 @@ function renderBook(){
   $('#bookMonthPreview').textContent=monthNamePt(date);
   $('#bookChefePreview').textContent='Sr. '+(bookMeta?.chefe_servico||'—');
 
-  const r1=internalRow('RADIO-01'),r2=internalRow('RADIO-02');
-  $('#bookRadio1').textContent=internalDisplayName(r1);$('#bookRadio2').textContent=internalDisplayName(r2);
+  $('#bookRadio1').textContent=internalDisplayNameByCode('RADIO-01');
+  $('#bookRadio2').textContent=internalDisplayNameByCode('RADIO-02');
 
   const driverRows=[
     ['MOTOLANCIA',bookDriverName('MOTOLANCIA',0)],['MOTOLANCIA',bookDriverName('MOTOLANCIA',1)],
     ['USA 01',bookDriverName('USA01')],['USA 02',bookDriverName('USA02')],['USA 06',bookDriverName('USA06')],
     ['USB 01',bookDriverName('USB01')],['USB 02',bookDriverName('USB02')],['USB 03',bookDriverName('USB03')],
     ['USB 04',bookDriverName('USB04')],['USB 05',bookDriverName('USB05')],['USB 06',bookDriverName('USB06')],
-    ['',''],['AMB - S1',internalDisplayName(internalRow('AMB-S1'))],['AMB - S2',internalDisplayName(internalRow('AMB-S2'))],
-    ['AMB - 03 EXTRA',internalDisplayName(internalRow('AMB-03-EXTRA'))],['AMB - S4 EXTRA',internalDisplayName(internalRow('AMB-S4-EXTRA'))]
+    ['',''],['AMB - S1',internalDisplayNameByCode('AMB-S1')],['AMB - S2',internalDisplayNameByCode('AMB-S2')],
+    ['AMB - 03 EXTRA',internalDisplayNameByCode('AMB-03-EXTRA')],['AMB - S4 EXTRA',internalDisplayNameByCode('AMB-S4-EXTRA')]
   ];
   $('#bookDriversBody').innerHTML=driverRows.map(r=>'<tr><td>'+esc(r[0])+'</td><td>'+esc(r[1])+'</td></tr>').join('');
 
   const central=BOOK_INTERNAL_SLOTS.filter(x=>x.setor==='CENTRAL');
-  $('#bookInternalBody').innerHTML=central.map(s=>'<tr><td>'+esc(s.label)+'</td><td>'+esc(internalDisplayName(internalRow(s.code)))+'</td></tr>').join('');
+  $('#bookInternalBody').innerHTML=central.map(s=>'<tr><td>'+esc(s.label)+'</td><td>'+esc(internalDisplayNameByCode(s.code))+'</td></tr>').join('');
 
   const perm=collectPermutas(),template=['CONDUTOR','CONDUTOR','RADIO','RADIO','SANITARIA','SANITARIA','LAVADOR','LAVADOR'];
   const used=new Set();
@@ -1612,16 +1707,18 @@ function renderBook(){
   perm.forEach((p,i)=>{if(!used.has(i))rows.push(p)});
   $('#bookPermutasBody').innerHTML=rows.map(p=>'<tr><th>'+esc(p.funcao)+'</th><td>'+esc(p.substituto)+'</td><td>'+esc(p.substituido)+'</td></tr>').join('');
   $('#bookObsPreview').textContent=bookMeta?.observacoes||'';
-  renderInternalEditor();
+  renderInternalEditors();
 }
 async function saveBook(){
   if(!isOperator())return;
   await ensurePlantaoForBook();
   const r1=internalRow('RADIO-01'),r2=internalRow('RADIO-02');
+  const p1=r1?.profissional_id||fixedInternalRow('RADIO-01')?.profissional_id||null;
+  const p2=r2?.profissional_id||fixedInternalRow('RADIO-02')?.profissional_id||null;
   const payload={
     plantao_id:currentPlantao.id,parte_diaria:$('#bookParte').value.trim()||null,ano:Number(currentPlantao.data_plantao.slice(0,4)),
-    chefe_servico:$('#bookChefe').value.trim()||null,radio_1_profissional_id:r1?.profissional_id||null,radio_1_nome_snapshot:internalDisplayName(r1),
-    radio_2_profissional_id:r2?.profissional_id||null,radio_2_nome_snapshot:internalDisplayName(r2),observacoes:$('#bookObs').value.trim()||null,
+    chefe_servico:$('#bookChefe').value.trim()||null,radio_1_profissional_id:p1,radio_1_nome_snapshot:internalDisplayNameByCode('RADIO-01'),
+    radio_2_profissional_id:p2,radio_2_nome_snapshot:internalDisplayNameByCode('RADIO-02'),observacoes:$('#bookObs').value.trim()||null,
     atualizado_por:profile?.nome||null,atualizado_em:new Date().toISOString()
   };
   const {error}=await supabase.from('livro_plantao').upsert(payload,{onConflict:'plantao_id'});
@@ -1725,6 +1822,8 @@ $('#teamSearch').oninput=e=>renderTeamSearch(e.target.value);$('#clearTeamSearch
 $('#assignMode').onchange=()=>$('#assignVehicleWrap').classList.toggle('hidden',$('#assignMode').value!=='FIXO');
 $('#confirmAssignBtn').onclick=confirmAssign;$('#saveIndividualOccBtn').onclick=saveIndividualOccurrence;
 $('#regRole').onchange=renderRegistry;$('#registerProfessionalBtn').onclick=registerProfessional;
+$('.scale-scope-btn').forEach(b=>b.onclick=()=>showTeamScope(b.dataset.teamScope));
+$('#internalReloadBtn').onclick=()=>loadBookData().then(()=>{renderInternalEditors();renderBook()});
 $('#saveBookBtn').onclick=saveBook;$('#printBookBtn').onclick=()=>window.print();
 
 supabase.auth.onAuthStateChange((_,s)=>applySession(s));
