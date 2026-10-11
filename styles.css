@@ -43,6 +43,7 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 .top-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap;justify-content:flex-end}
 .date-field{display:flex;align-items:center;gap:6px;color:#fff;font-size:.74rem;font-weight:800}
 .date-field input{width:auto;padding:7px 8px;border:1px solid #b8cfda;border-radius:7px;background:#fff;color:#102a3b}
+.day-ala-badge{display:inline-flex;align-items:center;justify-content:center;padding:5px 8px;border-radius:999px;background:#fff7ed;border:1px solid #fdba74;color:#9a3412;font-size:.68rem;font-weight:1000;letter-spacing:.03em;white-space:nowrap}
 .role-badge{padding:5px 8px;border-radius:999px;background:#0ea5e933;border:1px solid #7dd3fc;color:#fff;font-size:.68rem;font-weight:1000;letter-spacing:.04em}
 .sync-strip{display:flex;align-items:center;gap:7px;margin:5px 0 7px;padding:5px 8px;border:1px solid #7bc795;background:#e7f7ed;color:#166534;border-radius:8px;font-size:.72rem}
 .sync-dot{width:7px;height:7px;border-radius:50%;background:#16a34a;box-shadow:0 0 0 3px #16a34a18}
