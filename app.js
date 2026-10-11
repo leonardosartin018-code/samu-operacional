@@ -31,6 +31,10 @@ let selectedExpressPermutaRow = null;
 let pendingQuickRegistration = null;
 let realtimeChannel = null;
 let reloadTimer = null;
+let operationalShiftTimer = null;
+let operationalShiftSyncBusy = false;
+let autoFollowCurrentShift = true;
+let lastOperationalShiftKey = '';
 let expressTechSelected = new Map();
 let expressNurseSelected = new Map();
 
@@ -267,6 +271,72 @@ function syncDateAndAla(dateIso,turnoOverride=null){
 }
 function selectedDate(){
   return $('#shiftDate').value || currentPlantao?.data_plantao || operationalShiftContext().date;
+}
+function operationalShiftKey(ctx=operationalShiftContext()){
+  return ctx.date+'|'+ctx.turno+'|'+alaForDate(ctx.date);
+}
+function plantaoShiftKey(p=currentPlantao){
+  if(!p)return '';
+  return String(p.data_plantao||'')+'|'+normalizeTurno(p.turno||'')+'|'+norm(p.ala||'');
+}
+function currentScaleContext(){
+  const now=operationalShiftContext();
+  if(currentPlantao){
+    return {
+      date:currentPlantao.data_plantao||now.date,
+      ala:norm(currentPlantao.ala||alaForDate(currentPlantao.data_plantao||now.date)),
+      turno:normalizeTurno(currentPlantao.turno||now.turno)
+    };
+  }
+  const date=selectedDate()||now.date;
+  return {
+    date,
+    ala:alaForDate(date),
+    turno:date===now.date?now.turno:normalizeTurno($('#expressTurno')?.value||now.turno)
+  };
+}
+async function synchronizeCurrentOperationalShift(force=false){
+  if(!session||operationalShiftSyncBusy||(!autoFollowCurrentShift&&!force))return;
+  const ctx=operationalShiftContext();
+  const key=operationalShiftKey(ctx);
+  if(!force && key===lastOperationalShiftKey && plantaoShiftKey()===key)return;
+
+  operationalShiftSyncBusy=true;
+  try{
+    setSync('Sincronizando Ala e turno atuais...','warn');
+    syncDateAndAla(ctx.date,ctx.turno);
+    await loadAll(ctx.date);
+    await loadExpressScale();
+
+    // A escala interna usa exatamente o mesmo plantão/Ala/turno da operacional.
+    await loadBookData();
+    if(!$('#teamInternalPanel')?.classList.contains('hidden'))renderInternalEditors();
+    if($('#book')?.classList.contains('active'))renderBook();
+
+    lastOperationalShiftKey=operationalShiftKey(ctx);
+    setSync('Plantão atual sincronizado • '+alaForDate(ctx.date)+' • '+ctx.turno);
+  }catch(error){
+    console.error('Falha ao sincronizar plantão atual',error);
+    setSync('Falha ao sincronizar o plantão atual','warn');
+  }finally{
+    operationalShiftSyncBusy=false;
+  }
+}
+function stopOperationalShiftMonitor(){
+  if(operationalShiftTimer){
+    clearInterval(operationalShiftTimer);
+    operationalShiftTimer=null;
+  }
+}
+function startOperationalShiftMonitor(){
+  stopOperationalShiftMonitor();
+  operationalShiftTimer=setInterval(()=>{
+    if(!session||!autoFollowCurrentShift)return;
+    const key=operationalShiftKey();
+    if(key!==lastOperationalShiftKey || plantaoShiftKey()!==key){
+      synchronizeCurrentOperationalShift().catch(console.error);
+    }
+  },30000);
 }
 
 function openPage(id){
@@ -1401,7 +1471,11 @@ async function deleteOccurrence(id){
 
 /* ---------- escala expressa ---------- */
 async function loadExpressScale(){
-  const ala=$('#expressAla').value,turno=$('#expressTurno').value;
+  const scaleCtx=currentScaleContext();
+  const ala=scaleCtx.ala,turno=scaleCtx.turno;
+  if($('#expressAla'))$('#expressAla').value=ala;
+  if($('#expressTurno'))$('#expressTurno').value=turno;
+
   const {data,error}=await supabase.from('escala_fixa_anapolis')
     .select('*,profissionais(id,nome_completo,nome_de_guerra,funcao_sistema)')
     .eq('ala',ala).eq('turno',turno).eq('ativo',true).order('ordem');
@@ -1412,7 +1486,7 @@ async function loadExpressScale(){
   }
   scaleRows=data||[];
   $('#expressStatus').className='express-status ok';
-  $('#expressStatus').innerHTML='<b>'+scaleRows.length+' posições pré-carregadas.</b> Os nomes da escala aparecem como referência, mas ninguém entra escalado automaticamente. Clique em ESCALAR somente em quem realmente ficará no plantão.';
+  $('#expressStatus').innerHTML='<b>Escala automática: '+esc(ala)+' • '+esc(turno)+' — '+scaleRows.length+' posições.</b> Os nomes são a referência da escala fixa; só entra em serviço quem for efetivamente escalado/confirmado.';
   renderExpressDrivers();
 }
 function expressDecisionTime(m){
@@ -1878,8 +1952,9 @@ async function saveQuickRegistration(){
 
 async function ensureOperationalScaleFromFixed(){
   if(!currentPlantao||!vehicles.length||!professionals.length)return;
-  const ala=currentPlantao.ala||alaForDate(currentPlantao.data_plantao);
-  const turno=normalizeTurno(currentPlantao.turno||operationalShiftContext().turno);
+  const scaleCtx=currentScaleContext();
+  const ala=scaleCtx.ala;
+  const turno=scaleCtx.turno;
   const [fixRes,teamRes]=await Promise.all([
     supabase.from('escala_fixa_anapolis').select('*').eq('ala',ala).eq('turno',turno).eq('ativo',true).order('ordem'),
     supabase.from('equipe_plantao').select('*').eq('plantao_id',currentPlantao.id)
@@ -1982,11 +2057,22 @@ function findProfessionalByReference(name){
   return bestScore>=.72?best:null;
 }
 async function ensurePlantaoForBook(){
-  if(currentPlantao)return currentPlantao;
   const ctx=operationalShiftContext();
+
+  if(autoFollowCurrentShift){
+    const expectedKey=operationalShiftKey(ctx);
+    if(plantaoShiftKey()!==expectedKey){
+      currentPlantao=await ensureOperationalPlantao(ctx.date,ctx.turno,alaForDate(ctx.date));
+      syncDateAndAla(ctx.date,currentPlantao.turno||ctx.turno);
+      lastOperationalShiftKey=expectedKey;
+    }
+    return currentPlantao;
+  }
+
+  if(currentPlantao)return currentPlantao;
   const date=selectedDate()||ctx.date;
   const ala=alaForDate(date);
-  const turno=(date===ctx.date)?ctx.turno:ctx.turno;
+  const turno=date===ctx.date?ctx.turno:normalizeTurno($('#expressTurno')?.value||ctx.turno);
   currentPlantao=await ensureOperationalPlantao(date,turno,ala);
   syncDateAndAla(date,currentPlantao.turno||turno);
   return currentPlantao;
@@ -2172,9 +2258,8 @@ function renderInternalEditorTo(selector){
   el.querySelectorAll('[data-int-search]').forEach(inp=>inp.oninput=()=>internalAutocomplete(inp.dataset.intSearch,inp.value,el));
 }
 function renderInternalEditors(){
-  const ala=currentPlantao?.ala||alaForDate(selectedDate());
-  const turno=normalizeTurno(currentPlantao?.turno||operationalShiftContext().turno);
-  if($('#internalAlaTurnoBadge'))$('#internalAlaTurnoBadge').textContent='ALA '+ala+' • '+turno;
+  const scaleCtx=currentScaleContext();
+  if($('#internalAlaTurnoBadge'))$('#internalAlaTurnoBadge').textContent='ALA '+scaleCtx.ala+' • '+scaleCtx.turno;
   renderInternalEditorTo('#teamInternalEditor');
   renderInternalEditorTo('#internalScaleEditor');
 }
@@ -2449,6 +2534,8 @@ function subscribeRealtime(){
 async function applySession(s){
   session=s;
   if(!s){
+    stopOperationalShiftMonitor();
+    lastOperationalShiftKey='';
     $('#auth').classList.remove('hidden');$('#app').classList.add('hidden');return;
   }
   const {data:p}=await supabase.from('usuarios_perfis').select('*').eq('user_id',s.user.id).maybeSingle();
@@ -2457,12 +2544,13 @@ async function applySession(s){
   $('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
   $('#endShiftBtn').disabled=!isOperator();$('#manualOccBtn').disabled=!isOperator();
 
-  // O plantão operacional muda às 07:00. Entre 00:00 e 06:59,
-  // continuamos no NOTURNO iniciado às 19:00 do dia anterior.
-  const shift=operationalShiftContext();
-  syncDateAndAla(shift.date,shift.turno);
-  await loadAll(shift.date);
+  // Segue automaticamente o plantão vigente. A virada 07:00/19:00
+  // atualiza Escala Operacional e Serviço Interno juntos.
+  autoFollowCurrentShift=true;
+  lastOperationalShiftKey='';
+  await synchronizeCurrentOperationalShift(true);
   subscribeRealtime();
+  startOperationalShiftMonitor();
 }
 
 /* ---------- events ---------- */
@@ -2505,13 +2593,37 @@ $$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page));
 $$('[data-open-page]').forEach(b=>b.onclick=()=>openPage(b.dataset.openPage));
 $$('[data-close-modal]').forEach(b=>b.onclick=()=>closeModal(b.dataset.closeModal));
 $$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModal(m.id)}));
-$('#shiftDate').onchange=()=>{syncDateAndAla($('#shiftDate').value,operationalShiftContext().turno);loadAll($('#shiftDate').value)};
+$('#shiftDate').onchange=async()=>{
+  const ctx=operationalShiftContext();
+  const date=$('#shiftDate').value;
+  autoFollowCurrentShift=date===ctx.date;
+  if(autoFollowCurrentShift){
+    await synchronizeCurrentOperationalShift(true);
+  }else{
+    lastOperationalShiftKey='';
+    syncDateAndAla(date,$('#expressTurno')?.value||ctx.turno);
+    await loadAll(date);
+    await loadExpressScale();
+  }
+};
 $('#exportBtn').onclick=exportCSV;$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
 $('#regionalBtn').onclick=()=>$('#regionalIntegrated').scrollIntoView({behavior:'smooth',block:'start'});
 $('#rotationCriterion').onchange=e=>persistRotationCriterion(e.target.value);
 $('#teamReloadBtn').onclick=()=>loadAll(selectedDate());
 $('#saveOcc').onclick=saveOccurrence;$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
-$('#loadScaleBtn').onclick=loadExpressScale;$('#expressAla').onchange=()=>{scaleRows=[];$('#expressStatus').className='express-status';$('#expressStatus').innerHTML='Ala alterada. Clique em <b>CARREGAR ESCALA FIXA</b>.'};$('#expressTurno').onchange=()=>{scaleRows=[];$('#expressStatus').className='express-status';$('#expressStatus').innerHTML='Turno alterado. Clique em <b>CARREGAR ESCALA FIXA</b>.'};
+$('#loadScaleBtn').onclick=loadExpressScale;
+$('#expressAla').onchange=()=>{
+  const scaleCtx=currentScaleContext();
+  $('#expressAla').value=scaleCtx.ala;
+  $('#expressStatus').className='express-status ok';
+  $('#expressStatus').innerHTML='A Ala da escala acompanha automaticamente o plantão: <b>'+esc(scaleCtx.ala)+' • '+esc(scaleCtx.turno)+'</b>.';
+};
+$('#expressTurno').onchange=()=>{
+  const scaleCtx=currentScaleContext();
+  $('#expressTurno').value=scaleCtx.turno;
+  $('#expressStatus').className='express-status ok';
+  $('#expressStatus').innerHTML='O turno acompanha automaticamente o plantão: <b>'+esc(scaleCtx.ala)+' • '+esc(scaleCtx.turno)+'</b>.';
+};
 $('#allDriversRotationBtn').onclick=setAllDriversRotation;$('#restoreFixedDriversBtn').onclick=restoreFixedDrivers;
 $('#expressTechSearch').oninput=e=>expressSearch('tech',e.target.value);$('#expressNurseSearch').oninput=e=>expressSearch('nurse',e.target.value);
 $('#applyExpressPreviewBtn').onclick=()=>{$('#expressStatus').className='express-status ok';$('#expressStatus').innerHTML='<b>Prévia preparada:</b> '+expressTechSelected.size+' técnico(s)/enfermeiro(s) para USB e '+expressNurseSelected.size+' enfermeiro(s) para USA. Clique em CONFIRMAR para gravar.'};
@@ -2529,6 +2641,15 @@ $('#saveBookBtn').onclick=saveBook;$('#printBookBtn').onclick=()=>window.print()
 $('#expressPermutaSearch').oninput=expressPermutaAutocomplete;
 $('#saveExpressPermutaBtn').onclick=saveExpressPermuta;
 $('#saveQuickRegisterBtn').onclick=saveQuickRegistration;
+
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'&&session&&autoFollowCurrentShift){
+    const key=operationalShiftKey();
+    if(key!==lastOperationalShiftKey || plantaoShiftKey()!==key){
+      synchronizeCurrentOperationalShift().catch(console.error);
+    }
+  }
+});
 
 supabase.auth.onAuthStateChange((_,s)=>{
   // Consultas ao Supabase precisam ocorrer fora do callback de autenticação.
