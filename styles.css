@@ -597,3 +597,31 @@ nav.tabs .tab.book-tab.active{
   .scale-scope-btn[data-team-scope="internal"]:not(.active){animation:none}
   .internal-slot,.internal-status-actions button,.scale-scope-btn[data-team-scope="internal"]{transition:none}
 }
+
+/* ---------- feedback de situação da viatura e tempos de QTH ---------- */
+.occ-timeline{
+  grid-template-columns:repeat(4,minmax(0,1fr));
+}
+.occ-time-chip.qth-duration{
+  background:rgba(14,165,233,.20);
+  border-color:rgba(125,211,252,.55);
+}
+.status-strip button{
+  transition:transform .12s ease,filter .12s ease,box-shadow .12s ease,background .12s ease;
+}
+.status-strip button:hover{
+  transform:translateY(-1px);
+  filter:brightness(1.12);
+}
+.status-strip button.active{
+  background:#fff;
+  color:#073955;
+  border-color:#fff;
+  box-shadow:inset 0 0 0 2px rgba(7,89,133,.18),0 2px 8px rgba(0,0,0,.14);
+}
+.status-strip button:active{
+  transform:translateY(0) scale(.97);
+}
+@media(max-width:920px){
+  .occ-timeline{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
