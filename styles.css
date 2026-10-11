@@ -410,3 +410,190 @@ nav.tabs .tab.book-tab.active{
 .scale-confirm-state.confirmed{background:#dcfce7;border-color:#86efac;color:#166534}
 .internal-card-footer{min-height:29px}
 .internal-card-footer small{line-height:1.25}
+
+/* ---------- BLOCO 3: layout e leitura operacional ---------- */
+
+/* Bases descentralizadas: três colunas no desktop, mantendo a sequência atual */
+.regional-grid{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+}
+.regional-card{
+  padding:8px;
+  border-radius:10px;
+}
+.regional-name{
+  font-size:.86rem;
+  line-height:1.05;
+}
+.regional-sub{
+  font-size:.58rem;
+}
+.regional-base-status{
+  padding:4px 6px;
+  font-size:.52rem;
+}
+.regional-vehicles{
+  gap:6px;
+}
+.regional-vehicle{
+  padding:7px;
+  border-radius:9px;
+}
+.regional-vehicle-name{
+  font-size:.82rem;
+}
+.regional-vehicle .crew-name{
+  font-size:.64rem;
+}
+.regional-vehicle .crew-role{
+  font-size:.47rem;
+}
+.regional-controls .status-select{
+  font-size:.61rem;
+  padding:5px;
+}
+@media(max-width:1050px){
+  .regional-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:720px){
+  .regional-grid{grid-template-columns:1fr}
+}
+
+/* Equipe confirmada: bloco SAMU azul, com separação visual clara por função */
+.team-preview-wrap{
+  background:linear-gradient(145deg,#064d73 0%,#073955 100%);
+  border:1px solid #0e7490;
+  box-shadow:0 8px 22px rgba(7,57,85,.16);
+}
+.team-preview-wrap>.head h2{
+  color:#fff;
+}
+.team-preview-wrap>.head p{
+  color:#d8eef8;
+}
+.team-preview-wrap .count-badge{
+  background:#fff;
+  color:#075985;
+  border:1px solid #bae6fd;
+}
+.team-preview-wrap .roster-region{
+  border-color:#8ec5dc;
+  background:#f7fbfd;
+  box-shadow:0 3px 10px rgba(3,45,67,.10);
+}
+.team-preview-wrap .roster-region-head{
+  background:#0b5f8c;
+  border-bottom-color:#0a4f76;
+}
+.team-preview-wrap .roster-region-head b{
+  color:#fff;
+  font-size:.78rem;
+  letter-spacing:.025em;
+}
+.team-preview-wrap .roster-region-head span{
+  color:#d8eef8;
+}
+.team-preview-wrap .roster-role-group{
+  border-top:0;
+  border-left:5px solid #38bdf8;
+  margin:7px;
+  border-radius:8px;
+  overflow:hidden;
+  background:#fff;
+  box-shadow:0 2px 7px rgba(15,23,42,.06);
+}
+.team-preview-wrap .roster-role-head{
+  background:#e7f5fb;
+  padding:7px 9px;
+}
+.team-preview-wrap .roster-role-head b{
+  color:#075985;
+  font-size:.67rem;
+  letter-spacing:.035em;
+}
+.team-preview-wrap .roster-role-head span{
+  min-width:22px;
+  text-align:center;
+  padding:2px 6px;
+  border-radius:999px;
+  background:#075985;
+  color:#fff;
+  font-weight:1000;
+}
+.team-preview-wrap .roster-role-group.role-driver{border-left-color:#0ea5e9}
+.team-preview-wrap .roster-role-group.role-tech{border-left-color:#0284c7}
+.team-preview-wrap .roster-role-group.role-nurse{border-left-color:#0891b2}
+.team-preview-wrap .roster-role-group.role-doctor{border-left-color:#1d4ed8}
+.team-preview-wrap .roster-role-group.role-moto{border-left-color:#f59e0b}
+.team-preview-wrap .roster-person{
+  background:#fdfefe;
+  border-color:#c5dce7;
+}
+.team-preview-wrap .roster-person-name{
+  color:#063b5c;
+  font-size:.74rem;
+}
+.team-preview-wrap .roster-person-meta{
+  color:#486b7d;
+}
+@media(max-width:900px){
+  .team-preview-wrap .roster-list{grid-template-columns:1fr}
+}
+
+/* Serviço Interno: deixar claro que a aba é clicável */
+.scale-scope-btn[data-team-scope="internal"]{
+  position:relative;
+  overflow:hidden;
+  transition:transform .16s ease,box-shadow .16s ease,background .16s ease,border-color .16s ease;
+}
+.scale-scope-btn[data-team-scope="internal"]:not(.active){
+  background:#fff7ed;
+  border-color:#fb923c;
+  color:#9a3412;
+  box-shadow:0 0 0 0 rgba(249,115,22,.22);
+  animation:internalTabPulse 2.2s ease-in-out infinite;
+}
+.scale-scope-btn[data-team-scope="internal"]:not(.active)::after{
+  content:'CLIQUE';
+  margin-left:7px;
+  padding:2px 5px;
+  border-radius:999px;
+  background:#f97316;
+  color:#fff;
+  font-size:.46rem;
+  font-weight:1000;
+  vertical-align:middle;
+}
+.scale-scope-btn[data-team-scope="internal"]:hover{
+  transform:translateY(-1px);
+  box-shadow:0 5px 12px rgba(7,89,133,.16);
+}
+@keyframes internalTabPulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(249,115,22,.20)}
+  50%{box-shadow:0 0 0 5px rgba(249,115,22,.08)}
+}
+
+/* Feedback imediato nos controles do serviço interno */
+.internal-status-actions button{
+  transition:transform .12s ease,box-shadow .12s ease,filter .12s ease;
+}
+.internal-status-actions button:hover{
+  transform:translateY(-1px);
+  filter:brightness(.98);
+  box-shadow:0 4px 9px rgba(15,23,42,.10);
+}
+.internal-status-actions button:active{
+  transform:translateY(0) scale(.98);
+}
+.internal-slot{
+  transition:background-color .18s ease,border-color .18s ease,box-shadow .18s ease,color .18s ease,transform .16s ease;
+}
+.internal-slot:hover{
+  transform:translateY(-1px);
+  box-shadow:0 7px 16px rgba(15,23,42,.11);
+}
+@media(prefers-reduced-motion:reduce){
+  .scale-scope-btn[data-team-scope="internal"]:not(.active){animation:none}
+  .internal-slot,.internal-status-actions button,.scale-scope-btn[data-team-scope="internal"]{transition:none}
+}
