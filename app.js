@@ -346,12 +346,16 @@ function openPage(id){
   document.querySelector('.tab[data-page="'+id+'"]')?.classList.add('active');
   if(id==='history') renderHistory();
   if(id==='team'){
-    renderTeamPreview();
-    loadExpressScale();
-    renderRegistry();
+    const ready=autoFollowCurrentShift?synchronizeCurrentOperationalShift():Promise.resolve();
+    ready.then(()=>{
+      renderTeamPreview();
+      loadExpressScale();
+      renderRegistry();
+    }).catch(e=>alert(e.message||e));
   }
   if(id==='book'){
-    loadBookData().then(()=>{renderInternalEditors();renderBook();renderScaleConfirmationStates()}).catch(e=>alert(e.message||e));
+    const ready=autoFollowCurrentShift?synchronizeCurrentOperationalShift():Promise.resolve();
+    ready.then(()=>loadBookData()).then(()=>{renderInternalEditors();renderBook();renderScaleConfirmationStates()}).catch(e=>alert(e.message||e));
   }
 }
 window.openPage=openPage;
@@ -2609,9 +2613,9 @@ $('#shiftDate').onchange=async()=>{
 $('#exportBtn').onclick=exportCSV;$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
 $('#regionalBtn').onclick=()=>$('#regionalIntegrated').scrollIntoView({behavior:'smooth',block:'start'});
 $('#rotationCriterion').onchange=e=>persistRotationCriterion(e.target.value);
-$('#teamReloadBtn').onclick=()=>loadAll(selectedDate());
+$('#teamReloadBtn').onclick=()=>autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadAll(selectedDate());
 $('#saveOcc').onclick=saveOccurrence;$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
-$('#loadScaleBtn').onclick=loadExpressScale;
+$('#loadScaleBtn').onclick=()=>autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadExpressScale();
 $('#expressAla').onchange=()=>{
   const scaleCtx=currentScaleContext();
   $('#expressAla').value=scaleCtx.ala;
