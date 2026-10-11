@@ -1790,9 +1790,25 @@ $$('.auth-tab').forEach(b=>b.onclick=()=>{
   $('#signupForm').classList.toggle('hidden',b.dataset.auth!=='signup');
 });
 $('#loginForm').onsubmit=async e=>{
-  e.preventDefault();$('#authMsg').textContent='';
-  const {error}=await supabase.auth.signInWithPassword({email:$('#loginEmail').value.trim(),password:$('#loginPass').value});
-  if(error)$('#authMsg').textContent=error.message;
+  e.preventDefault();
+  const msg=$('#authMsg');
+  const btn=$('#loginForm button[type="submit"]');
+  msg.textContent='Entrando...';
+  if(btn)btn.disabled=true;
+  try{
+    const {data,error}=await supabase.auth.signInWithPassword({
+      email:$('#loginEmail').value.trim(),
+      password:$('#loginPass').value
+    });
+    if(error)throw error;
+    if(data?.session)await applySession(data.session);
+    msg.textContent='';
+  }catch(error){
+    console.error('Falha no login',error);
+    msg.textContent=error?.message||'Não foi possível entrar. Tente novamente.';
+  }finally{
+    if(btn)btn.disabled=false;
+  }
 };
 $('#signupForm').onsubmit=async e=>{
   e.preventDefault();
