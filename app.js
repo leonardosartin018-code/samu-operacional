@@ -37,6 +37,14 @@ let autoFollowCurrentShift = true;
 let lastOperationalShiftKey = '';
 let expressTechSelected = new Map();
 let expressNurseSelected = new Map();
+let unsavedOperationalScale = false;
+let unsavedInternalScale = false;
+let unsavedBook = false;
+const modalDraftSnapshots = new Map();
+const TRACKED_DRAFT_MODALS = new Set([
+  'teamModal','occModal','occEditModal','expressPermutaModal',
+  'quickRegisterModal','assignModal','individualOccModal'
+]);
 
 const REGIONAL_ORDER = ['ABADIÂNIA','ALEXÂNIA','COCALZINHO','CORUMBÁ','GOIANÁPOLIS','JARANÁPOLIS','PIRENÓPOLIS','TEREZÓPOLIS'];
 const BOOK_INTERNAL_SLOTS = [
@@ -93,6 +101,59 @@ function setSync(text,type='ok'){
   const el=$('#syncStatus');
   el.className='sync-strip'+(type==='ok'?'':' '+type);
   el.innerHTML='<span class="sync-dot"></span><span>'+esc(text)+'</span>';
+}
+function markOperationalDirty(){
+  unsavedOperationalScale=true;
+  renderScaleConfirmationStates();
+}
+function clearOperationalDirty(){
+  unsavedOperationalScale=false;
+  renderScaleConfirmationStates();
+}
+function markInternalDirty(){
+  unsavedInternalScale=true;
+  renderScaleConfirmationStates();
+}
+function clearInternalDirty(){
+  unsavedInternalScale=false;
+  renderScaleConfirmationStates();
+}
+function operationalNeedsConfirmation(){
+  return !!currentPlantao && (unsavedOperationalScale || !currentPlantao.escala_operacional_confirmada_em);
+}
+function internalNeedsConfirmation(){
+  return !!currentPlantao && (unsavedInternalScale || !currentPlantao.escala_interna_confirmada_em);
+}
+function unsavedRiskMessage({includeOperational=false,includeInternal=false,includeBook=false,action='continuar'}={}){
+  const items=[];
+  if(includeOperational && operationalNeedsConfirmation())items.push('• A ESCALA OPERACIONAL ainda precisa ser CONFIRMADA.');
+  if(includeInternal && internalNeedsConfirmation())items.push('• A EQUIPE INTERNA ainda precisa ser CONFIRMADA.');
+  if(includeBook && unsavedBook)items.push('• O LIVRO possui alterações que ainda não foram salvas.');
+  if(!items.length)return '';
+  return 'ATENÇÃO — HÁ DADOS PENDENTES\n\n'+items.join('\n')+'\n\nSe você '+action+', poderá perder alterações ou deixar a escala sem confirmação.\n\nDeseja continuar mesmo assim?';
+}
+function confirmUnsavedRisk(options){
+  const msg=unsavedRiskMessage(options);
+  return !msg || confirm(msg);
+}
+function activeTeamScope(){
+  return $('#teamInternalPanel')?.classList.contains('hidden')?'operational':'internal';
+}
+function serializeModalDraft(id){
+  const modal=$('#'+id);
+  if(!modal)return '';
+  return [...modal.querySelectorAll('input,select,textarea')]
+    .filter(el=>!['button','submit'].includes(el.type))
+    .map(el=>el.id+'='+String(el.value||''))
+    .join('|');
+}
+function modalHasUnsavedDraft(id){
+  if(!TRACKED_DRAFT_MODALS.has(id))return false;
+  const initial=modalDraftSnapshots.get(id);
+  return initial!==undefined && serializeModalDraft(id)!==initial;
+}
+function anyDraftModalOpen(){
+  return [...TRACKED_DRAFT_MODALS].some(id=>$('#'+id)?.classList.contains('show')&&modalHasUnsavedDraft(id));
 }
 function firstTwoNames(name){
   const parts=String(name||'').trim().split(/\s+/).filter(Boolean);
@@ -340,8 +401,17 @@ function startOperationalShiftMonitor(){
 }
 
 function openPage(id){
-  $$('.page').forEach(x=>x.classList.remove('active'));
-  $$('.tab').forEach(x=>x.classList.remove('active'));
+  const current=document.querySelector('.page.active')?.id||'';
+  if(current && current!==id){
+    if(current==='team'){
+      if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,action:'sair desta página'}))return false;
+    }
+    if(current==='book'){
+      if(!confirmUnsavedRisk({includeInternal:true,includeBook:true,action:'sair do LIVRO'}))return false;
+    }
+  }
+  $('.page').forEach(x=>x.classList.remove('active'));
+  $('.tab').forEach(x=>x.classList.remove('active'));
   $('#'+id)?.classList.add('active');
   document.querySelector('.tab[data-page="'+id+'"]')?.classList.add('active');
   if(id==='history') renderHistory();
@@ -360,8 +430,23 @@ function openPage(id){
 }
 window.openPage=openPage;
 
-function openModal(id){ $('#'+id)?.classList.add('show'); }
-function closeModal(id){ $('#'+id)?.classList.remove('show'); }
+function openModal(id){
+  $('#'+id)?.classList.add('show');
+  if(TRACKED_DRAFT_MODALS.has(id)){
+    setTimeout(()=>modalDraftSnapshots.set(id,serializeModalDraft(id)),0);
+  }
+}
+function closeModal(id){
+  $('#'+id)?.classList.remove('show');
+  modalDraftSnapshots.delete(id);
+}
+function requestCloseModal(id){
+  if(modalHasUnsavedDraft(id)){
+    if(!confirm('ATENÇÃO\n\nHá informações preenchidas que ainda não foram salvas.\nSe fechar agora, esses dados serão perdidos.\n\nDeseja fechar mesmo assim?'))return false;
+  }
+  closeModal(id);
+  return true;
+}
 
 async function ensureProfessionals(){
   if(professionals.length) return professionals;
@@ -519,8 +604,12 @@ function confirmationLabel(ts,by){
   return {text:'CONFIRMADA '+fmtTime(ts)+who,cls:'confirmed'};
 }
 function renderScaleConfirmationStates(){
-  const op=confirmationLabel(currentPlantao?.escala_operacional_confirmada_em,currentPlantao?.escala_operacional_confirmada_por);
-  const inn=confirmationLabel(currentPlantao?.escala_interna_confirmada_em,currentPlantao?.escala_interna_confirmada_por);
+  const op=unsavedOperationalScale
+    ? {text:'ALTERADA — CONFIRMAR',cls:'pending'}
+    : confirmationLabel(currentPlantao?.escala_operacional_confirmada_em,currentPlantao?.escala_operacional_confirmada_por);
+  const inn=unsavedInternalScale
+    ? {text:'ALTERADA — CONFIRMAR',cls:'pending'}
+    : confirmationLabel(currentPlantao?.escala_interna_confirmada_em,currentPlantao?.escala_interna_confirmada_por);
   if($('#expressConfirmState')){
     $('#expressConfirmState').textContent=op.text;
     $('#expressConfirmState').className='scale-confirm-state '+op.cls;
@@ -1259,6 +1348,7 @@ async function deactivateTeamRow(m,now){
   if(o){
     await supabase.from('equipe_ocorrencia').delete().eq('ocorrencia_id',o.id).eq('profissional_id',m.profissional_id);
   }
+  markOperationalDirty();
 }
 async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPIDA'){
   if(!currentPlantao)await ensurePlantaoForBook();
@@ -1287,6 +1377,7 @@ async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPID
     },{onConflict:'ocorrencia_id,profissional_id'});
     if(eo.error)throw eo.error;
   }
+  markOperationalDirty();
 }
 async function saveQuickTeam(){
   if(!isOperator()||!currentPlantao||!selectedTeamVehicle)return;
@@ -1628,6 +1719,7 @@ async function expressUseFixed(rowId){
         if(error)throw error;
       }
     }
+    markOperationalDirty();
     await loadAll(selectedDate());await loadExpressScale();
   }catch(e){alert(e.message||e)}
 }
@@ -1713,6 +1805,7 @@ async function saveExpressPermuta(){
 
     closeModal('expressPermutaModal');
     selectedExpressPermutaRow=null;
+    markOperationalDirty();
     await loadAll(selectedDate());await loadExpressScale();
   }catch(e){alert(e.message||e)}
 }
@@ -1757,6 +1850,7 @@ async function expressToggleRotation(rowId){
       });
       if(error)throw error;
     }
+    markOperationalDirty();
     await loadAll(selectedDate());await loadExpressScale();
   }catch(e){alert(e.message||e)}
 }
@@ -1790,6 +1884,7 @@ async function expressAbsent(rowId){
       turno_escala:currentPlantao.turno
     });
     if(error)throw error;
+    markOperationalDirty();
     await loadAll(selectedDate());await loadExpressScale();
   }catch(e){alert(e.message||e)}
 }
@@ -1805,6 +1900,7 @@ async function setAllDriversRotation(){
       viatura_id:null,viatura_snapshot:null
     }).eq('id',m.id);
   }
+  markOperationalDirty();
   await loadAll(selectedDate());await loadExpressScale();
 }
 async function restoreFixedDrivers(){
@@ -1815,6 +1911,7 @@ async function restoreFixedDrivers(){
     const v=vehicleByCode(r.codigo_viatura);
     if(v&&r.profissional_id)await assignProfessionalToVehicle(r.profissional_id,v.id,'Condutor','ESCALA_EXPRESSA');
   }
+  markOperationalDirty();
   await loadAll(selectedDate());await loadExpressScale();
 }
 function expressSearch(role,q){
@@ -1828,11 +1925,11 @@ function expressSearch(role,q){
   box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-exp-prof="'+p.id+'"><b>'+esc(displayName(p))+'</b><small>'+esc(p.nome_completo)+' • '+esc(p.funcao_sistema)+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div>';
   box.classList.add('show');
   box.querySelectorAll('[data-exp-prof]').forEach(b=>b.onclick=()=>{
-    const p=professionals.find(x=>x.id===b.dataset.expProf);selected.set(p.id,p);input.value='';box.classList.remove('show');renderExpressSelected();
+    const p=professionals.find(x=>x.id===b.dataset.expProf);selected.set(p.id,p);input.value='';box.classList.remove('show');markOperationalDirty();renderExpressSelected();
   });
 }
 function renderExpressSelected(){
-  const render=(map,el)=>{el.innerHTML=[...map.values()].map(p=>'<span class="selected-chip">'+esc(displayName(p))+'<button type="button" data-chip-remove="'+p.id+'">×</button></span>').join('');el.querySelectorAll('[data-chip-remove]').forEach(b=>b.onclick=()=>{map.delete(b.dataset.chipRemove);renderExpressSelected()})};
+  const render=(map,el)=>{el.innerHTML=[...map.values()].map(p=>'<span class="selected-chip">'+esc(displayName(p))+'<button type="button" data-chip-remove="'+p.id+'">×</button></span>').join('');el.querySelectorAll('[data-chip-remove]').forEach(b=>b.onclick=()=>{map.delete(b.dataset.chipRemove);markOperationalDirty();renderExpressSelected()})};
   render(expressTechSelected,$('#expressTechSelected'));render(expressNurseSelected,$('#expressNurseSelected'));
   $('#expressTechCount').textContent=expressTechSelected.size;$('#expressNurseCount').textContent=expressNurseSelected.size;
 }
@@ -1844,6 +1941,7 @@ async function putProfessionalInRotation(pro,group,funcao){
     else{
       const {error}=await supabase.from('equipe_plantao').update({funcao,tipo_escala:'REVEZAMENTO',grupo_revezamento:group,viatura_id:null,viatura_snapshot:null,revezamento_tipo_viatura:group.startsWith('USA')?'USA':'USB',origem_escala:'ESCALA_EXPRESSA'}).eq('id',existing.id);
       if(error)throw error;
+      markOperationalDirty();
       return;
     }
   }
@@ -1852,6 +1950,7 @@ async function putProfessionalInRotation(pro,group,funcao){
     grupo_revezamento:group,revezamento_tipo_viatura:group.startsWith('USA')?'USA':'USB',origem_escala:'ESCALA_EXPRESSA'
   });
   if(error)throw error;
+  markOperationalDirty();
 }
 async function confirmExpress(){
   if(!isOperator())return;
@@ -1877,6 +1976,7 @@ async function confirmExpress(){
     await loadAll(selectedDate());
     await loadExpressScale();
     await refreshBookProjection();
+    clearOperationalDirty();
     renderScaleConfirmationStates();
     $('#expressStatus').className='express-status ok';
     $('#expressStatus').innerHTML='<b>Escala operacional confirmada.</b> A equipe foi registrada e o LIVRO está sincronizado.';
@@ -2065,6 +2165,13 @@ async function ensureOperationalScaleFromFixed(){
 
 /* ---------- livro do plantão / serviço interno ---------- */
 function showTeamScope(scope){
+  const current=activeTeamScope();
+  if(current!==scope){
+    const allowed=current==='operational'
+      ? confirmUnsavedRisk({includeOperational:true,action:'abrir o Serviço Interno'})
+      : confirmUnsavedRisk({includeInternal:true,action:'voltar para a Escala Operacional'});
+    if(!allowed)return false;
+  }
   const internal=scope==='internal';
   $('#teamOperationalPanel')?.classList.toggle('hidden',internal);
   $('#teamInternalPanel')?.classList.toggle('hidden',!internal);
@@ -2294,6 +2401,7 @@ function renderInternalEditorTo(selector){
       card.querySelector('[data-int-id="'+code+'"]').value='';
       const search=card.querySelector('[data-int-search="'+code+'"]');if(search)search.value='';
     }
+    markInternalDirty();
   });
   el.querySelectorAll('[data-int-search]').forEach(inp=>inp.oninput=()=>internalAutocomplete(inp.dataset.intSearch,inp.value,el));
 }
@@ -2320,6 +2428,7 @@ function internalAutocomplete(code,q,root=document){
     input.value=professionalLabel(p,'other');if(idEl)idEl.value=p.id;box.classList.remove('show');
     const selected=input.closest('.internal-permuta-box')?.querySelector('.internal-permuta-selected');
     if(selected)selected.textContent='Substituto: '+displayName(p);
+    markInternalDirty();
   });
   const add=box.querySelector('[data-register-new]');
   if(add)add.onclick=()=>openQuickRegistration(input.value,'other',input,idEl);
@@ -2380,6 +2489,7 @@ async function confirmInternalTeam(rootSelector='#teamInternalEditor'){
 
     await loadBookData();
     await syncBookScaleMetadata();
+    clearInternalDirty();
     renderInternalEditors();
     renderBook();
     renderScaleConfirmationStates();
@@ -2527,12 +2637,14 @@ async function saveBook(){
   };
   const {error}=await supabase.from('livro_plantao').upsert(payload,{onConflict:'plantao_id'});
   if(error)return alert(error.message);
+  unsavedBook=false;
   await loadBookData();renderBook();alert('Livro salvo.');
 }
 
 /* ---------- shift ---------- */
 async function endShift(){
   if(!isOperator()||!currentPlantao)return;
+  if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,includeBook:true,action:'encerrar o plantão'}))return;
   if(!confirm('ENCERRAR O PLANTÃO '+fmtDate(currentPlantao.data_plantao)+'?'))return;
   const {error}=await supabase.from('plantoes').update({status:'ENCERRADO',encerrado_em:new Date().toISOString(),operador_encerramento:profile?.nome||null}).eq('id',currentPlantao.id);
   if(error)alert(error.message);else await loadAll();
@@ -2628,12 +2740,21 @@ $('#signupForm').onsubmit=async e=>{
   });
   $('#authMsg').textContent=error?error.message:(data.session?'Conta criada.':'Conta criada. Confira seu e-mail para confirmar.');
 };
-$('#logoutBtn').onclick=()=>supabase.auth.signOut();
-$$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page));
-$$('[data-open-page]').forEach(b=>b.onclick=()=>openPage(b.dataset.openPage));
-$$('[data-close-modal]').forEach(b=>b.onclick=()=>closeModal(b.dataset.closeModal));
-$$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModal(m.id)}));
+$('#logoutBtn').onclick=()=>{
+  if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,includeBook:true,action:'sair do sistema'}))return;
+  if(anyDraftModalOpen()&&!confirm('Há uma janela com dados não salvos. Sair mesmo assim?'))return;
+  supabase.auth.signOut();
+};
+$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page));
+$('[data-open-page]').forEach(b=>b.onclick=()=>openPage(b.dataset.openPage));
+$('[data-close-modal]').forEach(b=>b.onclick=()=>requestCloseModal(b.dataset.closeModal));
+$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)requestCloseModal(m.id)}));
 $('#shiftDate').onchange=async()=>{
+  const previous=currentPlantao?.data_plantao||operationalShiftContext().date;
+  if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,includeBook:true,action:'trocar a data do plantão'})){
+    $('#shiftDate').value=previous;
+    return;
+  }
   const ctx=operationalShiftContext();
   const date=$('#shiftDate').value;
   autoFollowCurrentShift=date===ctx.date;
@@ -2649,7 +2770,10 @@ $('#shiftDate').onchange=async()=>{
 $('#exportBtn').onclick=exportCSV;$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
 $('#regionalBtn').onclick=()=>$('#regionalIntegrated').scrollIntoView({behavior:'smooth',block:'start'});
 $('#rotationCriterion').onchange=e=>persistRotationCriterion(e.target.value);
-$('#teamReloadBtn').onclick=()=>autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadAll(selectedDate());
+$('#teamReloadBtn').onclick=()=>{
+  if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,action:'atualizar a equipe'}))return;
+  autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadAll(selectedDate());
+};
 $('#saveOcc').onclick=saveOccurrence;$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
 $('#loadScaleBtn').onclick=()=>autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadExpressScale();
 $('#expressAla').onchange=()=>{
@@ -2674,13 +2798,24 @@ $('#assignMode').onchange=()=>$('#assignVehicleWrap').classList.toggle('hidden',
 $('#confirmAssignBtn').onclick=confirmAssign;$('#saveIndividualOccBtn').onclick=saveIndividualOccurrence;
 $('#regRole').onchange=renderRegistry;$('#registerProfessionalBtn').onclick=registerProfessional;
 $$('.scale-scope-btn').forEach(b=>b.onclick=()=>showTeamScope(b.dataset.teamScope));
-$('#internalReloadBtn').onclick=()=>loadBookData().then(()=>{renderInternalEditors();renderBook();renderScaleConfirmationStates()});
+$('#internalReloadBtn').onclick=()=>{
+  if(!confirmUnsavedRisk({includeInternal:true,action:'recarregar o Serviço Interno'}))return;
+  loadBookData().then(()=>{renderInternalEditors();renderBook();renderScaleConfirmationStates()});
+};
 $('#confirmInternalBtn').onclick=()=>confirmInternalTeam('#teamInternalEditor');
 $('#confirmInternalBookBtn').onclick=()=>confirmInternalTeam('#internalScaleEditor');
 $('#saveBookBtn').onclick=saveBook;$('#printBookBtn').onclick=()=>window.print();
+['#bookChefe','#bookObs'].forEach(sel=>{if($(sel))$(sel).addEventListener('input',()=>{unsavedBook=true})});
 $('#expressPermutaSearch').oninput=expressPermutaAutocomplete;
 $('#saveExpressPermutaBtn').onclick=saveExpressPermuta;
 $('#saveQuickRegisterBtn').onclick=saveQuickRegistration;
+
+window.addEventListener('beforeunload',e=>{
+  if(unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen()){
+    e.preventDefault();
+    e.returnValue='';
+  }
+});
 
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'&&session&&autoFollowCurrentShift){
