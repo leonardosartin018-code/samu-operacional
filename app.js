@@ -26,6 +26,7 @@ let selectedVehicle = null;
 let selectedTeamVehicle = null;
 let selectedEditOccurrence = null;
 let selectedAssignProfessional = null;
+let selectedAssignTeamRow = null;
 let selectedIndividualMember = null;
 let selectedExpressPermutaRow = null;
 let pendingQuickRegistration = null;
@@ -1143,7 +1144,10 @@ function rosterPersonHtml(m){
   const v=vehicleById(m.viatura_id);
   const assign=v?.nome||m.viatura_snapshot||m.grupo_revezamento||m.tipo_escala||'SEM VIATURA';
   return '<div class="roster-person"><div><div class="roster-person-name">'+esc(displayName(m.profissionais))+'</div><div class="roster-person-meta">'+esc(m.funcao)+' • '+esc(assign)+'</div></div>'+
-    '<div class="roster-person-actions"><button class="person-occ" data-individual-occ="'+m.id+'">LANÇAR Nº OCORRÊNCIA</button>'+(isOperator()?'<button class="person-remove" data-remove-member="'+m.id+'">RETIRAR DA ESCALA</button>':'')+'</div></div>';
+    '<div class="roster-person-actions">'+
+      '<button class="person-occ" data-individual-occ="'+m.id+'">LANÇAR Nº OCORRÊNCIA</button>'+
+      (isOperator()?'<button class="person-edit" data-edit-member="'+m.id+'">EDITAR</button><button class="person-remove" data-remove-member="'+m.id+'">RETIRAR DA ESCALA</button>':'')+
+    '</div></div>';
 }
 function renderTeamPreview(){
   const active=activeTeamRows();
@@ -1165,6 +1169,7 @@ function renderTeamPreview(){
     renderRegion('ANÁPOLIS','Equipe operacional e profissionais em revezamento sem viatura fixa.',an)+
     renderRegion('BASES DESCENTRALIZADAS','Profissionais vinculados às viaturas regionais.',rg);
   $('#teamPreview').querySelectorAll('[data-individual-occ]').forEach(b=>b.onclick=()=>openIndividualOccurrence(b.dataset.individualOcc));
+  $('#teamPreview').querySelectorAll('[data-edit-member]').forEach(b=>b.onclick=()=>openEditTeamMember(b.dataset.editMember));
   $('#teamPreview').querySelectorAll('[data-remove-member]').forEach(b=>b.onclick=()=>removeTeamMember(b.dataset.removeMember));
 }
 
@@ -1996,31 +2001,193 @@ async function confirmExpress(){
 }
 
 /* ---------- generic assignment ---------- */
+function configureAssignModes(role){
+  const allowed={
+    driver:['FIXO','REVEZ_USA','REVEZ_USB'],
+    tech:['FIXO','REVEZ_USB'],
+    nurse:['FIXO','REVEZ_USA','REVEZ_USB'],
+    doctor:['FIXO'],
+    moto:['FIXO']
+  }[role]||['FIXO'];
+  [...$('#assignMode').options].forEach(o=>{
+    const show=allowed.includes(o.value);
+    o.hidden=!show;
+    o.disabled=!show;
+  });
+  if(!allowed.includes($('#assignMode').value))$('#assignMode').value=allowed[0];
+}
+function assignmentModeForMember(m){
+  if(!m||!isRotationMember(m))return 'FIXO';
+  const group=norm(m.grupo_revezamento||m.revezamento_tipo_viatura||m.tipo_escala);
+  return group.includes('USA')?'REVEZ_USA':'REVEZ_USB';
+}
+function assignmentRoleForMember(m,p){
+  return m?teamRoleKey(m):professionalRoleKey(p);
+}
+function fixedFunctionForRole(role,p,v){
+  if(role==='driver')return 'Condutor';
+  if(role==='tech')return 'Técnico de Enfermagem';
+  if(role==='nurse')return vehicleType(v).includes('USB')?'Técnico de Enfermagem':'Enfermeiro';
+  if(role==='doctor')return 'Médico';
+  if(role==='moto')return p?.funcao_sistema||'Motolância';
+  return p?.funcao_sistema||'Profissional';
+}
+function validateFixedAssignment(role,v){
+  const type=vehicleType(v);
+  if(role==='tech'&&!type.includes('USB'))return 'Técnico deve ficar em uma USB.';
+  if(role==='doctor'&&!type.includes('USA'))return 'Médico deve ficar em uma USA.';
+  if(role==='nurse'&&!type.includes('USA')&&!type.includes('USB'))return 'Enfermeiro deve ficar em USA ou USB.';
+  if(role==='moto'&&!type.includes('MOTO'))return 'Piloto de motolância deve ficar na Motolância.';
+  return '';
+}
 function openAssignModal(proId){
   if(!isOperator())return;
+  selectedAssignTeamRow=null;
   selectedAssignProfessional=professionals.find(p=>p.id===proId);if(!selectedAssignProfessional)return;
+  const role=professionalRoleKey(selectedAssignProfessional);
+  configureAssignModes(role);
   $('#assignTitle').textContent='Escalar '+displayName(selectedAssignProfessional);
   $('#assignPersonInfo').textContent=selectedAssignProfessional.nome_completo+' • '+selectedAssignProfessional.funcao_sistema;
   populateVehicleSelect($('#assignVehicle'),null,false);
-  $('#assignMode').value='FIXO';$('#assignVehicleWrap').classList.remove('hidden');openModal('assignModal');
+  $('#assignMode').value='FIXO';
+  $('#assignVehicleWrap').classList.remove('hidden');
+  $('#confirmAssignBtn').textContent='ESCALAR';
+  openModal('assignModal');
+}
+function openEditTeamMember(teamId){
+  if(!isOperator())return;
+  const m=team.find(x=>x.id===teamId&&norm(x.status||'ATIVO')==='ATIVO');
+  if(!m)return alert('Esse profissional não está mais ativo nesta escala.');
+  const p=m.profissionais||professionals.find(x=>x.id===m.profissional_id);
+  if(!p)return alert('Profissional não encontrado no cadastro.');
+
+  selectedAssignTeamRow=m;
+  selectedAssignProfessional=p;
+  const role=assignmentRoleForMember(m,p);
+  configureAssignModes(role);
+  populateVehicleSelect($('#assignVehicle'),m.viatura_id||null,false);
+
+  const mode=assignmentModeForMember(m);
+  $('#assignMode').value=mode;
+  $('#assignVehicleWrap').classList.toggle('hidden',mode!=='FIXO');
+  $('#assignTitle').textContent='Editar '+displayName(p);
+
+  const v=vehicleById(m.viatura_id);
+  const current=v?.nome||m.viatura_snapshot||m.grupo_revezamento||m.tipo_escala||'SEM VIATURA';
+  $('#assignPersonInfo').textContent=p.nome_completo+' • '+roleLabel(role)+' • Atual: '+current;
+  $('#confirmAssignBtn').textContent='SALVAR ALTERAÇÃO';
+  openModal('assignModal');
+}
+async function syncEditedMemberOccurrence(oldRow,newVehicle,funcao){
+  const oldVehicle=vehicleById(oldRow?.viatura_id);
+  const oldOccurrence=oldVehicle?activeOccurrence(oldVehicle):null;
+  if(oldOccurrence){
+    const del=await supabase.from('equipe_ocorrencia').delete()
+      .eq('ocorrencia_id',oldOccurrence.id)
+      .eq('profissional_id',oldRow.profissional_id);
+    if(del.error)throw del.error;
+  }
+  if(newVehicle){
+    const newOccurrence=activeOccurrence(newVehicle);
+    if(newOccurrence){
+      const p=selectedAssignProfessional;
+      const up=await supabase.from('equipe_ocorrencia').upsert({
+        ocorrencia_id:newOccurrence.id,
+        profissional_id:oldRow.profissional_id,
+        funcao,
+        nome_snapshot:p?.nome_completo||oldRow.nome_snapshot,
+        viatura_id:newVehicle.id,
+        viatura_snapshot:newVehicle.nome,
+        tipo_escala_no_momento:'FIXO EM VIATURA'
+      },{onConflict:'ocorrencia_id,profissional_id'});
+      if(up.error)throw up.error;
+    }
+  }
 }
 async function confirmAssign(){
   const p=selectedAssignProfessional;if(!p||!currentPlantao)return;
   const mode=$('#assignMode').value;
+  const editRow=selectedAssignTeamRow;
+  const role=assignmentRoleForMember(editRow,p);
   try{
+    if(editRow){
+      const now=new Date().toISOString();
+
+      if(mode==='FIXO'){
+        const v=vehicleById($('#assignVehicle').value);if(!v)return alert('Escolha uma viatura.');
+        const invalid=validateFixedAssignment(role,v);if(invalid)return alert(invalid);
+        const funcao=fixedFunctionForRole(role,p,v);
+
+        const occupied=activeTeamRows().find(m=>m.id!==editRow.id&&m.viatura_id===v.id&&teamRoleKey(m)===teamRoleKey({...editRow,funcao}));
+        if(occupied){
+          if(!confirm('Já existe '+roleLabel(teamRoleKey(occupied))+' em '+v.nome+'.\n\nDeseja substituir '+displayName(occupied.profissionais)+'?'))return;
+          await deactivateTeamRow(occupied,now);
+        }
+
+        const {error}=await supabase.from('equipe_plantao').update({
+          funcao,
+          tipo_escala:'FIXO EM VIATURA',
+          viatura_id:v.id,
+          viatura_snapshot:v.nome,
+          grupo_revezamento:null,
+          revezamento_tipo_viatura:null,
+          origem_escala:'EDICAO_EQUIPE',
+          status:'ATIVO',
+          saiu_em:null
+        }).eq('id',editRow.id);
+        if(error)throw error;
+        await syncEditedMemberOccurrence(editRow,v,funcao);
+      }else{
+        if(role==='doctor'||role==='moto')return alert('Essa função não participa do revezamento.');
+        if(mode==='REVEZ_USA'&&!['driver','nurse'].includes(role))return alert('Neste revezamento USA entram Condutor ou Enfermeiro.');
+        if(mode==='REVEZ_USB'&&!['driver','tech','nurse'].includes(role))return alert('Neste revezamento USB entram Condutor, Técnico ou Enfermeiro.');
+
+        const type=mode==='REVEZ_USA'?'USA':'USB';
+        const funcao=role==='driver'?'Condutor':type==='USA'?'Enfermeiro':'Técnico de Enfermagem';
+        const group=type+'_'+(role==='driver'?'CONDUTOR':type==='USA'?'ENFERMEIRO':'TECNICO');
+
+        await syncEditedMemberOccurrence(editRow,null,funcao);
+        const {error}=await supabase.from('equipe_plantao').update({
+          funcao,
+          tipo_escala:'REVEZAMENTO',
+          viatura_id:null,
+          viatura_snapshot:null,
+          grupo_revezamento:group,
+          revezamento_tipo_viatura:type,
+          origem_escala:'EDICAO_EQUIPE',
+          status:'ATIVO',
+          saiu_em:null
+        }).eq('id',editRow.id);
+        if(error)throw error;
+      }
+
+      markOperationalDirty();
+      closeModal('assignModal');
+      selectedAssignTeamRow=null;
+      selectedAssignProfessional=null;
+      await loadAll(selectedDate());
+      await loadExpressScale();
+      await refreshBookProjection();
+      return;
+    }
+
     if(mode==='FIXO'){
       const v=vehicleById($('#assignVehicle').value);if(!v)return alert('Escolha uma viatura.');
-      let funcao=p.funcao_sistema;
-      if(professionalRoleKey(p)==='nurse'&&vehicleType(v).includes('USB'))funcao='Técnico de Enfermagem';
+      const invalid=validateFixedAssignment(role,v);if(invalid)return alert(invalid);
+      const funcao=fixedFunctionForRole(role,p,v);
       await assignProfessionalToVehicle(p.id,v.id,funcao,'BUSCA_EQUIPE');
     }else if(mode==='REVEZ_USA'){
-      if(!['driver','nurse'].includes(professionalRoleKey(p)))return alert('Para revezamento USA, use condutor ou enfermeiro.');
-      await putProfessionalInRotation(p,professionalRoleKey(p)==='driver'?'USA_CONDUTOR':'USA_ENFERMEIRO',professionalRoleKey(p)==='driver'?'Condutor':'Enfermeiro');
+      if(!['driver','nurse'].includes(role))return alert('Para revezamento USA, use condutor ou enfermeiro.');
+      await putProfessionalInRotation(p,role==='driver'?'USA_CONDUTOR':'USA_ENFERMEIRO',role==='driver'?'Condutor':'Enfermeiro');
     }else{
-      if(!['driver','tech','nurse'].includes(professionalRoleKey(p)))return alert('Para revezamento USB, use condutor, técnico ou enfermeiro.');
-      await putProfessionalInRotation(p,professionalRoleKey(p)==='driver'?'USB_CONDUTOR':'USB_TECNICO',professionalRoleKey(p)==='driver'?'Condutor':'Técnico de Enfermagem');
+      if(!['driver','tech','nurse'].includes(role))return alert('Para revezamento USB, use condutor, técnico ou enfermeiro.');
+      await putProfessionalInRotation(p,role==='driver'?'USB_CONDUTOR':'USB_TECNICO',role==='driver'?'Condutor':'Técnico de Enfermagem');
     }
-    closeModal('assignModal');selectedAssignProfessional=null;$('#teamSearch').value='';$('#teamSearchResults').classList.remove('show');await loadAll(selectedDate());
+    closeModal('assignModal');
+    selectedAssignProfessional=null;
+    $('#teamSearch').value='';
+    $('#teamSearchResults').classList.remove('show');
+    await loadAll(selectedDate());
   }catch(e){alert(e.message||e)}
 }
 async function removeTeamMember(id){
