@@ -161,9 +161,13 @@ function crewHasRole(mem,role){
 }
 function crewCompleteness(v,mem=vehicleMembers(v)){
   const req=requiredDispatchRoles(v);
-  if(!mem.length) return {state:'empty',label:'SEM EQUIPE'};
-  if(!req.length) return {state:'complete',label:'EQUIPE DEFINIDA'};
-  const ok=req.every(r=>crewHasRole(mem,r));
+  if(!mem.length && !req.length) return {state:'empty',label:'SEM EQUIPE'};
+  if(!req.length) return {state:mem.length?'complete':'empty',label:mem.length?'EQUIPE DEFINIDA':'SEM EQUIPE'};
+  // Em Anápolis, a prontidão considera também quem será puxado automaticamente
+  // do revezamento no momento do empenho.
+  const effective=(isAnapolisVehicle(v)&&!vehicleType(v).includes('MOTO'))?automaticDispatchCrew(v):mem;
+  if(!effective.length) return {state:'empty',label:'SEM EQUIPE'};
+  const ok=req.every(r=>crewHasRole(effective,r));
   return ok?{state:'complete',label:'APTA PARA EMPENHO'}:{state:'partial',label:'EQUIPE PARCIAL'};
 }
 function dispatchRequirementText(v){
