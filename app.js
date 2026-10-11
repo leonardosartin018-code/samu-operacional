@@ -111,7 +111,10 @@ function activeTeamRows(){
   return team.filter(m=>norm(m.status || 'ATIVO')==='ATIVO');
 }
 function vehicleMembers(v){
-  const list=activeTeamRows().filter(m=>m.viatura_id===v.id || (!m.viatura_id && norm(m.viatura_snapshot)===norm(v.nome)));
+  const list=activeTeamRows().filter(m=>
+    !isRotationMember(m) &&
+    (m.viatura_id===v.id || (!m.viatura_id && norm(m.viatura_snapshot)===norm(v.nome)))
+  );
   const order={driver:1,tech:2,nurse:3,doctor:4,moto:5,other:9};
   return list.sort((a,b)=>(order[teamRoleKey(a)]||9)-(order[teamRoleKey(b)]||9));
 }
@@ -122,8 +125,8 @@ function expectedRoles(v){
   if(t.includes('MOTO')) return ['moto'];
   return [];
 }
-function crewCompleteness(v){
-  const mem=vehicleMembers(v), exp=expectedRoles(v);
+function crewCompleteness(v,mem=vehicleMembers(v)){
+  const exp=expectedRoles(v);
   if(!mem.length) return {state:'empty',label:'SEM EQUIPE'};
   if(!exp.length) return {state:'complete',label:'EQUIPE DEFINIDA'};
   const present=new Set(mem.map(teamRoleKey));
@@ -340,23 +343,47 @@ function memberSlotHtml(m){
   if(!m) return '<div class="crew-slot"><div class="crew-role">VAGA</div><div class="crew-name">—</div></div>';
   return '<div class="crew-slot"><div class="crew-role">'+esc(roleLabel(teamRoleKey(m)))+'</div><div class="crew-name">'+esc(displayName(m.profissionais))+'</div></div>';
 }
+function rotationPreviewSlotHtml(m,role){
+  if(!m)return memberSlotHtml(null);
+  return '<div class="crew-slot rotation-preview"><div class="crew-role">'+esc(roleLabel(role))+'</div><div class="crew-name">'+esc(displayName(m.profissionais))+'</div></div>';
+}
+function crewRowsForCard(v){
+  const o=activeOccurrence(v);
+  if(o){
+    const occRows=occurrenceMembers(o.id);
+    if(occRows.length)return occRows;
+  }
+  return vehicleMembers(v);
+}
 function crewGridHtml(v){
-  const mem=vehicleMembers(v);
+  const o=activeOccurrence(v);
+  const mem=crewRowsForCard(v);
   const exp=expectedRoles(v);
+  const used=new Set(mem.map(m=>m.profissional_id));
   let slots=[];
   if(exp.length){
     slots=exp.map(role=>{
-      const m=mem.find(x=>teamRoleKey(x)===role || (role==='tech'&&teamRoleKey(x)==='nurse'));
-      return memberSlotHtml(m);
+      const m=mem.find(x=>teamRoleKey(x)===role || (role==='tech'&&teamRoleKey(x)==='nurse'&&norm(x.funcao).includes('TECN')));
+      if(m)return memberSlotHtml(m);
+
+      // Na base de Anápolis, quando não existe fixo nessa função,
+      // já mostramos quem seria puxado automaticamente do revezamento.
+      if(!o&&isAnapolisVehicle(v)&&!vehicleType(v).includes('MOTO')&&['driver','tech','nurse'].includes(role)){
+        const next=dispatchCandidateForVehicleRole(v,role,used);
+        if(next){used.add(next.profissional_id);return rotationPreviewSlotHtml(next,role)}
+      }
+      return memberSlotHtml(null);
     });
     const extra=mem.filter(m=>!exp.includes(teamRoleKey(m)) && !(teamRoleKey(m)==='nurse'&&exp.includes('tech')));
     slots.push(...extra.map(memberSlotHtml));
   }else slots=mem.map(memberSlotHtml);
   if(!slots.length) slots=[memberSlotHtml(null)];
   const cls=slots.length===1?'one':slots.length===2?'two':'';
-  const comp=crewCompleteness(v);
+  const comp=crewCompleteness(v,mem);
+  const label=o?'EQUIPE DA OCORRÊNCIA':comp.label;
+  const state=o?'complete':comp.state;
   return '<div class="crew-grid '+cls+'">'+slots.join('')+'</div>'+
-    '<div class="crew-setup '+comp.state+'"><b>'+comp.label+'</b><span>Clique no card para empenhar / editar equipe</span></div>';
+    '<div class="crew-setup '+state+'"><b>'+label+'</b><span>'+(o?'Equipe efetivamente empenhada':'Fixo + próximo do revezamento')+'</span></div>';
 }
 function occurrenceInfoHtml(v,o){
   if(!o) return '';
