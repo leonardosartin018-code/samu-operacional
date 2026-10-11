@@ -1584,7 +1584,23 @@ function internalSlotHtml(slot){
 }
 function renderInternalEditorTo(selector){
   const el=$(selector);if(!el)return;
-  el.innerHTML=BOOK_INTERNAL_SLOTS.map(internalSlotHtml).join('');
+  const groups=[
+    {key:'sanitarias',title:'AMBULÂNCIAS SANITÁRIAS',sub:'S 01, S 02 e posições extras',filter:s=>s.funcao==='SANITARIA'},
+    {key:'radio',title:'RÁDIO-OPERADORES',sub:'1º e 2º horários do rádio',filter:s=>s.funcao==='RADIO'},
+    {key:'tarm',title:'TARMs',sub:'Equipe de atendimento e regulação da central',filter:s=>s.funcao==='TARM'},
+    {key:'lavadores',title:'LAVADORES',sub:'Equipe de higienização e apoio operacional',filter:s=>s.funcao==='LAVADOR'}
+  ];
+  el.innerHTML=groups.map(g=>{
+    const slots=BOOK_INTERNAL_SLOTS.filter(g.filter);
+    const defined=slots.filter(s=>{
+      const row=internalRow(s.code),fixed=fixedInternalRow(s.code),status=internalStatusValue(row,fixed);
+      return status!=='VAGO';
+    }).length;
+    return '<section class="internal-section-group '+g.key+'">'+
+      '<div class="internal-section-head"><div><h3>'+g.title+'</h3><p>'+g.sub+'</p></div><span class="internal-section-count">'+defined+'/'+slots.length+' definidos</span></div>'+
+      '<div class="internal-section-body">'+slots.map(internalSlotHtml).join('')+'</div>'+
+    '</section>';
+  }).join('');
   el.querySelectorAll('[data-int-status]').forEach(b=>b.onclick=()=>{
     const code=b.dataset.intStatus,value=b.dataset.value,card=el.querySelector('[data-internal-slot="'+code+'"]');
     card.querySelector('[data-int-type="'+code+'"]').value=value;
