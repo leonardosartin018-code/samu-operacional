@@ -435,7 +435,26 @@ function renderAll(){
   renderDestinations();
   renderHistory();
   renderTeamPreview();
+  renderScaleConfirmationStates();
+  if(!$('#teamInternalPanel')?.classList.contains('hidden')) renderInternalEditors();
   if($('#book')?.classList.contains('active')) renderBook();
+}
+function confirmationLabel(ts,by){
+  if(!ts)return {text:'NÃO CONFIRMADA',cls:'pending'};
+  const who=by?' • '+by:'';
+  return {text:'CONFIRMADA '+fmtTime(ts)+who,cls:'confirmed'};
+}
+function renderScaleConfirmationStates(){
+  const op=confirmationLabel(currentPlantao?.escala_operacional_confirmada_em,currentPlantao?.escala_operacional_confirmada_por);
+  const inn=confirmationLabel(currentPlantao?.escala_interna_confirmada_em,currentPlantao?.escala_interna_confirmada_por);
+  if($('#expressConfirmState')){
+    $('#expressConfirmState').textContent=op.text;
+    $('#expressConfirmState').className='scale-confirm-state '+op.cls;
+  }
+  if($('#internalConfirmState')){
+    $('#internalConfirmState').textContent=inn.text;
+    $('#internalConfirmState').className='scale-confirm-state '+inn.cls;
+  }
 }
 
 function renderSummary(){
@@ -1728,10 +1747,26 @@ async function confirmExpress(){
     for(const p of expressTechSelected.values())await putProfessionalInRotation(p,'USB_TECNICO','Técnico de Enfermagem');
     for(const p of expressNurseSelected.values())await putProfessionalInRotation(p,'USA_ENFERMEIRO','Enfermeiro');
     expressTechSelected.clear();expressNurseSelected.clear();renderExpressSelected();
-    await loadAll(selectedDate());await loadExpressScale();
-    $('#expressStatus').className='express-status ok';$('#expressStatus').innerHTML='<b>Escala Expressa confirmada.</b> O painel já foi atualizado.';
+
+    const now=new Date().toISOString();
+    const {error}=await supabase.from('plantoes').update({
+      escala_operacional_confirmada_em:now,
+      escala_operacional_confirmada_por:profile?.nome||session?.user?.email||'OPERADOR'
+    }).eq('id',currentPlantao.id);
+    if(error)throw error;
+
+    currentPlantao={...currentPlantao,
+      escala_operacional_confirmada_em:now,
+      escala_operacional_confirmada_por:profile?.nome||session?.user?.email||'OPERADOR'
+    };
+    await loadAll(selectedDate());
+    await loadExpressScale();
+    await refreshBookProjection();
+    renderScaleConfirmationStates();
+    $('#expressStatus').className='express-status ok';
+    $('#expressStatus').innerHTML='<b>Escala operacional confirmada.</b> A equipe foi registrada e o LIVRO está sincronizado.';
   }catch(e){alert('Erro ao confirmar escala: '+(e.message||e))}
-  finally{$('#confirmExpressBtn').disabled=false;$('#confirmExpressBtn').textContent='CONFIRMAR ESCALA EXPRESSA'}
+  finally{$('#confirmExpressBtn').disabled=false;$('#confirmExpressBtn').textContent='CONFIRMAR ESCALA'}
 }
 
 /* ---------- generic assignment ---------- */
@@ -2066,9 +2101,7 @@ function bookDriverName(code,index=0){
   if(!v)return '------';
   const m=vehicleMembers(v).find(x=>teamRoleKey(x)==='driver');
   if(m)return displayName(m.profissionais);
-  const fixed=bookDriverFixedRows.find(x=>norm(x.codigo_viatura).replace(/\s/g,'')===norm(code).replace(/\s/g,''));
-  if(fixed?.nome_referencia)return fixed.nome_referencia;
-  const q=priorityPeopleForRole('driver',vehicleType(v).includes('USA')?'USA':'USB');
+  const q=priorityPeopleForRole('driver',vehicleType(v).includes('USA')?'USA':'USB',{rotationOnly:true});
   return q.length?'REVEZAMENTO':'------';
 }
 function monthNamePt(dateIso){
@@ -2096,7 +2129,7 @@ function internalSlotHtml(slot){
       '<div class="autocomplete-shell"><input data-int-search="'+slot.code+'" autocomplete="off" placeholder="Digite 3 letras do substituto..." value="'+esc(substitute)+'"><div class="autocomplete-results" data-int-results="'+slot.code+'"></div></div>'+
       '<div class="internal-permuta-selected">'+(substitute?'Substituto: '+esc(substitute):'Selecione o substituto para registrar a permuta.')+'</div>'+
     '</div>'+
-    '<div class="internal-card-footer"><small>Situação atual: <b>'+status+'</b></small><button class="internal-save-btn" data-int-save="'+slot.code+'">SALVAR</button></div>'+
+    '<div class="internal-card-footer"><small>Situação selecionada: <b>'+status+'</b> • confirme a equipe para gravar</small></div>'+
   '</div>';
 }
 function renderInternalEditorTo(selector){
@@ -2136,7 +2169,6 @@ function renderInternalEditorTo(selector){
     }
   });
   el.querySelectorAll('[data-int-search]').forEach(inp=>inp.oninput=()=>internalAutocomplete(inp.dataset.intSearch,inp.value,el));
-  el.querySelectorAll('[data-int-save]').forEach(b=>b.onclick=()=>saveInternalSlot(b.dataset.intSave,el));
 }
 function renderInternalEditors(){
   const ala=currentPlantao?.ala||alaForDate(selectedDate());
@@ -2166,6 +2198,109 @@ function internalAutocomplete(code,q,root=document){
   const add=box.querySelector('[data-register-new]');
   if(add)add.onclick=()=>openQuickRegistration(input.value,'other',input,idEl);
 }
+function buildInternalPayloadFromCard(slot,root){
+  const fixed=fixedInternalRow(slot.code);
+  const card=root.querySelector('[data-internal-slot="'+slot.code+'"]');
+  if(!card)return null;
+  const type=card.querySelector('[data-int-type="'+slot.code+'"]')?.value||'VAGO';
+  let proId=card.querySelector('[data-int-id="'+slot.code+'"]')?.value||null;
+  let snapshot=null;
+  if(type==='ESCALADO'){
+    const fixedPro=fixed?.profissional_id?professionals.find(x=>x.id===fixed.profissional_id):findProfessionalByReference(fixed?.nome_referencia);
+    proId=fixedPro?.id||fixed?.profissional_id||null;
+    snapshot=fixedPro?.nome_completo||fixed?.nome_referencia||null;
+    if(!proId&&!snapshot)throw new Error('Não foi possível localizar o titular de '+slot.label+'.');
+  }
+  if(type==='PERMUTA'){
+    if(!proId)throw new Error('Selecione quem está substituindo '+(fixed?.nome_referencia||'o titular')+' em '+slot.label+'.');
+    snapshot=professionals.find(x=>x.id===proId)?.nome_completo||null;
+    if(!snapshot)throw new Error('Substituto inválido em '+slot.label+'.');
+  }
+  if(type==='AUSENTE'||type==='VAGO'){proId=null;snapshot=null}
+  const titularPro=fixed?.profissional_id?professionals.find(x=>x.id===fixed.profissional_id):findProfessionalByReference(fixed?.nome_referencia);
+  return {
+    plantao_id:currentPlantao.id,
+    escala_fixa_id:fixed?.id||null,
+    setor:slot.setor,codigo_posicao:slot.code,funcao:slot.funcao,
+    profissional_id:proId,nome_snapshot:snapshot,
+    titular_profissional_id:titularPro?.id||fixed?.profissional_id||null,
+    titular_nome_snapshot:fixed?.nome_referencia||titularPro?.nome_completo||null,
+    tipo_alteracao:type,status:'ATIVO',ordem:slot.order,
+    atualizado_em:new Date().toISOString()
+  };
+}
+async function confirmInternalTeam(rootSelector='#teamInternalEditor'){
+  if(!isOperator())return;
+  await ensurePlantaoForBook();
+  await ensureProfessionals();
+  const root=$(rootSelector);
+  if(!root)return;
+  const btn=rootSelector==='#internalScaleEditor'?$('#confirmInternalBookBtn'):$('#confirmInternalBtn');
+  if(btn){btn.disabled=true;btn.textContent='CONFIRMANDO...'}
+  try{
+    const payloads=BOOK_INTERNAL_SLOTS.map(slot=>buildInternalPayloadFromCard(slot,root)).filter(Boolean);
+    if(!payloads.length)throw new Error('Nenhuma posição interna encontrada para confirmar.');
+    const {error}=await supabase.from('escala_interna_plantao').upsert(payloads,{onConflict:'plantao_id,codigo_posicao'});
+    if(error)throw error;
+
+    const now=new Date().toISOString();
+    const confirmedBy=profile?.nome||session?.user?.email||'OPERADOR';
+    const pr=await supabase.from('plantoes').update({
+      escala_interna_confirmada_em:now,
+      escala_interna_confirmada_por:confirmedBy
+    }).eq('id',currentPlantao.id);
+    if(pr.error)throw pr.error;
+    currentPlantao={...currentPlantao,escala_interna_confirmada_em:now,escala_interna_confirmada_por:confirmedBy};
+
+    await loadBookData();
+    await syncBookScaleMetadata();
+    renderInternalEditors();
+    renderBook();
+    renderScaleConfirmationStates();
+    setSync('Equipe interna confirmada • LIVRO atualizado');
+  }catch(e){
+    alert('Não foi possível confirmar a equipe interna: '+(e.message||e));
+  }finally{
+    if(btn){btn.disabled=false;btn.textContent='CONFIRMAR EQUIPE INTERNA'}
+  }
+}
+function confirmedInternalRow(code){
+  const row=internalRow(code);
+  if(!row)return null;
+  const status=internalStatusValue(row,fixedInternalRow(code));
+  return ['ESCALADO','PERMUTA'].includes(status)?row:null;
+}
+async function syncBookScaleMetadata(){
+  if(!currentPlantao)return;
+  if(!bookMeta)await loadBookData();
+  const r1=confirmedInternalRow('RADIO-01');
+  const r2=confirmedInternalRow('RADIO-02');
+  const payload={
+    plantao_id:currentPlantao.id,
+    parte_diaria:bookMeta?.parte_diaria||null,
+    ano:bookMeta?.ano||Number(currentPlantao.data_plantao.slice(0,4)),
+    chefe_servico:bookMeta?.chefe_servico||null,
+    radio_1_profissional_id:r1?.profissional_id||null,
+    radio_1_nome_snapshot:r1?internalDisplayNameByCode('RADIO-01'):null,
+    radio_2_profissional_id:r2?.profissional_id||null,
+    radio_2_nome_snapshot:r2?internalDisplayNameByCode('RADIO-02'):null,
+    observacoes:bookMeta?.observacoes||null,
+    texto_responsabilidade:bookMeta?.texto_responsabilidade||null,
+    texto_transmissao:bookMeta?.texto_transmissao||null,
+    status:bookMeta?.status||'RASCUNHO',
+    atualizado_por:profile?.nome||session?.user?.email||null,
+    atualizado_em:new Date().toISOString()
+  };
+  const {data,error}=await supabase.from('livro_plantao').upsert(payload,{onConflict:'plantao_id'}).select().single();
+  if(error)throw error;
+  bookMeta=data;
+}
+async function refreshBookProjection(){
+  if(!currentPlantao)return;
+  await loadBookData();
+  await syncBookScaleMetadata();
+  if($('#book')?.classList.contains('active'))renderBook();
+}
 async function saveInternalSlot(code,root=document){
   if(!isOperator())return;
   await ensurePlantaoForBook();
@@ -2191,7 +2326,9 @@ async function saveInternalSlot(code,root=document){
   };
   const {error}=await supabase.from('escala_interna_plantao').upsert(payload,{onConflict:'plantao_id,codigo_posicao'});
   if(error)return alert(error.message);
-  await loadBookData();renderInternalEditors();renderBook();
+  await loadBookData();
+  await syncBookScaleMetadata();
+  renderInternalEditors();renderBook();
 }
 function collectPermutas(){
   const out=[];
@@ -2254,9 +2391,9 @@ function renderBook(){
 async function saveBook(){
   if(!isOperator())return;
   await ensurePlantaoForBook();
-  const r1=internalRow('RADIO-01'),r2=internalRow('RADIO-02');
-  const p1=r1?.profissional_id||fixedInternalRow('RADIO-01')?.profissional_id||null;
-  const p2=r2?.profissional_id||fixedInternalRow('RADIO-02')?.profissional_id||null;
+  const r1=confirmedInternalRow('RADIO-01'),r2=confirmedInternalRow('RADIO-02');
+  const p1=r1?.profissional_id||null;
+  const p2=r2?.profissional_id||null;
   const payload={
     plantao_id:currentPlantao.id,parte_diaria:$('#bookParte').value.trim()||null,ano:Number(currentPlantao.data_plantao.slice(0,4)),
     chefe_servico:$('#bookChefe').value.trim()||null,radio_1_profissional_id:p1,radio_1_nome_snapshot:internalDisplayNameByCode('RADIO-01'),
@@ -2301,7 +2438,10 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'equipe_ocorrencia'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'revezamento_plantao'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'livro_plantao'},()=>{if($('#book')?.classList.contains('active'))loadBookData().then(renderBook)})
-    .on('postgres_changes',{event:'*',schema:'public',table:'escala_interna_plantao'},()=>{if($('#book')?.classList.contains('active'))loadBookData().then(renderBook)})
+    .on('postgres_changes',{event:'*',schema:'public',table:'escala_interna_plantao'},()=>{
+      loadBookData().then(()=>{renderInternalEditors();if($('#book')?.classList.contains('active'))renderBook()}).catch(console.error);
+    })
+    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'plantoes'},scheduleReload)
     .subscribe(s=>{if(s==='SUBSCRIBED')setSync('Banco conectado • atualização em tempo real ativa')});
 }
 
@@ -2381,7 +2521,9 @@ $('#assignMode').onchange=()=>$('#assignVehicleWrap').classList.toggle('hidden',
 $('#confirmAssignBtn').onclick=confirmAssign;$('#saveIndividualOccBtn').onclick=saveIndividualOccurrence;
 $('#regRole').onchange=renderRegistry;$('#registerProfessionalBtn').onclick=registerProfessional;
 $$('.scale-scope-btn').forEach(b=>b.onclick=()=>showTeamScope(b.dataset.teamScope));
-$('#internalReloadBtn').onclick=()=>loadBookData().then(()=>{renderInternalEditors();renderBook()});
+$('#internalReloadBtn').onclick=()=>loadBookData().then(()=>{renderInternalEditors();renderBook();renderScaleConfirmationStates()});
+$('#confirmInternalBtn').onclick=()=>confirmInternalTeam('#teamInternalEditor');
+$('#confirmInternalBookBtn').onclick=()=>confirmInternalTeam('#internalScaleEditor');
 $('#saveBookBtn').onclick=saveBook;$('#printBookBtn').onclick=()=>window.print();
 $('#expressPermutaSearch').oninput=expressPermutaAutocomplete;
 $('#saveExpressPermutaBtn').onclick=saveExpressPermuta;
