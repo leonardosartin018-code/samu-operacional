@@ -124,7 +124,7 @@ function roleLabel(k){
   return {driver:'CONDUTOR',tech:'TÉCNICO',nurse:'ENFERMEIRO',doctor:'MÉDICO',moto:'MOTOLÂNCIA'}[k] || 'PROFISSIONAL';
 }
 function vehicleType(v){ return norm(v?.tipo || v?.nome); }
-function isAnapolisVehicle(v){ return norm(v?.bases?.nome).includes('ANAPOL'); }
+function isAnapolisVehicle(v){ return norm(v?.bases?.nome)==='ANAPOLIS'; }
 function vehicleById(id){ return vehicles.find(v=>v.id===id); }
 function vehicleByCode(code){
   const n=norm(code).replace(/\s/g,'');
