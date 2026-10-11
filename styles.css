@@ -747,3 +747,25 @@ nav.tabs .tab.book-tab.active{
   border-color:#7dd3fc;
   color:#075985;
 }
+
+/* ---------- edição rápida da equipe confirmada ---------- */
+.roster-person-actions{
+  display:flex;
+  gap:5px;
+  flex-wrap:wrap;
+  justify-content:flex-end;
+}
+.person-edit{
+  border:1px solid #38bdf8;
+  background:#e0f2fe;
+  color:#075985;
+  border-radius:7px;
+  padding:5px 8px;
+  font-size:.56rem;
+  font-weight:1000;
+  cursor:pointer;
+}
+.person-edit:hover{
+  background:#bae6fd;
+  border-color:#0ea5e9;
+}
