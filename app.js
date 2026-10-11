@@ -611,16 +611,19 @@ function crewGridHtml(v){
 function occurrenceInfoHtml(v,o){
   if(!o) return '';
   const qthRecorded=!!o.chegada_qth_em;
+  const inicio=o.saida_em||o.acionada_em;
+  const tempoQth=minutesBetween(inicio,o.chegada_qth_em);
   return '<div class="occ-detail">OC. '+esc(o.numero||'—')+' • '+esc(o.natureza||'SEM NATUREZA')+'</div>'+
     '<div class="occ-address">'+esc([o.bairro,o.endereco,o.destino].filter(Boolean).join(' • '))+'</div>'+
     '<div class="occ-timeline">'+
-      '<div class="occ-time-chip"><span>SAÍDA</span><b>'+fmtTime(o.saida_em||o.acionada_em)+'</b></div>'+
-      '<div class="occ-time-chip"><span>QTH</span><b>'+fmtTime(o.chegada_qth_em)+'</b></div>'+
+      '<div class="occ-time-chip"><span>INÍCIO / SAÍDA</span><b>'+fmtTime(inicio)+'</b></div>'+
+      '<div class="occ-time-chip"><span>CHEGADA QTH</span><b>'+fmtTime(o.chegada_qth_em)+'</b></div>'+
+      '<div class="occ-time-chip qth-duration"><span>TEMPO ATÉ QTH</span><b>'+fmtMinutes(tempoQth)+'</b></div>'+
       '<div class="occ-time-chip"><span>INÍCIO RETORNO</span><b>'+fmtTime(o.inicio_retorno_em)+'</b></div>'+
     '</div>'+
     (statusInfo(v).key==='occurrence'
       ? '<div class="occurrence-main-actions">'+
-          '<button class="qth-btn '+(qthRecorded?'recorded':'')+'" data-act="qth" data-o="'+o.id+'">'+(qthRecorded?'QTH REGISTRADO • '+fmtTime(o.chegada_qth_em):'CHEGADA NO QTH')+'</button>'+
+          '<button class="qth-btn '+(qthRecorded?'recorded':'')+'" data-act="qth" data-o="'+o.id+'">'+(qthRecorded?'QTH REGISTRADO • '+fmtTime(o.chegada_qth_em)+' • '+fmtMinutes(tempoQth):'CHEGADA NO QTH')+'</button>'+
           '<div class="occurrence-action-row">'+
             '<button class="qta-btn" data-act="qta" data-o="'+o.id+'" data-v="'+v.id+'">QTA</button>'+
             '<button class="edit-team-btn" data-act="edit-team" data-v="'+v.id+'">EDITAR EQUIPE</button>'+
@@ -632,13 +635,15 @@ function occurrenceInfoHtml(v,o){
 function statusStripHtml(v){
   if(!isOperator()) return '';
   const o=activeOccurrence(v);
-  if(o && statusInfo(v).key==='occurrence') return '';
+  const current=statusInfo(v).key;
+  if(o && current==='occurrence') return '';
+  const btn=(key,label)=>'<button class="'+(current===key?'active':'')+'" data-status="'+key+'" data-v="'+v.id+'" title="Alterar situação para '+label+'">'+label+'</button>';
   return '<div class="status-strip">'+
-    '<button data-status="base" data-v="'+v.id+'">BASE</button>'+
-    '<button data-status="asepsis" data-v="'+v.id+'">ASSEPSIA</button>'+
-    '<button data-status="mechanical" data-v="'+v.id+'">PANE</button>'+
-    '<button data-status="noCrew" data-v="'+v.id+'">S/EQUIPE</button>'+
-    '<button data-status="noStretcher" data-v="'+v.id+'">S/MACA</button>'+
+    btn('base','BASE')+
+    btn('asepsis','ASSEPSIA')+
+    btn('mechanical','PANE')+
+    btn('noCrew','S/EQUIPE')+
+    btn('noStretcher','S/MACA')+
   '</div>';
 }
 function vehicleCardHtml(v){
@@ -1389,9 +1394,21 @@ async function saveOccurrence(){
 async function setOccurrenceQth(id){
   if(!isOperator())return;
   const o=occurrences.find(x=>x.id===id);
-  if(o?.chegada_qth_em && !confirm('O QTH já foi registrado às '+fmtTime(o.chegada_qth_em)+'. Deseja atualizar o horário?'))return;
-  const {error}=await supabase.from('ocorrencias').update({chegada_qth_em:new Date().toISOString()}).eq('id',id);
-  if(error)alert(error.message);
+  if(!o)return alert('Ocorrência não encontrada.');
+  if(o.chegada_qth_em && !confirm('O QTH já foi registrado às '+fmtTime(o.chegada_qth_em)+'. Deseja atualizar o horário?'))return;
+
+  const previous=o.chegada_qth_em||null;
+  const now=new Date().toISOString();
+  o.chegada_qth_em=now;
+  renderAll();
+
+  const {error}=await supabase.from('ocorrencias').update({chegada_qth_em:now}).eq('id',id);
+  if(error){
+    o.chegada_qth_em=previous;
+    renderAll();
+    return alert('Não foi possível registrar a chegada no QTH: '+error.message);
+  }
+  await loadAll(selectedDate());
 }
 async function setOccurrenceQta(oid,vid){
   if(!isOperator()||!confirm('CONFIRMAR QTA?\n\nA ocorrência não será contabilizada no revezamento e a viatura volta para BASE.'))return;
@@ -1407,12 +1424,14 @@ async function setOccurrenceQta(oid,vid){
     if(row)await supabase.from('equipe_plantao').update({ultimo_retorno_em:now}).eq('id',row.id);
   }
   if(vid)await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid);
+  await loadAll(selectedDate());
 }
 async function setReturning(oid,vid){
   if(!isOperator())return;
   const now=new Date().toISOString();
   if(oid){const r=await supabase.from('ocorrencias').update({status:'RETORNANDO',inicio_retorno_em:now}).eq('id',oid);if(r.error)return alert(r.error.message)}
-  if(vid){const r=await supabase.from('viaturas').update({status_atual:'RETORNANDO'}).eq('id',vid);if(r.error)alert(r.error.message)}
+  if(vid){const r=await supabase.from('viaturas').update({status_atual:'RETORNANDO'}).eq('id',vid);if(r.error)return alert(r.error.message)}
+  await loadAll(selectedDate());
 }
 async function creditOccurrence(occ){
   if(!occ||occ.creditou_revezamento)return;
@@ -1440,13 +1459,30 @@ async function setArrived(oid,vid){
     await creditOccurrence(o);
   }
   if(vid)await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid);
+  await loadAll(selectedDate());
 }
 async function setVehicleStatus(vId,key){
   if(!isOperator())return;
   const v=vehicleById(vId);
+  if(!v)return alert('Viatura não encontrada.');
   if(activeOccurrence(v))return alert('Finalize a ocorrência antes de alterar a situação da viatura.');
-  const {error}=await supabase.from('viaturas').update({status_atual:statusDbValue(key)}).eq('id',vId);
-  if(error)alert(error.message);
+
+  const previous=v.status_atual;
+  const next=statusDbValue(key);
+  v.status_atual=next;
+  renderAll();
+  setSync((v.nome||v.codigo)+' → '+statusInfo(v).label,'warn');
+
+  const {error}=await supabase.from('viaturas').update({status_atual:next}).eq('id',vId);
+  if(error){
+    v.status_atual=previous;
+    renderAll();
+    setSync('Falha ao alterar situação da viatura','error');
+    return alert('Não foi possível alterar a situação da viatura: '+error.message);
+  }
+
+  await loadAll(selectedDate());
+  setSync((v.nome||v.codigo)+' atualizada para '+statusInfo(vehicleById(vId)||v).label);
 }
 function openOccurrenceEdit(id){
   if(!isOperator())return;
