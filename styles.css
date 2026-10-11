@@ -625,3 +625,83 @@ nav.tabs .tab.book-tab.active{
 @media(max-width:920px){
   .occ-timeline{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* ---------- Escala Expressa: hierarquia visual e legibilidade ---------- */
+.express-vtr{
+  font-size:.82rem;
+  line-height:1.1;
+  letter-spacing:.01em;
+}
+.express-vtr-type{
+  font-size:.60rem;
+  line-height:1.15;
+}
+.express-row-badge{
+  font-size:.59rem;
+  padding:4px 7px;
+}
+
+.express-fixed-label,
+.express-current-label{
+  margin-top:8px;
+  font-size:.64rem;
+  line-height:1.1;
+  font-weight:1000;
+  letter-spacing:.055em;
+  opacity:1;
+}
+
+.express-fixed-label{
+  color:#facc15;
+}
+.express-current-label{
+  color:#7dd3fc;
+}
+
+.express-fixed-name{
+  margin-top:3px;
+  font-size:.82rem;
+  line-height:1.15;
+  font-weight:1000;
+  color:#fff;
+}
+.express-current-name{
+  margin-top:3px;
+  font-size:1rem;
+  line-height:1.12;
+  font-weight:1000;
+  color:#fff;
+}
+
+/* Nos cards claros/quentes, mantém contraste sem poluição visual */
+.express-driver-card.permuta .express-fixed-label,
+.express-driver-card.permuta .express-current-label{
+  color:#713f12;
+}
+.express-driver-card.permuta .express-fixed-name,
+.express-driver-card.permuta .express-current-name{
+  color:#2b2105;
+}
+
+.express-driver-card.rotation .express-fixed-label,
+.express-driver-card.rotation .express-current-label{
+  color:#5b2504;
+}
+.express-driver-card.rotation .express-fixed-name,
+.express-driver-card.rotation .express-current-name{
+  color:#111827;
+}
+
+/* Estado fixo continua com nome branco e rótulos destacados */
+.express-driver-card.fixed .express-fixed-label{
+  color:#fde047;
+}
+.express-driver-card.fixed .express-current-label{
+  color:#bae6fd;
+}
+
+/* Botões ligeiramente maiores para leitura rápida */
+.express-driver-actions button{
+  font-size:.58rem;
+  min-height:36px;
+}
