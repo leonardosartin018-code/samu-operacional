@@ -2272,13 +2272,22 @@ $('#teamSearch').oninput=e=>renderTeamSearch(e.target.value);$('#clearTeamSearch
 $('#assignMode').onchange=()=>$('#assignVehicleWrap').classList.toggle('hidden',$('#assignMode').value!=='FIXO');
 $('#confirmAssignBtn').onclick=confirmAssign;$('#saveIndividualOccBtn').onclick=saveIndividualOccurrence;
 $('#regRole').onchange=renderRegistry;$('#registerProfessionalBtn').onclick=registerProfessional;
-$('.scale-scope-btn').forEach(b=>b.onclick=()=>showTeamScope(b.dataset.teamScope));
+$$('.scale-scope-btn').forEach(b=>b.onclick=()=>showTeamScope(b.dataset.teamScope));
 $('#internalReloadBtn').onclick=()=>loadBookData().then(()=>{renderInternalEditors();renderBook()});
 $('#saveBookBtn').onclick=saveBook;$('#printBookBtn').onclick=()=>window.print();
 $('#expressPermutaSearch').oninput=expressPermutaAutocomplete;
 $('#saveExpressPermutaBtn').onclick=saveExpressPermuta;
 $('#saveQuickRegisterBtn').onclick=saveQuickRegistration;
 
-supabase.auth.onAuthStateChange((_,s)=>applySession(s));
+supabase.auth.onAuthStateChange((_,s)=>{
+  // Consultas ao Supabase precisam ocorrer fora do callback de autenticação.
+  setTimeout(()=>{
+    if(session?.access_token===s?.access_token)return;
+    applySession(s).catch(error=>{
+      console.error('Falha ao carregar sessão',error);
+      $('#authMsg').textContent=error?.message||'Não foi possível carregar o acesso. Tente novamente.';
+    });
+  },0);
+});
 const {data:{session:initialSession}}=await supabase.auth.getSession();
 await applySession(initialSession);
