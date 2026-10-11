@@ -995,8 +995,20 @@ function professionalLabel(p,key){
   const full=(p?.nome_completo||'').toUpperCase();
   return short===full ? full : short+' — '+full;
 }
+function defaultRoleForKey(key){
+  return {driver:'Condutor',moto:'Motolância',tech:'Técnico de Enfermagem',nurse:'Enfermeiro',doctor:'Médico'}[key]||'Condutor';
+}
+function openQuickRegistration(name,key,input,hidden){
+  pendingQuickRegistration={key,input,hidden};
+  $('#quickRegName').value=String(name||'').trim();
+  $('#quickRegWar').value='';
+  $('#quickRegRole').value=defaultRoleForKey(key);
+  openModal('quickRegisterModal');
+}
 function showAutocomplete(box,list,key,input,hidden){
-  box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-prof="'+p.id+'"><b>'+esc(professionalLabel(p,key))+'</b><small>'+esc(p.funcao_sistema||'')+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado para este campo.</div>';
+  box.innerHTML=list.length
+    ? list.map(p=>'<button type="button" class="autocomplete-result" data-prof="'+p.id+'"><b>'+esc(professionalLabel(p,key))+'</b><small>'+esc(p.funcao_sistema||'')+'</small></button>').join('')
+    : '<div class="autocomplete-empty">Nenhum profissional encontrado.</div><button type="button" class="autocomplete-register" data-register-new="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
   box.classList.add('show');
   box.querySelectorAll('[data-prof]').forEach(b=>b.onclick=()=>{
     const p=professionals.find(x=>x.id===b.dataset.prof);
@@ -1004,6 +1016,8 @@ function showAutocomplete(box,list,key,input,hidden){
     hidden.value=p.id;
     box.classList.remove('show');
   });
+  const add=box.querySelector('[data-register-new]');
+  if(add)add.onclick=()=>openQuickRegistration(input.value,key,input,hidden);
 }
 function quickAutocomplete(key){
   const cfg=quickCfg()[key],input=$(cfg.input),hidden=$(cfg.hidden),box=$(cfg.results),q=norm(input.value);
@@ -1394,8 +1408,10 @@ function expressPermutaAutocomplete(){
   $('#expressPermutaProId').value='';
   if(q.length<3){box.classList.remove('show');box.innerHTML='';return}
   const titularId=selectedExpressPermutaRow?.profissional_id;
-  const list=professionals.filter(p=>p.id!==titularId && professionalRoleKey(p)==='driver' && teamSearchText(p).includes(q)).slice(0,15);
-  box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-express-perm-pro="'+p.id+'"><b>'+esc(professionalLabel(p,'driver'))+'</b><small>'+esc(p.nome_completo)+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum condutor encontrado.</div>';
+  const list=professionals.filter(p=>p.id!==titularId && allowedForField(p,'driver') && teamSearchText(p).includes(q)).slice(0,15);
+  box.innerHTML=list.length
+    ? list.map(p=>'<button type="button" class="autocomplete-result" data-express-perm-pro="'+p.id+'"><b>'+esc(professionalLabel(p,'driver'))+'</b><small>'+esc(p.funcao_sistema||'')+' • '+esc(p.nome_completo)+'</small></button>').join('')
+    : '<div class="autocomplete-empty">Nenhum profissional compatível encontrado.</div><button type="button" class="autocomplete-register" data-register-new="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
   box.classList.add('show');
   box.querySelectorAll('[data-express-perm-pro]').forEach(b=>b.onclick=()=>{
     const p=professionals.find(x=>x.id===b.dataset.expressPermPro);
@@ -1403,6 +1419,8 @@ function expressPermutaAutocomplete(){
     $('#expressPermutaProId').value=p.id;
     box.classList.remove('show');
   });
+  const add=box.querySelector('[data-register-new]');
+  if(add)add.onclick=()=>openQuickRegistration($('#expressPermutaSearch').value,'driver',$('#expressPermutaSearch'),$('#expressPermutaProId'));
 }
 async function saveExpressPermuta(){
   if(!isOperator()||!selectedExpressPermutaRow)return;
@@ -1412,7 +1430,7 @@ async function saveExpressPermuta(){
   const mode=$('#expressPermutaMode').value;
   const pro=professionals.find(p=>p.id===proId);
   if(!pro)return alert('Selecione o condutor substituto.');
-  if(professionalRoleKey(pro)!=='driver')return alert('A permuta de condutor só pode receber outro condutor.');
+  if(!allowedForField(pro,'driver'))return alert('Para este campo, selecione Condutor, Motolância, TARM, Rádio-operador, Lavador ou Sanitária.');
 
   try{
     const now=new Date().toISOString();
@@ -1666,14 +1684,14 @@ async function saveIndividualOccurrence(){
 function renderRegistry(){
   const rows=professionals.slice(0,250);
   $('#registryTable').innerHTML=rows.map(p=>'<tr><td>'+esc(p.nome_completo||'—')+'</td><td>'+esc(p.nome_de_guerra||'—')+'</td><td>'+esc(p.funcao_sistema||'—')+'</td><td>'+esc(p.topico_ntfy||'—')+'</td><td>ATIVO</td></tr>').join('');
-  $('#regWarWrap').classList.toggle('hidden',norm($('#regRole').value)!=='CONDUTOR');
+  $('#regWarWrap').classList.remove('hidden');
 }
 async function registerProfessional(){
   if(!isOperator())return;
   const nome=$('#regName').value.trim(),funcao=$('#regRole').value,war=$('#regWarName').value.trim(),topic=$('#regTopic').value.trim();
   if(!nome)return alert('Informe o nome completo.');
   const {error}=await supabase.from('profissionais').insert({
-    nome_completo:nome,nome_de_guerra:norm(funcao)==='CONDUTOR'?(war||null):null,funcao_sistema:funcao,topico_ntfy:topic||null,
+    nome_completo:nome,nome_de_guerra:war||null,funcao_sistema:funcao,topico_ntfy:topic||null,
     notificar_padrao:false,ativo:true,data_cadastro:new Date().toISOString(),atualizado_em:new Date().toISOString()
   });
   if(error)return alert(error.message);
@@ -1683,6 +1701,34 @@ async function registerProfessional(){
   setTimeout(()=>$('#registryStatus').classList.add('hidden'),2500);
 }
 
+
+async function saveQuickRegistration(){
+  if(!isOperator())return;
+  const nome=$('#quickRegName').value.trim();
+  const war=$('#quickRegWar').value.trim();
+  const funcao=$('#quickRegRole').value;
+  if(!nome)return alert('Informe o nome completo.');
+  const {data,error}=await supabase.from('profissionais').insert({
+    nome_completo:nome,nome_de_guerra:war||null,funcao_sistema:funcao,
+    notificar_padrao:false,ativo:true,data_cadastro:new Date().toISOString(),atualizado_em:new Date().toISOString()
+  }).select('id,legacy_id,nome_completo,nome_de_guerra,funcao_sistema,categoria_origem,topico_ntfy,ativo').single();
+  if(error)return alert(error.message);
+
+  professionals.push(data);
+  professionals.sort((a,b)=>String(a.nome_completo).localeCompare(String(b.nome_completo),'pt-BR'));
+  const pending=pendingQuickRegistration;
+  if(pending?.input&&pending?.hidden){
+    if(!allowedForField(data,pending.key)){
+      alert('Profissional cadastrado, mas a função escolhida não é permitida neste campo.');
+    }else{
+      pending.input.value=professionalLabel(data,pending.key);
+      pending.hidden.value=data.id;
+    }
+  }
+  pendingQuickRegistration=null;
+  closeModal('quickRegisterModal');
+  renderRegistry();
+}
 
 async function ensureOperationalScaleFromFixed(){
   if(!currentPlantao||!vehicles.length||!professionals.length)return;
@@ -2225,6 +2271,7 @@ $('#internalReloadBtn').onclick=()=>loadBookData().then(()=>{renderInternalEdito
 $('#saveBookBtn').onclick=saveBook;$('#printBookBtn').onclick=()=>window.print();
 $('#expressPermutaSearch').oninput=expressPermutaAutocomplete;
 $('#saveExpressPermutaBtn').onclick=saveExpressPermuta;
+$('#saveQuickRegisterBtn').onclick=saveQuickRegistration;
 
 supabase.auth.onAuthStateChange((_,s)=>applySession(s));
 const {data:{session:initialSession}}=await supabase.auth.getSession();
