@@ -1260,7 +1260,7 @@ async function loadExpressScale(){
   }
   scaleRows=data||[];
   $('#expressStatus').className='express-status ok';
-  $('#expressStatus').innerHTML='<b>'+scaleRows.length+' posições carregadas.</b> Confira os fixos e altere apenas as exceções.';
+  $('#expressStatus').innerHTML='<b>'+scaleRows.length+' posições pré-carregadas.</b> Os nomes da escala aparecem como referência, mas ninguém entra escalado automaticamente. Clique em ESCALAR somente em quem realmente ficará no plantão.';
   renderExpressDrivers();
 }
 function expressRowState(r){
