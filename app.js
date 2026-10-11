@@ -1661,6 +1661,8 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'ocorrencias'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'equipe_ocorrencia'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'revezamento_plantao'},scheduleReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'livro_plantao'},()=>{if($('#book')?.classList.contains('active'))loadBookData().then(renderBook)})
+    .on('postgres_changes',{event:'*',schema:'public',table:'escala_interna_plantao'},()=>{if($('#book')?.classList.contains('active'))loadBookData().then(renderBook)})
     .subscribe(s=>{if(s==='SUBSCRIBED')setSync('Banco conectado • atualização em tempo real ativa')});
 }
 
