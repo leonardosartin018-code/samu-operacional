@@ -1742,7 +1742,8 @@ async function putProfessionalInRotation(pro,group,funcao){
 async function confirmExpress(){
   if(!isOperator())return;
   if(!currentPlantao)await ensurePlantaoForBook();
-  $('#confirmExpressBtn').disabled=true;$('#confirmExpressBtn').textContent='CONFIRMANDO...';
+  const confirmButtons=[$('#confirmExpressBtn'),$('#confirmExpressTopBtn')].filter(Boolean);
+  confirmButtons.forEach(b=>{b.disabled=true;b.textContent='CONFIRMANDO...'});
   try{
     for(const p of expressTechSelected.values())await putProfessionalInRotation(p,'USB_TECNICO','Técnico de Enfermagem');
     for(const p of expressNurseSelected.values())await putProfessionalInRotation(p,'USA_ENFERMEIRO','Enfermeiro');
@@ -1766,7 +1767,7 @@ async function confirmExpress(){
     $('#expressStatus').className='express-status ok';
     $('#expressStatus').innerHTML='<b>Escala operacional confirmada.</b> A equipe foi registrada e o LIVRO está sincronizado.';
   }catch(e){alert('Erro ao confirmar escala: '+(e.message||e))}
-  finally{$('#confirmExpressBtn').disabled=false;$('#confirmExpressBtn').textContent='CONFIRMAR ESCALA'}
+  finally{confirmButtons.forEach(b=>{b.disabled=false;b.textContent='CONFIRMAR ESCALA'})}
 }
 
 /* ---------- generic assignment ---------- */
@@ -2395,8 +2396,8 @@ async function saveBook(){
   const p2=r2?.profissional_id||null;
   const payload={
     plantao_id:currentPlantao.id,parte_diaria:$('#bookParte').value.trim()||null,ano:Number(currentPlantao.data_plantao.slice(0,4)),
-    chefe_servico:$('#bookChefe').value.trim()||null,radio_1_profissional_id:p1,radio_1_nome_snapshot:internalDisplayNameByCode('RADIO-01'),
-    radio_2_profissional_id:p2,radio_2_nome_snapshot:internalDisplayNameByCode('RADIO-02'),observacoes:$('#bookObs').value.trim()||null,
+    chefe_servico:$('#bookChefe').value.trim()||null,radio_1_profissional_id:p1,radio_1_nome_snapshot:p1?internalDisplayNameByCode('RADIO-01'):null,
+    radio_2_profissional_id:p2,radio_2_nome_snapshot:p2?internalDisplayNameByCode('RADIO-02'):null,observacoes:$('#bookObs').value.trim()||null,
     atualizado_por:profile?.nome||null,atualizado_em:new Date().toISOString()
   };
   const {error}=await supabase.from('livro_plantao').upsert(payload,{onConflict:'plantao_id'});
@@ -2515,6 +2516,7 @@ $('#allDriversRotationBtn').onclick=setAllDriversRotation;$('#restoreFixedDriver
 $('#expressTechSearch').oninput=e=>expressSearch('tech',e.target.value);$('#expressNurseSearch').oninput=e=>expressSearch('nurse',e.target.value);
 $('#applyExpressPreviewBtn').onclick=()=>{$('#expressStatus').className='express-status ok';$('#expressStatus').innerHTML='<b>Prévia preparada:</b> '+expressTechSelected.size+' técnico(s)/enfermeiro(s) para USB e '+expressNurseSelected.size+' enfermeiro(s) para USA. Clique em CONFIRMAR para gravar.'};
 $('#confirmExpressBtn').onclick=confirmExpress;
+$('#confirmExpressTopBtn').onclick=confirmExpress;
 $('#teamSearch').oninput=e=>renderTeamSearch(e.target.value);$('#clearTeamSearchBtn').onclick=()=>{$('#teamSearch').value='';$('#teamSearchResults').classList.remove('show');$('#teamSearchResults').innerHTML=''};
 $('#assignMode').onchange=()=>$('#assignVehicleWrap').classList.toggle('hidden',$('#assignMode').value!=='FIXO');
 $('#confirmAssignBtn').onclick=confirmAssign;$('#saveIndividualOccBtn').onclick=saveIndividualOccurrence;
