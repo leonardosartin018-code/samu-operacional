@@ -288,6 +288,7 @@ async function loadAll(preferredDate=null){
       }
     }
 
+    syncRotationCriterionFromPlantao();
     renderAll();
     if(currentPlantao){
       $('#plantaoInfo').textContent='Plantão '+(currentPlantao.legacy_id||'')+' • '+fmtDate(date)+' • ALA '+(currentPlantao.ala||ala)+' • '+currentPlantao.status;
@@ -1040,12 +1041,17 @@ async function saveOccurrence(){
   const vId=$('#occVehicleSelect').value||null;
   const v=vehicleById(vId);
   const now=localDateTimeIso(currentPlantao.data_plantao,$('#occStart').value||nowLocalTime());
+  const crit=currentRotationCriterion();
+  const autoCrew=v?automaticDispatchCrew(v):[];
   const payload={
     plantao_id:currentPlantao.id,viatura_id:vId,numero:$('#occNumber').value.trim()||null,natureza:$('#occNature').value.trim()||null,
     bairro:$('#occBairro').value.trim()||null,destino:$('#occDestino').value.trim()||null,endereco:$('#occEndereco').value.trim()||null,
     observacao:$('#occObs').value.trim()||null,status:vId?'EM OCORRENCIA':'FINALIZADA',acionada_em:now,saida_em:now,
     viatura_snapshot:v?.nome||null,base_snapshot:v?.bases?.nome||null,data_ocorrencia:currentPlantao.data_plantao,criado_por:profile?.nome||null,
-    finalizado_em:vId?null:new Date().toISOString()
+    finalizado_em:vId?null:new Date().toISOString(),
+    criterio_prioridade:vId?rotationCriterionDbValue(crit):null,
+    motivo_prioridade:vId?(crit==='occurrences'?'Menor número de ocorrências; desempate pelo maior tempo na base.':'Maior tempo disponível na base; desempate pelo menor número de ocorrências.'):null,
+    tempo_base_antes_min:vId?Math.max(0,vehicleBaseMinutes(v)):null
   };
   $('#saveOcc').disabled=true;
   try{
@@ -1054,9 +1060,11 @@ async function saveOccurrence(){
     if(vId){
       const ur=await supabase.from('viaturas').update({status_atual:'OCORRENCIA'}).eq('id',vId);
       if(ur.error)throw ur.error;
-      const mem=vehicleMembers(v);
-      if(mem.length){
-        const er=await supabase.from('equipe_ocorrencia').insert(mem.map(m=>({
+
+      // Mantém fixos na própria viatura e completa as vagas com quem está da vez
+      // nas filas de condutor/técnico/enfermeiro.
+      if(autoCrew.length){
+        const er=await supabase.from('equipe_ocorrencia').insert(autoCrew.map(m=>({
           ocorrencia_id:o.id,profissional_id:m.profissional_id,funcao:m.funcao,nome_snapshot:m.nome_snapshot||m.profissionais?.nome_completo,
           viatura_id:vId,viatura_snapshot:v.nome,tipo_escala_no_momento:m.tipo_escala
         })));
@@ -1080,6 +1088,14 @@ async function setOccurrenceQta(oid,vid){
   const now=new Date().toISOString();
   const r=await supabase.from('ocorrencias').update({status:'QTA',qta_em:now,finalizado_em:now,finalizado_por:profile?.nome||null,creditou_revezamento:false}).eq('id',oid);
   if(r.error)return alert(r.error.message);
+
+  // QTA não soma ocorrência, mas reinicia o relógio de tempo na base
+  // para quem chegou a ser empenhado.
+  const ids=[...new Set(occurrenceMembers(oid).map(x=>x.profissional_id).filter(Boolean))];
+  for(const id of ids){
+    const row=activeTeamRows().find(m=>m.profissional_id===id);
+    if(row)await supabase.from('equipe_plantao').update({ultimo_retorno_em:now}).eq('id',row.id);
+  }
   if(vid)await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid);
 }
 async function setReturning(oid,vid){
@@ -1216,14 +1232,18 @@ function expressSwap(rowId){
 async function expressToggleRotation(rowId){
   if(!isOperator())return;
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);if(!v)return;
-  const cur=currentByRole(v.id,'driver');if(!cur)return alert('Escale um condutor antes de ativar o revezamento.');
-  const turnOn=!norm(cur.tipo_escala).includes('REVEZ');
-  const group=vehicleType(v).includes('USA')?'USA_CONDUTOR':'USB_CONDUTOR';
-  const {error}=await supabase.from('equipe_plantao').update({
-    tipo_escala:turnOn?'REVEZAMENTO':'FIXO EM VIATURA',
-    grupo_revezamento:turnOn?group:null,
-    revezamento_tipo_viatura:turnOn?(vehicleType(v).includes('USA')?'USA':'USB'):null
-  }).eq('id',cur.id);
+  let cur=currentByRole(v.id,'driver');
+  if(!cur&&r?.profissional_id){
+    cur=activeTeamRows().find(m=>m.profissional_id===r.profissional_id&&teamRoleKey(m)==='driver')||null;
+  }
+  if(!cur)return alert('Escale um condutor antes de ativar o revezamento.');
+  const turnOn=!isRotationMember(cur);
+  const type=vehicleType(v).includes('USA')?'USA':'USB';
+  const group=type+'_CONDUTOR';
+  const payload=turnOn
+    ? {tipo_escala:'REVEZAMENTO',grupo_revezamento:group,revezamento_tipo_viatura:type,viatura_id:null,viatura_snapshot:null}
+    : {tipo_escala:'FIXO EM VIATURA',grupo_revezamento:null,revezamento_tipo_viatura:null,viatura_id:v.id,viatura_snapshot:v.nome};
+  const {error}=await supabase.from('equipe_plantao').update(payload).eq('id',cur.id);
   if(error)alert(error.message);else{await loadAll(selectedDate());await loadExpressScale()}
 }
 async function expressVacant(rowId){
@@ -1235,11 +1255,14 @@ async function expressVacant(rowId){
 }
 async function setAllDriversRotation(){
   if(!isOperator())return;
-  const rows=activeTeamRows().filter(m=>teamRoleKey(m)==='driver'&&isAnapolisVehicle(vehicleById(m.viatura_id))&&['USA','USB'].some(t=>vehicleType(vehicleById(m.viatura_id)).includes(t)));
-  if(!rows.length)return alert('Não há condutores ativos para colocar em revezamento.');
+  const rows=activeTeamRows().filter(m=>teamRoleKey(m)==='driver'&&m.viatura_id&&isAnapolisVehicle(vehicleById(m.viatura_id))&&['USA','USB'].some(t=>vehicleType(vehicleById(m.viatura_id)).includes(t)));
+  if(!rows.length)return alert('Não há condutores fixos ativos para colocar em revezamento.');
   for(const m of rows){
     const v=vehicleById(m.viatura_id),type=vehicleType(v).includes('USA')?'USA':'USB';
-    await supabase.from('equipe_plantao').update({tipo_escala:'REVEZAMENTO',grupo_revezamento:type+'_CONDUTOR',revezamento_tipo_viatura:type}).eq('id',m.id);
+    await supabase.from('equipe_plantao').update({
+      tipo_escala:'REVEZAMENTO',grupo_revezamento:type+'_CONDUTOR',revezamento_tipo_viatura:type,
+      viatura_id:null,viatura_snapshot:null
+    }).eq('id',m.id);
   }
   await loadAll(selectedDate());await loadExpressScale();
 }
@@ -1460,7 +1483,7 @@ $$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)closeModa
 $('#shiftDate').onchange=()=>{syncDateAndAla($('#shiftDate').value);loadAll($('#shiftDate').value)};
 $('#exportBtn').onclick=exportCSV;$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
 $('#regionalBtn').onclick=()=>$('#regionalIntegrated').scrollIntoView({behavior:'smooth',block:'start'});
-$('#rotationCriterion').onchange=renderRotation;
+$('#rotationCriterion').onchange=e=>persistRotationCriterion(e.target.value);
 $('#teamReloadBtn').onclick=()=>loadAll(selectedDate());
 $('#saveOcc').onclick=saveOccurrence;$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
 $('#loadScaleBtn').onclick=loadExpressScale;$('#expressAla').onchange=()=>{scaleRows=[];$('#expressStatus').className='express-status';$('#expressStatus').innerHTML='Ala alterada. Clique em <b>CARREGAR ESCALA FIXA</b>.'};$('#expressTurno').onchange=()=>{scaleRows=[];$('#expressStatus').className='express-status';$('#expressStatus').innerHTML='Turno alterado. Clique em <b>CARREGAR ESCALA FIXA</b>.'};
