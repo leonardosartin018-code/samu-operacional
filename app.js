@@ -1336,22 +1336,31 @@ async function expressUseFixed(rowId){
   if(!r?.profissional_id||!v)return alert('Titular ou viatura não vinculado ao banco.');
   try{
     const st=expressRowState(r);
+    const now=new Date().toISOString();
+
     if(st.state==='fixed'&&st.current){
       const {error}=await supabase.from('equipe_plantao').update({
-        status:'INATIVO',saiu_em:new Date().toISOString(),tipo_alteracao_escala:'DESESCALADO'
+        status:'INATIVO',saiu_em:now,tipo_alteracao_escala:'DESESCALADO'
       }).eq('id',st.current.id);
       if(error)throw error;
     }else{
+      // Ao trocar de REVEZAMENTO, PERMUTA ou AUSENTE para FIXO,
+      // encerra a decisão anterior antes de escalar o titular na viatura.
+      if(st.current)await deactivateTeamRow(st.current,now);
+      const titularElsewhere=activeTeamRows().find(m=>m.profissional_id===r.profissional_id);
+      if(titularElsewhere)await deactivateTeamRow(titularElsewhere,now);
+
       await assignProfessionalToVehicle(r.profissional_id,v.id,'Condutor','ESCALA_EXPRESSA');
       const cur=activeTeamRows().find(m=>m.viatura_id===v.id&&m.profissional_id===r.profissional_id&&teamRoleKey(m)==='driver');
       if(cur){
-        await supabase.from('equipe_plantao').update({
+        const {error}=await supabase.from('equipe_plantao').update({
           titular_profissional_id:r.profissional_id,
           nome_titular_escala:r.nome_referencia,
           tipo_alteracao_escala:'FIXO',
           ala_escala:currentPlantao.ala,
           turno_escala:currentPlantao.turno
         }).eq('id',cur.id);
+        if(error)throw error;
       }
     }
     await loadAll(selectedDate());await loadExpressScale();
