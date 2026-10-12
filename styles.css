@@ -800,3 +800,49 @@ nav.tabs .tab.book-tab.active{
 .team-preview-wrap .roster-role-group.role-nurse .roster-role-head b{
   color:#064668;
 }
+
+/* ---------- Remoção de selecionados: X maior abaixo do nome ---------- */
+.express-quick-wrap .selected-chips{
+  gap:7px;
+  align-items:stretch;
+}
+.express-quick-wrap .selected-chip{
+  display:inline-flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:space-between;
+  gap:5px;
+  min-height:57px;
+  padding:7px 9px 6px;
+  border-radius:11px;
+  text-align:center;
+  line-height:1.25;
+  font-size:.66rem;
+}
+.express-quick-wrap .selected-chip button{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  width:42px;
+  height:32px;
+  min-width:42px;
+  min-height:32px;
+  padding:0;
+  border:1px solid #fda4af;
+  border-radius:8px;
+  background:#fff1f2;
+  color:#b91c1c;
+  font-size:1.35rem;
+  font-weight:1000;
+  line-height:1;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+.express-quick-wrap .selected-chip button:hover{
+  background:#ffe4e6;
+  border-color:#fb7185;
+}
+.express-quick-wrap .selected-chip button:focus-visible{
+  outline:3px solid #38bdf8;
+  outline-offset:2px;
+}
