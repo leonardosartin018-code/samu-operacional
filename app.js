@@ -1938,11 +1938,33 @@ function expressSearch(role,q){
   const allowed=p=>role==='tech'?['tech','nurse'].includes(professionalRoleKey(p)):professionalRoleKey(p)==='nurse';
   const selected=role==='tech'?expressTechSelected:expressNurseSelected;
   const list=professionals.filter(p=>allowed(p)&&teamSearchText(p).includes(n)&&!selected.has(p.id)).slice(0,15);
-  box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-exp-prof="'+p.id+'"><b>'+esc(displayName(p))+'</b><small>'+esc(p.nome_completo)+' • '+esc(p.funcao_sistema)+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div>';
+  box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-exp-prof="'+p.id+'"><b>'+esc(displayName(p))+'</b><small>'+esc(p.nome_completo)+' • '+esc(p.funcao_sistema)+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div><button type="button" class="autocomplete-register" data-exp-register="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
   box.classList.add('show');
   box.querySelectorAll('[data-exp-prof]').forEach(b=>b.onclick=()=>{
-    const p=professionals.find(x=>x.id===b.dataset.expProf);selected.set(p.id,p);input.value='';box.classList.remove('show');markOperationalDirty();renderExpressSelected();
+    const p=professionals.find(x=>x.id===b.dataset.expProf);
+    if(p)selectExpressProfessional(p,role);
   });
+  const register=box.querySelector('[data-exp-register]');
+  if(register)register.onclick=()=>openExpressRegistration(role);
+}
+function selectExpressProfessional(p,role){
+  const selected=role==='tech'?expressTechSelected:expressNurseSelected;
+  const input=role==='tech'?$('#expressTechSearch'):$('#expressNurseSearch');
+  const box=role==='tech'?$('#expressTechResults'):$('#expressNurseResults');
+  selected.set(p.id,p);
+  input.value='';
+  box.innerHTML='';
+  box.classList.remove('show');
+  markOperationalDirty();
+  renderExpressSelected();
+}
+function openExpressRegistration(role){
+  if(!isOperator())return alert('Somente operadores podem cadastrar profissionais.');
+  const input=role==='tech'?$('#expressTechSearch'):$('#expressNurseSearch');
+  const box=role==='tech'?$('#expressTechResults'):$('#expressNurseResults');
+  openQuickRegistration(input.value,role,null,null);
+  pendingQuickRegistration.expressRole=role;
+  box.classList.remove('show');
 }
 function renderExpressSelected(){
   const render=(map,el)=>{el.innerHTML=[...map.values()].map(p=>'<span class="selected-chip">'+esc(displayName(p))+'<button type="button" data-chip-remove="'+p.id+'">×</button></span>').join('');el.querySelectorAll('[data-chip-remove]').forEach(b=>b.onclick=()=>{map.delete(b.dataset.chipRemove);markOperationalDirty();renderExpressSelected()})};
@@ -2247,6 +2269,16 @@ async function saveQuickRegistration(){
   const war=$('#quickRegWar').value.trim();
   const funcao=$('#quickRegRole').value;
   if(!nome)return alert('Informe o nome completo.');
+  const pending=pendingQuickRegistration;
+  if(pending?.expressRole){
+    const roleKey=professionalRoleKey({funcao_sistema:funcao});
+    if(pending.expressRole==='nurse'&&roleKey!=='nurse'){
+      return alert('Para revezamento da USA, cadastre com a função Enfermeiro.');
+    }
+    if(pending.expressRole==='tech'&&!['tech','nurse'].includes(roleKey)){
+      return alert('Para revezamento da USB, escolha Técnico de Enfermagem ou Enfermeiro.');
+    }
+  }
   const {data,error}=await supabase.from('profissionais').insert({
     nome_completo:nome,nome_de_guerra:war||null,funcao_sistema:funcao,
     notificar_padrao:false,ativo:true,data_cadastro:new Date().toISOString(),atualizado_em:new Date().toISOString()
@@ -2255,7 +2287,9 @@ async function saveQuickRegistration(){
 
   professionals.push(data);
   professionals.sort((a,b)=>String(a.nome_completo).localeCompare(String(b.nome_completo),'pt-BR'));
-  const pending=pendingQuickRegistration;
+  if(pending?.expressRole){
+    selectExpressProfessional(data,pending.expressRole);
+  }
   if(pending?.input&&pending?.hidden){
     if(!allowedForField(data,pending.key)){
       alert('Profissional cadastrado, mas a função escolhida não é permitida neste campo.');
@@ -2969,6 +3003,8 @@ $('#expressTurno').onchange=()=>{
 };
 $('#allDriversRotationBtn').onclick=setAllDriversRotation;$('#restoreFixedDriversBtn').onclick=restoreFixedDrivers;
 $('#expressTechSearch').oninput=e=>expressSearch('tech',e.target.value);$('#expressNurseSearch').oninput=e=>expressSearch('nurse',e.target.value);
+$('#expressTechAddBtn').onclick=()=>openExpressRegistration('tech');
+$('#expressNurseAddBtn').onclick=()=>openExpressRegistration('nurse');
 $('#applyExpressPreviewBtn').onclick=()=>{$('#expressStatus').className='express-status ok';$('#expressStatus').innerHTML='<b>Prévia preparada:</b> '+expressTechSelected.size+' técnico(s)/enfermeiro(s) para USB e '+expressNurseSelected.size+' enfermeiro(s) para USA. Clique em CONFIRMAR para gravar.'};
 $('#confirmExpressBtn').onclick=confirmExpress;
 $('#confirmExpressTopBtn').onclick=confirmExpress;
