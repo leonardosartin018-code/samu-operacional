@@ -769,3 +769,34 @@ nav.tabs .tab.book-tab.active{
   background:#bae6fd;
   border-color:#0ea5e9;
 }
+
+/* ---------- Destaque azul: técnicos e enfermeiros ---------- */
+/* Card de seleção de profissionais: azul destacado sobre o painel azul escuro. */
+.express-quick-wrap .express-quick-card{
+  background:linear-gradient(145deg,#0b6797 0%,#09517a 100%);
+  border:1px solid #49a9d4;
+  box-shadow:0 3px 10px rgba(1,29,48,.16);
+}
+.express-quick-wrap .express-quick-card:nth-child(2){
+  background:linear-gradient(145deg,#0a7494 0%,#075777 100%);
+}
+.express-quick-wrap .express-quick-card h3{
+  color:#fff;
+}
+/* Na equipe confirmada, apenas técnicos e enfermeiros recebem fundo azul claro. */
+.team-preview-wrap .roster-role-group.role-tech{
+  background:#dceffd;
+}
+.team-preview-wrap .roster-role-group.role-nurse{
+  background:#d8f1fb;
+}
+.team-preview-wrap .roster-role-group.role-tech .roster-role-head{
+  background:#b9def7;
+}
+.team-preview-wrap .roster-role-group.role-nurse .roster-role-head{
+  background:#b9e6f4;
+}
+.team-preview-wrap .roster-role-group.role-tech .roster-role-head b,
+.team-preview-wrap .roster-role-group.role-nurse .roster-role-head b{
+  color:#064668;
+}
