@@ -874,3 +874,57 @@ nav.tabs .tab.book-tab.active{
   outline:3px solid #fbbf24;
   outline-offset:2px;
 }
+
+/* ---------- Giroflex visual das viaturas em ocorrência ---------- */
+.vehicle-card.status-occurrence .vehicle-giroflex{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:3px;
+  width:124px;
+  height:25px;
+  margin:-4px auto 7px;
+  padding:4px 7px;
+  border:1px solid #b6c7d4;
+  border-radius:9px;
+  background:linear-gradient(180deg,#1e293b,#080f1d);
+  box-shadow:0 3px 9px rgba(0,0,0,.38),inset 0 1px 2px rgba(255,255,255,.16);
+  pointer-events:none;
+}
+.vehicle-card.status-occurrence .giroflex-led{
+  display:block;
+  flex:1 1 0;
+  height:12px;
+  border-radius:4px;
+  will-change:opacity,box-shadow;
+}
+.vehicle-card.status-occurrence .giroflex-led.blue{
+  background:#21b6ff;
+  animation:giroflexBlueFlash .9s steps(1,end) infinite;
+}
+.vehicle-card.status-occurrence .giroflex-led.red{
+  background:#ff3645;
+  animation:giroflexRedFlash .9s steps(1,end) infinite;
+}
+@keyframes giroflexBlueFlash{
+  0%,22%,50%,72%{
+    opacity:1;
+    box-shadow:0 0 7px 3px rgba(56,189,248,.94),0 0 18px 4px rgba(14,165,233,.48);
+  }
+  25%,47%,75%,97%,100%{opacity:.18;box-shadow:none}
+}
+@keyframes giroflexRedFlash{
+  0%,22%,50%,72%{opacity:.18;box-shadow:none}
+  25%,47%,75%,97%{
+    opacity:1;
+    box-shadow:0 0 7px 3px rgba(248,113,113,.94),0 0 18px 4px rgba(239,68,68,.48);
+  }
+  100%{opacity:.18;box-shadow:none}
+}
+@media(prefers-reduced-motion:reduce){
+  .vehicle-card.status-occurrence .giroflex-led{
+    animation:none;
+    opacity:1;
+    box-shadow:none;
+  }
+}
