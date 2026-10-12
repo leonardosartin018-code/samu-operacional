@@ -416,7 +416,14 @@ function openPage(id){
   const current=document.querySelector('.page.active')?.id||'';
   if(current && current!==id){
     if(current==='team'){
-      if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,action:'sair desta página'}))return false;
+      // Só cobra a confirmação da seção aberta. Alterações pendentes
+      // de qualquer seção continuam protegidas contra perda.
+      const scope=activeTeamScope();
+      if(!confirmUnsavedRisk({
+        includeOperational:scope==='operational'||unsavedOperationalScale,
+        includeInternal:scope==='internal'||unsavedInternalScale,
+        action:'sair desta página'
+      }))return false;
     }
     if(current==='book'){
       if(!confirmUnsavedRisk({includeInternal:true,includeBook:true,action:'sair do LIVRO'}))return false;
@@ -3027,7 +3034,9 @@ $('#saveQuickRegisterBtn').onclick=saveQuickRegistration;
 
 window.addEventListener('beforeunload',e=>{
   const page=document.querySelector('.page.active')?.id||'';
-  const unconfirmedScalePage=page==='team'&&(operationalNeedsConfirmation()||internalNeedsConfirmation());
+  const unconfirmedScalePage=page==='team'&&(
+    activeTeamScope()==='operational' ? operationalNeedsConfirmation() : internalNeedsConfirmation()
+  );
   if(unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen()||unconfirmedScalePage){
     e.preventDefault();
     e.returnValue='';
