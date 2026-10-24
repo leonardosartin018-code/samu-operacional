@@ -928,3 +928,37 @@ nav.tabs .tab.book-tab.active{
     box-shadow:none;
   }
 }
+
+/* ---------- Apoio à cobertura de municípios (sem despacho automático) ---------- */
+.regional-coverage{margin:10px 0;padding:11px;border:1px solid #78b8d3;border-left:5px solid #0e7490;border-radius:11px;background:#eff9fe}
+.coverage-header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}
+.coverage-header h3{margin:0;color:#073955;font-size:1rem}
+.coverage-header p{margin:4px 0 0;font-size:.75rem;color:#47677a}
+.coverage-counter{flex-shrink:0;padding:6px 9px;border-radius:7px;background:#d1fae5;color:#065f46;font-size:.68rem;font-weight:900}
+.coverage-filters{display:grid;grid-template-columns:1fr 1fr;gap:9px;margin-top:11px}
+.coverage-filters label{font-size:.72rem;font-weight:900;color:#19415a}
+.coverage-filters select{display:block;width:100%;min-height:39px;margin-top:5px;padding:8px 10px;background:#fff;border:1px solid #94b8ca;border-radius:8px;color:#15384d;font-weight:800;cursor:pointer}
+.coverage-warning{margin:10px 0;padding:9px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#7c4513;font-size:.72rem;line-height:1.5}
+.coverage-options{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
+.coverage-option{min-width:0;padding:10px;border:1px solid #ccd9e2;border-left:5px solid #94a3b8;border-radius:9px;background:#fff}
+.coverage-option.ready{border-left-color:#16a34a}
+.coverage-option.verify{border-left-color:#f59e0b}
+.coverage-option.busy{border-left-color:#94a3b8;background:#f8fafc}
+.coverage-option-head{display:flex;justify-content:space-between;align-items:flex-start;gap:9px}
+.coverage-option-head b{font-size:.81rem;color:#10394f}
+.coverage-status{max-width:56%;font-size:.64rem;font-weight:900;text-align:right;color:#475569}
+.coverage-option.ready .coverage-status{color:#166534}
+.coverage-option.verify .coverage-status{color:#92400e}
+.coverage-option-body{display:flex;justify-content:space-between;align-items:flex-start;gap:9px;margin-top:6px}
+.coverage-option-body strong{font-size:.78rem;color:#0f4363}
+.coverage-option-body small{max-width:52%;font-size:.65rem;text-align:right;color:#586f7f}
+.coverage-map-link{display:inline-flex;align-items:center;justify-content:center;margin-top:9px;padding:7px 9px;min-height:33px;border-radius:7px;background:#075985;color:#fff!important;font-size:.68rem;font-weight:1000;text-decoration:none}
+.coverage-map-link:hover{background:#0e7490}
+.coverage-source,.coverage-empty{margin:9px 0 0;color:#586f7f;font-size:.65rem;line-height:1.45}
+@media(max-width:850px){
+  .coverage-header{flex-direction:column}
+  .coverage-filters,.coverage-options{grid-template-columns:1fr}
+  .coverage-option-head,.coverage-option-body{flex-wrap:wrap}
+  .coverage-status,.coverage-option-body small{max-width:100%;text-align:left}
+}
+
