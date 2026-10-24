@@ -1062,6 +1062,105 @@ function renderRotation(){
     rotationPersonCard('USA — Enfermeiro da vez','nurse','USA');
 }
 
+/* Valores rodoviários de referência do estudo da SES/GO para a Região Pireneus.
+   Estudo histórico: NÃO são tempos de atendimento, GPS ou trânsito atual.
+   Jaranápolis não consta da matriz e depende de conferência externa da rota. */
+const REGIONAL_COVERAGE_CITY={
+  ABADIANIA:{label:'Abadiânia',map:'Abadiânia, Goiás, Brasil'},
+  ALEXANIA:{label:'Alexânia',map:'Alexânia, Goiás, Brasil'},
+  ANAPOLIS:{label:'Anápolis',map:'Anápolis, Goiás, Brasil'},
+  COCALZINHO:{label:'Cocalzinho de Goiás',map:'Cocalzinho de Goiás, Goiás, Brasil'},
+  CORUMBA:{label:'Corumbá de Goiás',map:'Corumbá de Goiás, Goiás, Brasil'},
+  GOIANAPOLIS:{label:'Goianápolis',map:'Goianápolis, Goiás, Brasil'},
+  JARANAPOLIS:{label:'Jaranápolis',map:'Jaranápolis, Pirenópolis, Goiás, Brasil'},
+  PIRENOPOLIS:{label:'Pirenópolis',map:'Pirenópolis, Goiás, Brasil'},
+  TEREZOPOLIS:{label:'Terezópolis de Goiás',map:'Terezópolis de Goiás, Goiás, Brasil'}
+};
+const REGIONAL_ROAD_KM={"ABADIANIA":{"ALEXANIA":30,"ANAPOLIS":36,"COCALZINHO":63,"CORUMBA":43,"GOIANAPOLIS":55,"PIRENOPOLIS":53,"TEREZOPOLIS":57},"ALEXANIA":{"ANAPOLIS":66,"COCALZINHO":64,"CORUMBA":45,"GOIANAPOLIS":85,"PIRENOPOLIS":66,"TEREZOPOLIS":87},"ANAPOLIS":{"COCALZINHO":73,"CORUMBA":53,"GOIANAPOLIS":25,"PIRENOPOLIS":63,"TEREZOPOLIS":27},"COCALZINHO":{"CORUMBA":21,"GOIANAPOLIS":99,"PIRENOPOLIS":41,"TEREZOPOLIS":101},"CORUMBA":{"GOIANAPOLIS":79,"PIRENOPOLIS":20,"TEREZOPOLIS":81},"GOIANAPOLIS":{"PIRENOPOLIS":89,"TEREZOPOLIS":17},"PIRENOPOLIS":{"TEREZOPOLIS":91}};
+let regionalCoverageTarget='';
+let regionalCoverageType='USB';
+
+function coverageCityKey(name){
+  const value=norm(name);
+  if(value.includes('JARANAPOLIS'))return 'JARANAPOLIS';
+  if(value.includes('COCALZINHO'))return 'COCALZINHO';
+  if(value.includes('CORUMBA'))return 'CORUMBA';
+  if(value.includes('GOIANAPOLIS'))return 'GOIANAPOLIS';
+  if(value.includes('TEREZOPOLIS')||value.includes('TERESOPOLIS'))return 'TEREZOPOLIS';
+  if(value.includes('PIRENOPOLIS'))return 'PIRENOPOLIS';
+  if(value.includes('ABADIANIA'))return 'ABADIANIA';
+  if(value.includes('ALEXANIA'))return 'ALEXANIA';
+  if(value.includes('ANAPOLIS'))return 'ANAPOLIS';
+  return null;
+}
+function coverageRoadKm(origin,destination){
+  if(origin===destination)return 0;
+  return REGIONAL_ROAD_KM[origin]?.[destination]??REGIONAL_ROAD_KM[destination]?.[origin]??null;
+}
+function coverageRouteUrl(origin,destination){
+  const a=REGIONAL_COVERAGE_CITY[origin],b=REGIONAL_COVERAGE_CITY[destination];
+  return 'https://www.google.com/maps/dir/?api=1&origin='+encodeURIComponent(a.map)+
+    '&destination='+encodeURIComponent(b.map)+'&travelmode=driving';
+}
+function renderRegionalCoverage(){
+  const panel=$('#regionalCoverage');
+  if(!panel)return;
+  const regionalKeys=[...new Set(vehicles.filter(v=>!isAnapolisVehicle(v)).map(v=>coverageCityKey(v.bases?.nome)).filter(Boolean))];
+  const cities=REGIONAL_ORDER.map(coverageCityKey).filter(k=>regionalKeys.includes(k));
+  if(!cities.length){
+    panel.innerHTML='<div class="coverage-empty">Ainda não há bases descentralizadas carregadas para comparar.</div>';
+    return;
+  }
+  if(!cities.includes(regionalCoverageTarget))regionalCoverageTarget=cities[0];
+  const destinations=cities.map(key=>'<option value="'+key+'"'+(key===regionalCoverageTarget?' selected':'')+'>'+esc(REGIONAL_COVERAGE_CITY[key].label)+'</option>').join('');
+  const options=[
+    {value:'USB',label:'USB (suporte básico)'},
+    {value:'USA',label:'USA (suporte avançado)'},
+    {value:'AMBOS',label:'USB ou USA (comparar cobertura)'}
+  ];
+  const types=options.map(x=>'<option value="'+x.value+'"'+(x.value===regionalCoverageType?' selected':'')+'>'+x.label+'</option>').join('');
+  const candidateKeys=[...cities,'ANAPOLIS'].filter((key,i,arr)=>key!==regionalCoverageTarget&&arr.indexOf(key)===i);
+  const candidates=candidateKeys.map(key=>{
+    const sourceVehicles=vehicles.filter(v=>coverageCityKey(v.bases?.nome)===key&&
+      (vehicleType(v).includes('USB')||vehicleType(v).includes('USA'))&&
+      (regionalCoverageType==='AMBOS'||vehicleType(v).includes(regionalCoverageType)));
+    const qrv=sourceVehicles.filter(v=>statusInfo(v).key==='base'&&!activeOccurrence(v));
+    const ready=qrv.filter(v=>crewCompleteness(v).state==='complete');
+    const state=ready.length?'ready':qrv.length?'verify':'busy';
+    const display=ready.length?ready:qrv.length?qrv:sourceVehicles;
+    const km=coverageRoadKm(key,regionalCoverageTarget);
+    return {key,sourceVehicles,qrv,ready,state,display,km};
+  }).filter(x=>x.sourceVehicles.length>0);
+  const stateSort={ready:0,verify:1,busy:2};
+  candidates.sort((a,b)=>stateSort[a.state]-stateSort[b.state]||
+    (a.km===null?1:0)-(b.km===null?1:0)||
+    (a.km??Infinity)-(b.km??Infinity)||
+    REGIONAL_COVERAGE_CITY[a.key].label.localeCompare(REGIONAL_COVERAGE_CITY[b.key].label,'pt-BR'));
+  const readyCount=candidates.filter(x=>x.state==='ready').length;
+  const rows=candidates.map(x=>{
+    const label=REGIONAL_COVERAGE_CITY[x.key].label;
+    const summary=x.state==='ready'?'QRV informado • equipe mínima registrada':x.state==='verify'?'QRV informado • verificar guarnição':'Nenhuma viatura compatível marcada QRV';
+    const units=x.display.map(v=>esc(v.nome||v.codigo||'Viatura')+' ('+esc(statusInfo(v).label)+')').join(' • ');
+    const reference=x.km===null?'Distância não cadastrada':x.km+' km de referência rodoviária';
+    return '<article class="coverage-option '+x.state+'">'+
+      '<div class="coverage-option-head"><b>'+esc(label)+'</b><span class="coverage-status">'+summary+'</span></div>'+
+      '<div class="coverage-option-body"><strong>'+reference+'</strong><small>'+units+'</small></div>'+
+      '<a class="coverage-map-link" target="_blank" rel="noopener noreferrer" href="'+coverageRouteUrl(x.key,regionalCoverageTarget)+'">VER ROTA E TEMPO NO MAPS ↗</a>'+
+    '</article>';
+  }).join('');
+  panel.innerHTML=
+    '<div class="coverage-header"><div><h3>Apoio à cobertura entre bases</h3>'+
+    '<p>Se a viatura local estiver indisponível, compare outras bases e confirme o trajeto antes do acionamento.</p></div>'+
+    '<span class="coverage-counter">'+readyCount+' base(s) com QRV e equipe mínima</span></div>'+
+    '<div class="coverage-filters"><label>Cidade que precisa de atendimento<select id="coverageTarget">'+destinations+'</select></label>'+
+    '<label>Recurso definido pela regulação<select id="coverageType">'+types+'</select></label></div>'+
+    '<p class="coverage-warning">Ordem por disponibilidade informada e distância de referência, <b>não por tempo real de chegada</b>. Confirmar posição da ambulância, equipe, viabilidade do deslocamento, rota e autorização do médico regulador. Distâncias entre centros de municípios; não representam o endereço da ocorrência.</p>'+
+    '<div class="coverage-options">'+(rows||'<p class="coverage-empty">Não há viaturas do tipo selecionado nas demais bases cadastradas.</p>')+'</div>'+
+    '<p class="coverage-source">Referências de quilômetros: matriz histórica de municípios da Região Pireneus (SES/GO). Jaranápolis não consta dessa matriz. O Maps permite consultar cada rota e o tempo estimado, sujeitos às condições atuais.</p>';
+  $('#coverageTarget').onchange=e=>{regionalCoverageTarget=e.target.value;renderRegionalCoverage()};
+  $('#coverageType').onchange=e=>{regionalCoverageType=e.target.value;renderRegionalCoverage()};
+}
+
 function regionalOrderIndex(name){
   const i=REGIONAL_ORDER.indexOf(norm(name));
   return i<0?99:i;
@@ -1108,6 +1207,7 @@ function renderRegional(){
       return '<article class="regional-card"><div class="regional-card-head"><div><div class="regional-name">'+esc(baseName)+'</div><div class="regional-sub">USA antes da USB • '+list.length+' viatura(s)</div></div><span class="regional-base-status">'+label+'</span></div><div class="regional-vehicles">'+list.map(regionalVehicleHtml).join('')+'</div></article>';
     }).join('');
   bindVehicleActions($('#regionalGrid'));
+  renderRegionalCoverage();
 }
 
 function destinationCard(o){
