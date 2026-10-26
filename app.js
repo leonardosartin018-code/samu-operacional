@@ -1529,6 +1529,16 @@ function configureQuickTeamFields(v){
   };
   const visible=mode==='moto'?['driver','tech']:mode==='usa'?['driver','nurse','doctor']:mode==='usb'?['driver','tech']:Object.keys(fields);
   Object.entries(fields).forEach(([k,el])=>el?.classList.toggle('hidden',!visible.includes(k)));
+  Object.entries(fields).forEach(([key,el])=>{
+    const register=el?.querySelector('[data-quick-register]');
+    if(!register)return;
+    const role=effectiveQuickRole(key);
+    const title={
+      driver:'CONDUTOR',tech:'TÉCNICO / ENFERMEIRO',nurse:'ENFERMEIRO',
+      doctor:'MÉDICO',moto:'PILOTO'
+    }[role]||'PROFISSIONAL';
+    register.textContent='+ CADASTRAR '+title;
+  });
 
   if(mode==='moto'){
     fields.driver.querySelector('label').textContent='MOTOLÂNCIA 1';
@@ -1582,6 +1592,13 @@ function quickAutocomplete(key){
 function bindQuickInputs(){
   Object.entries(quickCfg()).forEach(([key,cfg])=>{
     const input=$(cfg.input),remove=$(cfg.remove);
+    const register=$('#teamModal [data-quick-register="'+key+'"]');
+    if(register){
+      register.onclick=()=>{
+        if(!isOperator())return alert('Somente operadores podem cadastrar profissionais.');
+        openQuickRegistration(input.value,effectiveQuickRole(key),input,$(cfg.hidden));
+      };
+    }
     if(!input.dataset.bound){
       input.dataset.bound='1';
       input.addEventListener('input',()=>quickAutocomplete(key));
@@ -2655,11 +2672,15 @@ async function saveQuickRegistration(){
   if(pending?.expressRole){
     const roleKey=professionalRoleKey({funcao_sistema:funcao});
     if(pending.expressRole==='nurse'&&roleKey!=='nurse'){
-      return alert('Para revezamento da USA, cadastre com a função Enfermeiro.');
+      return alert('Para a USA, cadastre com a função Enfermeiro.');
     }
     if(pending.expressRole==='tech'&&!['tech','nurse'].includes(roleKey)){
-      return alert('Para revezamento da USB, escolha Técnico de Enfermagem ou Enfermeiro.');
+      return alert('Para a USB, escolha Técnico de Enfermagem ou Enfermeiro.');
     }
+  }
+  // Não grave no banco com função incompatível com a posição solicitada.
+  if(pending?.input&&pending?.hidden&&!allowedForField({funcao_sistema:funcao},pending.key)){
+    return alert('A função selecionada não é compatível com este campo da equipe. Escolha a função correta antes de cadastrar.');
   }
   const {data,error}=await supabase.from('profissionais').insert({
     nome_completo:nome,nome_de_guerra:war||null,funcao_sistema:funcao,
@@ -2678,6 +2699,11 @@ async function saveQuickRegistration(){
     }else{
       pending.input.value=professionalLabel(data,pending.key);
       pending.hidden.value=data.id;
+      const results=quickCfg()[Object.keys(quickCfg()).find(key=>$(quickCfg()[key].input)===pending.input)]?.results;
+      if(results){
+        $(results).classList.remove('show');
+        $(results).innerHTML='';
+      }
     }
   }
   pendingQuickRegistration=null;
