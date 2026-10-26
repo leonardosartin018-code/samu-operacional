@@ -1626,18 +1626,18 @@ async function deactivateTeamRow(m,now){
   }
   markOperationalDirty();
 }
-async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPIDA'){
+async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPIDA',transferApproved=false){
   if(!currentPlantao)await ensurePlantaoForBook();
   const pro=professionals.find(p=>p.id===proId);
   const v=vehicleById(vId);
   if(!pro||!v)throw new Error('Profissional ou viatura não encontrado.');
   const now=new Date().toISOString();
   const currentSameRole=activeTeamRows().find(m=>m.viatura_id===vId && norm(m.funcao)===norm(funcao));
-  if(currentSameRole?.profissional_id===proId)return;
+  if(currentSameRole?.profissional_id===proId)return true;
   const elsewhere=activeTeamRows().find(m=>m.profissional_id===proId && m.id!==currentSameRole?.id);
   if(elsewhere){
     const oldV=vehicleById(elsewhere.viatura_id);
-    if(!confirm(pro.nome_completo+' já está em '+(oldV?.nome||elsewhere.viatura_snapshot||'outra escala')+'.\n\nDeseja transferir para '+v.nome+'?'))return;
+    if(!transferApproved&&!confirm(pro.nome_completo+' já está em '+(oldV?.nome||elsewhere.viatura_snapshot||'outra escala')+'.\n\nDeseja transferir para '+v.nome+'?'))return false;
     await deactivateTeamRow(elsewhere,now);
   }
   if(currentSameRole)await deactivateTeamRow(currentSameRole,now);
@@ -1654,6 +1654,7 @@ async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPID
     if(eo.error)throw eo.error;
   }
   markOperationalDirty();
+  return true;
 }
 async function saveQuickTeam(){
   if(!isOperator()||!currentPlantao||!selectedTeamVehicle)return;
@@ -2201,7 +2202,7 @@ function expressSearch(role,q){
   const allowed=p=>role==='tech'?['tech','nurse'].includes(professionalRoleKey(p)):professionalRoleKey(p)==='nurse';
   const selected=role==='tech'?expressTechSelected:expressNurseSelected;
   const list=professionals.filter(p=>allowed(p)&&teamSearchText(p).includes(n)&&!selected.has(p.id)).slice(0,15);
-  box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-exp-prof="'+p.id+'"><b>'+esc(displayName(p))+'</b><small>'+esc(p.nome_completo)+' • '+esc(p.funcao_sistema)+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div><button type="button" class="autocomplete-register" data-exp-register="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
+  box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-exp-prof="'+esc(p.id)+'"><b>'+esc(displayName(p))+'</b><small>'+esc(p.nome_completo)+' • '+esc(p.funcao_sistema)+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div><button type="button" class="autocomplete-register" data-exp-register="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
   box.classList.add('show');
   box.querySelectorAll('[data-exp-prof]').forEach(b=>b.onclick=()=>{
     const p=professionals.find(x=>x.id===b.dataset.expProf);
@@ -2212,9 +2213,14 @@ function expressSearch(role,q){
 }
 function selectExpressProfessional(p,role){
   const selected=role==='tech'?expressTechSelected:expressNurseSelected;
+  const other=role==='tech'?expressNurseSelected:expressTechSelected;
+  if(other.has(p.id)){
+    alert(displayName(p)+' já está selecionado para '+(role==='tech'?'USA':'USB')+'. Remova da outra lista antes de escolher esta função.');
+    return;
+  }
   const input=role==='tech'?$('#expressTechSearch'):$('#expressNurseSearch');
   const box=role==='tech'?$('#expressTechResults'):$('#expressNurseResults');
-  selected.set(p.id,p);
+  if(!selected.has(p.id))selected.set(p.id,{professional:p,mode:'REVEZAMENTO',vehicleId:''});
   input.value='';
   box.innerHTML='';
   box.classList.remove('show');
@@ -2229,10 +2235,101 @@ function openExpressRegistration(role){
   pendingQuickRegistration.expressRole=role;
   box.classList.remove('show');
 }
+function expressFixedVehicles(role){
+  const type=role==='tech'?'USB':'USA';
+  return vehicles.filter(v=>isAnapolisVehicle(v)&&vehicleType(v).includes(type))
+    .sort((a,b)=>String(a.nome||a.codigo).localeCompare(String(b.nome||b.codigo),'pt-BR',{numeric:true}));
+}
 function renderExpressSelected(){
-  const render=(map,el)=>{el.innerHTML=[...map.values()].map(p=>'<span class="selected-chip">'+esc(displayName(p))+'<button type="button" data-chip-remove="'+p.id+'">×</button></span>').join('');el.querySelectorAll('[data-chip-remove]').forEach(b=>b.onclick=()=>{map.delete(b.dataset.chipRemove);markOperationalDirty();renderExpressSelected()})};
-  render(expressTechSelected,$('#expressTechSelected'));render(expressNurseSelected,$('#expressNurseSelected'));
-  $('#expressTechCount').textContent=expressTechSelected.size;$('#expressNurseCount').textContent=expressNurseSelected.size;
+  const render=(map,element,role)=>{
+    if(!element)return;
+    const vehiclesForRole=expressFixedVehicles(role);
+    element.innerHTML=[...map.entries()].map(([id,item])=>{
+      const p=item.professional;
+      const fixed=item.mode==='FIXO';
+      const choices=vehiclesForRole.map(v=>
+        '<option value="'+esc(v.id)+'"'+(item.vehicleId===v.id?' selected':'')+'>'+esc(v.nome||v.codigo)+'</option>'
+      ).join('');
+      return '<div class="express-person-card">'+
+        '<div class="express-person-card-head"><strong>'+esc(displayName(p))+'</strong>'+
+        '<button type="button" class="express-person-remove" data-exp-remove="'+esc(id)+'" aria-label="Remover '+esc(displayName(p))+'">×</button></div>'+
+        '<label class="express-person-field"><span>TIPO DE ESCALA</span>'+
+          '<select data-exp-mode="'+esc(id)+'" aria-label="Tipo de escala de '+esc(displayName(p))+'">'+
+            '<option value="REVEZAMENTO"'+(!fixed?' selected':'')+'>REVEZAMENTO</option>'+
+            '<option value="FIXO"'+(fixed?' selected':'')+'>FIXO EM VIATURA</option>'+
+          '</select></label>'+
+        (fixed?'<label class="express-person-field"><span>VIATURA FIXA</span>'+
+          '<select data-exp-vehicle="'+esc(id)+'" aria-label="Viatura fixa de '+esc(displayName(p))+'">'+
+            '<option value="">SELECIONE A VIATURA</option>'+choices+
+          '</select></label>':'<span class="express-person-hint">Fila '+(role==='tech'?'USB':'USA')+' de revezamento</span>')+
+      '</div>';
+    }).join('');
+    element.querySelectorAll('[data-exp-remove]').forEach(btn=>btn.onclick=()=>{
+      map.delete(btn.dataset.expRemove);
+      markOperationalDirty();
+      renderExpressSelected();
+    });
+    element.querySelectorAll('[data-exp-mode]').forEach(select=>select.onchange=()=>{
+      const item=map.get(select.dataset.expMode);
+      if(!item)return;
+      item.mode=select.value==='FIXO'?'FIXO':'REVEZAMENTO';
+      if(item.mode!=='FIXO')item.vehicleId='';
+      markOperationalDirty();
+      renderExpressSelected();
+    });
+    element.querySelectorAll('[data-exp-vehicle]').forEach(select=>select.onchange=()=>{
+      const item=map.get(select.dataset.expVehicle);
+      if(!item)return;
+      item.vehicleId=select.value;
+      markOperationalDirty();
+      renderExpressSelected();
+    });
+  };
+  render(expressTechSelected,$('#expressTechSelected'),'tech');
+  render(expressNurseSelected,$('#expressNurseSelected'),'nurse');
+  $('#expressTechCount').textContent=expressTechSelected.size;
+  $('#expressNurseCount').textContent=expressNurseSelected.size;
+}
+function preparedExpressSelections(){
+  return [
+    ...[...expressTechSelected.values()].map(item=>({...item,role:'tech',funcao:'Técnico de Enfermagem',group:'USB_TECNICO'})),
+    ...[...expressNurseSelected.values()].map(item=>({...item,role:'nurse',funcao:'Enfermeiro',group:'USA_ENFERMEIRO'}))
+  ];
+}
+function validateExpressSelections(entries){
+  const fixedPositions=new Set(),people=new Set();
+  const warnings=[];
+  for(const item of entries){
+    const p=item.professional;
+    if(!p?.id||!professionals.some(x=>x.id===p.id))throw new Error('Um dos profissionais selecionados não está disponível no cadastro. Atualize e confira.');
+    if(people.has(p.id))throw new Error(displayName(p)+' está duplicado na seleção. Remova uma das entradas.');
+    people.add(p.id);
+    if(!allowedForField(p,item.role))throw new Error(displayName(p)+' não possui função compatível com '+(item.role==='tech'?'USB':'USA')+'.');
+    if(!['FIXO','REVEZAMENTO'].includes(item.mode))throw new Error('Escolha FIXO ou REVEZAMENTO para '+displayName(p)+'.');
+    if(item.mode==='FIXO'){
+      const v=vehicleById(item.vehicleId);
+      if(!v||!expressFixedVehicles(item.role).some(x=>x.id===v.id)){
+        throw new Error('Selecione uma viatura '+(item.role==='tech'?'USB':'USA')+' de Anápolis para '+displayName(p)+'.');
+      }
+      const key=item.role+'|'+v.id;
+      if(fixedPositions.has(key))throw new Error('A viatura '+v.nome+' recebeu dois profissionais FIXOS na mesma função. Escolha apenas um.');
+      fixedPositions.add(key);
+      const occupant=currentByRole(v.id,item.role);
+      if(occupant&&occupant.profissional_id!==p.id){
+        warnings.push((v.nome||v.codigo)+': '+displayName(occupant.profissionais)+' será substituído por '+displayName(p)+'.');
+      }
+    }
+    const existing=activeTeamRows().find(m=>m.profissional_id===p.id);
+    if(existing){
+      const destination=item.mode==='FIXO'?item.vehicleId:null;
+      const samePlacement=item.mode==='FIXO'
+        ? existing.viatura_id===destination&&!isRotationMember(existing)&&teamRoleKey(existing)===item.role
+        : isRotationMember(existing)&&norm(existing.grupo_revezamento)===norm(item.group);
+      if(!samePlacement)warnings.push(displayName(p)+' já consta em outra posição da escala e será transferido.');
+    }
+  }
+  if(warnings.length&&!confirm('ATENÇÃO — ALTERAÇÕES NA EQUIPE\n\n'+[...new Set(warnings)].join('\n')+'\n\nDeseja continuar com essas alterações?'))return false;
+  return true;
 }
 async function putProfessionalInRotation(pro,group,funcao){
   const now=new Date().toISOString();
@@ -2256,13 +2353,26 @@ async function putProfessionalInRotation(pro,group,funcao){
 async function confirmExpress(){
   if(!isOperator())return;
   if(currentPlantao&&norm(currentPlantao.status)!=='ABERTO')return alert('Plantão encerrado. Inicie a próxima escala.');
-  if(!currentPlantao)await ensurePlantaoForBook();
+  const prepared=preparedExpressSelections();
+  try{
+    if(!validateExpressSelections(prepared))return;
+  }catch(e){alert('Verifique a seleção de profissionais: '+(e.message||e));return}
+  if(!currentPlantao){
+    try{await ensurePlantaoForBook()}catch(e){alert(e.message||e);return}
+  }
   const confirmButtons=[$('#confirmExpressBtn'),$('#confirmExpressTopBtn')].filter(Boolean);
   confirmButtons.forEach(b=>{b.disabled=true;b.textContent='CONFIRMANDO...'});
+  let assignmentsApplied=0;
   try{
-    for(const p of expressTechSelected.values())await putProfessionalInRotation(p,'USB_TECNICO','Técnico de Enfermagem');
-    for(const p of expressNurseSelected.values())await putProfessionalInRotation(p,'USA_ENFERMEIRO','Enfermeiro');
-    expressTechSelected.clear();expressNurseSelected.clear();renderExpressSelected();
+    for(const item of prepared){
+      if(item.mode==='FIXO'){
+        const applied=await assignProfessionalToVehicle(item.professional.id,item.vehicleId,item.funcao,'ESCALA_EXPRESSA',true);
+        if(applied===false)throw new Error('Transferência cancelada para '+displayName(item.professional));
+      }else{
+        await putProfessionalInRotation(item.professional,item.group,item.funcao);
+      }
+      assignmentsApplied++;
+    }
 
     const now=new Date().toISOString();
     const {error}=await supabase.from('plantoes').update({
@@ -2278,11 +2388,19 @@ async function confirmExpress(){
     await loadAll(selectedDate());
     await loadExpressScale();
     await refreshBookProjection();
+    expressTechSelected.clear();
+    expressNurseSelected.clear();
+    renderExpressSelected();
     clearOperationalDirty();
     renderScaleConfirmationStates();
     $('#expressStatus').className='express-status ok';
-    $('#expressStatus').innerHTML='<b>Escala operacional confirmada.</b> A equipe foi registrada e o LIVRO está sincronizado.';
-  }catch(e){alert('Erro ao confirmar escala: '+(e.message||e))}
+    $('#expressStatus').innerHTML='<b>Escala operacional confirmada.</b> Profissionais fixos e em revezamento registrados; LIVRO sincronizado.';
+  }catch(e){
+    if(assignmentsApplied){
+      try{await loadAll(selectedDate());await loadExpressScale()}catch(refreshError){console.error('Falha ao recarregar equipe após erro',refreshError)}
+    }
+    alert('Erro ao confirmar escala: '+(e.message||e)+(assignmentsApplied?'\n\nAlgumas alterações podem ter sido gravadas. Verifique a equipe antes de tentar novamente.':''));
+  }
   finally{confirmButtons.forEach(b=>{b.disabled=false;b.textContent='CONFIRMAR ESCALA'})}
 }
 
