@@ -446,7 +446,8 @@ function startOperationalShiftMonitor(){
   },30000);
 }
 
-function openPage(id){
+function openPage(id, options={}){
+  const teamView=id==='team'&&options.teamView==='roster'?'roster':'edit';
   const current=document.querySelector('.page.active')?.id||'';
   if(current && current!==id){
     if(current==='team'){
@@ -463,18 +464,39 @@ function openPage(id){
       if(!confirmUnsavedRisk({includeInternal:true,includeBook:true,action:'sair do LIVRO'}))return false;
     }
   }
+  // Equipe do Dia mostra a relação já escalada, sem apagar rascunhos
+  // nem recarregar a escala quando a navegação continua na mesma página.
+  if(id==='team'&&teamView==='roster'&&activeTeamScope()==='internal'){
+    if(showTeamScope('operational')===false)return false;
+  }
   [...document.querySelectorAll('.page')].forEach(x=>x.classList.remove('active'));
   [...document.querySelectorAll('.tab')].forEach(x=>x.classList.remove('active'));
   $('#'+id)?.classList.add('active');
-  document.querySelector('.tab[data-page="'+id+'"]')?.classList.add('active');
+  const tabSelector=id==='team'
+    ? '.tab[data-page="team"][data-team-view="'+teamView+'"]'
+    : '.tab[data-page="'+id+'"]';
+  document.querySelector(tabSelector)?.classList.add('active');
   if(id==='history') renderHistory();
   if(id==='team'){
-    const ready=autoFollowCurrentShift?synchronizeCurrentOperationalShift():Promise.resolve();
-    ready.then(()=>{
+    const navigateToTeamSection=()=>{
+      if(teamView==='roster'){
+        $('.team-preview-wrap')?.scrollIntoView({behavior:'smooth',block:'start'});
+      }else{
+        $('#team')?.scrollIntoView({behavior:'smooth',block:'start'});
+      }
+    };
+    if(current==='team'){
       renderTeamPreview();
-      loadExpressScale();
-      renderRegistry();
-    }).catch(e=>alert(e.message||e));
+      navigateToTeamSection();
+    }else{
+      const ready=autoFollowCurrentShift?synchronizeCurrentOperationalShift():Promise.resolve();
+      ready.then(()=>{
+        renderTeamPreview();
+        loadExpressScale();
+        renderRegistry();
+        navigateToTeamSection();
+      }).catch(e=>alert(e.message||e));
+    }
   }
   if(id==='book'){
     const ready=autoFollowCurrentShift?synchronizeCurrentOperationalShift():Promise.resolve();
@@ -3204,7 +3226,7 @@ $('#logoutBtn').onclick=()=>{
   if(anyDraftModalOpen()&&!confirm('Há uma janela com dados não salvos. Sair mesmo assim?'))return;
   supabase.auth.signOut();
 };
-$$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page));
+$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page,{teamView:b.dataset.teamView}));
 $$('[data-open-page]').forEach(b=>b.onclick=()=>openPage(b.dataset.openPage));
 $$('[data-close-modal]').forEach(b=>b.onclick=()=>requestCloseModal(b.dataset.closeModal));
 $$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)requestCloseModal(m.id)}));
@@ -3231,7 +3253,7 @@ $('#shiftTransitionAcknowledge').onchange=updateShiftTransitionButtons;
 $('#shiftEndOnlyBtn').onclick=()=>executeShiftTransition('end');
 $('#shiftEndStartBtn').onclick=()=>executeShiftTransition('end_start');
 $('#shiftStartOnlyBtn').onclick=()=>executeShiftTransition('start');
-$('#regionalBtn').onclick=()=>$('#regionalIntegrated').scrollIntoView({behavior:'smooth',block:'start'});
+$('#regionalBtn')?.addEventListener('click',()=>$('#regionalIntegrated').scrollIntoView({behavior:'smooth',block:'start'}));
 $('#rotationCriterion').onchange=e=>persistRotationCriterion(e.target.value);
 $('#teamReloadBtn').onclick=()=>{
   if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,action:'atualizar a equipe'}))return;
