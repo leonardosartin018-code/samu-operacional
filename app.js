@@ -35,6 +35,9 @@ let reloadTimer = null;
 let operationalShiftTimer = null;
 let operationalShiftSyncBusy = false;
 let autoFollowCurrentShift = true;
+// A escala escolhida manualmente é apenas a referência de titulares para o plantão aberto.
+let manualScaleReference = null;
+let pendingScaleReference = null;
 let lastOperationalShiftKey = '';
 let lastClockShiftKey = '';
 let shiftTransitionBusy = false;
@@ -339,9 +342,7 @@ function syncDateAndAla(dateIso,turnoOverride=null){
   const turno=turnoOverride?normalizeTurno(turnoOverride):(date===ctx.date?ctx.turno:ctx.turno);
   $('#shiftDate').value=date;
   $('#dayAlaBadge').textContent='ALA DO DIA: '+ala+' • '+turno;
-  if($('#expressAla'))$('#expressAla').value=ala;
-  if($('#expressTurno'))$('#expressTurno').value=turno;
-  if($('#expressCurrentShift'))$('#expressCurrentShift').textContent='ALA '+ala+' • '+turno+' • '+fmtDate(date);
+  updateScaleReferenceUI({ala,turno,date});
   return {ala,turno,date};
 }
 function selectedDate(){
@@ -394,6 +395,78 @@ function currentScaleContext(){
     turno:date===now.date?now.turno:normalizeTurno($('#expressTurno')?.value||now.turno)
   };
 }
+function activeScaleReference(){
+  const ctx=currentScaleContext();
+  return manualScaleReference
+    ? {...ctx,ala:manualScaleReference.ala,turno:manualScaleReference.turno}
+    : ctx;
+}
+function updateScaleReferenceUI(baseContext=null){
+  const base=baseContext||currentScaleContext();
+  const selected=manualScaleReference||base;
+  if($('#expressAla'))$('#expressAla').value=selected.ala;
+  if($('#expressTurno'))$('#expressTurno').value=selected.turno;
+  const manual=!!manualScaleReference;
+  const mode=$('#scaleReferenceMode');
+  if(mode){
+    mode.classList.toggle('manual',manual);
+    mode.textContent=manual?'MANUAL • REFERÊNCIA ESCOLHIDA':'AUTOMÁTICA • ALA E TURNO DO PLANTÃO';
+  }
+  $('#autoScaleReferenceBtn')?.classList.toggle('hidden',!manual);
+  if($('#expressCurrentShift')){
+    $('#expressCurrentShift').textContent=manual
+      ? 'PLANTÃO: ALA '+base.ala+' • '+base.turno+' • '+fmtDate(base.date)+' | REFERÊNCIA MANUAL: '+selected.ala+' • '+selected.turno
+      : 'ALA '+base.ala+' • '+base.turno+' • '+fmtDate(base.date);
+  }
+}
+function askToApplyScaleReference(){
+  const ala=norm($('#expressAla').value);
+  const turno=normalizeTurno($('#expressTurno').value);
+  const base=currentScaleContext();
+  if(!ALA_CYCLE.includes(ala))return alert('Escolha uma Ala válida.');
+  if(ala===base.ala&&turno===base.turno){
+    return restoreAutomaticScaleReference();
+  }
+  if(manualScaleReference?.ala===ala&&manualScaleReference?.turno===turno){
+    updateScaleReferenceUI();
+    return;
+  }
+  pendingScaleReference={ala,turno,date:base.date,plantaoKey:plantaoShiftKey()};
+  $('#scaleReferenceDetails').innerHTML=
+    '<p><b>Plantão operacional aberto:</b> '+esc(shiftTitle(base))+'</p>'+
+    '<p><b>Escala de referência solicitada:</b> ALA '+esc(ala)+' • '+esc(turno)+'</p>'+
+    '<p><strong>ATENÇÃO:</strong> Você está escolhendo os titulares de uma Ala/turno diferente. Isso não muda a data, a Ala ou o turno do plantão operacional, não encerra plantões e não substitui registros já realizados.</p>'+
+    '<p>As decisões de FIXO, PERMUTA, REVEZAMENTO e AUSENTE feitas a partir dessa referência serão registradas no plantão aberto atual. Revise os nomes antes de confirmar. Alterações pendentes da escala ainda precisam ser confirmadas.</p>';
+  $('#scaleReferenceAcknowledge').checked=false;
+  $('#applyScaleReferenceBtn').disabled=true;
+  openModal('scaleReferenceModal');
+}
+async function applyManualScaleReference(){
+  if(!pendingScaleReference||!$('#scaleReferenceAcknowledge').checked)return;
+  const pending=pendingScaleReference;
+  if(pending.plantaoKey!==plantaoShiftKey()||pending.date!==currentScaleContext().date){
+    pendingScaleReference=null;
+    closeModal('scaleReferenceModal');
+    updateScaleReferenceUI();
+    return alert('O plantão mudou durante a escolha. Confira os dados e selecione a escala novamente.');
+  }
+  manualScaleReference={ala:pending.ala,turno:pending.turno};
+  pendingScaleReference=null;
+  closeModal('scaleReferenceModal');
+  await loadExpressScale();
+  setSync('Referência manual ativa: '+manualScaleReference.ala+' • '+manualScaleReference.turno+' | Plantão operacional permanece '+shiftTitle(currentScaleContext()),'warn');
+}
+async function restoreAutomaticScaleReference(){
+  if(manualScaleReference&&!confirmUnsavedRisk({includeOperational:true,includeInternal:true,includeBook:true,action:'voltar à escala automática'})){
+    updateScaleReferenceUI();
+    return false;
+  }
+  manualScaleReference=null;
+  pendingScaleReference=null;
+  await loadExpressScale();
+  setSync('Escala de referência automática • '+shiftTitle(currentScaleContext()));
+  return true;
+}
 async function synchronizeCurrentOperationalShift(force=false){
   if(!session||operationalShiftSyncBusy||(!autoFollowCurrentShift&&!force))return;
   operationalShiftSyncBusy=true;
@@ -409,6 +482,10 @@ async function synchronizeCurrentOperationalShift(force=false){
       }
       setSync('Troca de plantão aguardando salvamento','warn');
       return;
+    }
+    if(manualScaleReference&&key!==plantaoShiftKey()){
+      // Uma nova abertura de plantão volta à referência automática, nunca arrasta outra Ala.
+      manualScaleReference=null;
     }
     syncDateAndAla(ctx.date,ctx.turno);
     await loadAll(ctx.date,ctx.turno);
@@ -516,6 +593,12 @@ function closeModal(id){
   modalDraftSnapshots.delete(id);
 }
 function requestCloseModal(id){
+  if(id==='scaleReferenceModal'){
+    pendingScaleReference=null;
+    closeModal(id);
+    updateScaleReferenceUI();
+    return true;
+  }
   if(modalHasUnsavedDraft(id)){
     if(!confirm('ATENÇÃO\n\nHá informações preenchidas que ainda não foram salvas.\nSe fechar agora, esses dados serão perdidos.\n\nDeseja fechar mesmo assim?'))return false;
   }
@@ -1795,22 +1878,25 @@ async function deleteOccurrence(id){
 
 /* ---------- escala expressa ---------- */
 async function loadExpressScale(){
-  const scaleCtx=currentScaleContext();
+  const scaleCtx=activeScaleReference();
   const ala=scaleCtx.ala,turno=scaleCtx.turno;
-  if($('#expressAla'))$('#expressAla').value=ala;
-  if($('#expressTurno'))$('#expressTurno').value=turno;
+  updateScaleReferenceUI();
 
   const {data,error}=await supabase.from('escala_fixa_anapolis')
     .select('*,profissionais(id,nome_completo,nome_de_guerra,funcao_sistema)')
     .eq('ala',ala).eq('turno',turno).eq('ativo',true).order('ordem');
   if(error){
+    scaleRows=[];
+    renderExpressDrivers();
     $('#expressStatus').className='express-status warn';
     $('#expressStatus').textContent=error.message;
     return;
   }
   scaleRows=data||[];
-  $('#expressStatus').className='express-status ok';
-  $('#expressStatus').innerHTML='<b>'+scaleRows.length+' posições carregadas.</b> Confira e confirme os profissionais em serviço.';
+  $('#expressStatus').className='express-status '+(manualScaleReference?'warn':'ok');
+  $('#expressStatus').innerHTML='<b>'+scaleRows.length+' posições carregadas.</b> '+(manualScaleReference
+    ? 'REFERÊNCIA MANUAL: ALA '+esc(ala)+' • '+esc(turno)+'. Confira os titulares; o plantão operacional não foi alterado.'
+    : 'Confira e confirme os profissionais em serviço.');
   renderExpressDrivers();
 }
 function expressDecisionTime(m){
@@ -1818,7 +1904,7 @@ function expressDecisionTime(m){
 }
 function expressLatestDecision(r){
   return team
-    .filter(m=>m.titular_profissional_id===r.profissional_id || (m.profissional_id===r.profissional_id && norm(m.ala_escala)===norm(currentPlantao?.ala) && norm(m.turno_escala)===norm(currentPlantao?.turno)))
+    .filter(m=>m.titular_profissional_id===r.profissional_id || (m.profissional_id===r.profissional_id && norm(m.ala_escala)===norm(activeScaleReference().ala) && norm(m.turno_escala)===norm(activeScaleReference().turno)))
     .sort((a,b)=>expressDecisionTime(b)-expressDecisionTime(a))[0]||null;
 }
 function expressRowState(r){
@@ -1905,8 +1991,8 @@ async function expressUseFixed(rowId){
           titular_profissional_id:r.profissional_id,
           nome_titular_escala:r.nome_referencia,
           tipo_alteracao_escala:'FIXO',
-          ala_escala:currentPlantao.ala,
-          turno_escala:currentPlantao.turno
+          ala_escala:activeScaleReference().ala,
+          turno_escala:activeScaleReference().turno
         }).eq('id',cur.id);
         if(error)throw error;
       }
@@ -1990,8 +2076,8 @@ async function saveExpressPermuta(){
       titular_profissional_id:r.profissional_id,
       nome_titular_escala:r.nome_referencia,
       tipo_alteracao_escala:'PERMUTA',
-      ala_escala:currentPlantao.ala,
-      turno_escala:currentPlantao.turno
+      ala_escala:activeScaleReference().ala,
+      turno_escala:activeScaleReference().turno
     };
     const {error}=await supabase.from('equipe_plantao').insert(payload);
     if(error)throw error;
@@ -2038,8 +2124,8 @@ async function expressToggleRotation(rowId){
         titular_profissional_id:r.profissional_id,
         nome_titular_escala:r.nome_referencia,
         tipo_alteracao_escala:'REVEZAMENTO',
-        ala_escala:currentPlantao.ala,
-        turno_escala:currentPlantao.turno
+        ala_escala:activeScaleReference().ala,
+        turno_escala:activeScaleReference().turno
       });
       if(error)throw error;
     }
@@ -2073,8 +2159,8 @@ async function expressAbsent(rowId){
       titular_profissional_id:r.profissional_id,
       nome_titular_escala:r.nome_referencia,
       tipo_alteracao_escala:'AUSENTE',
-      ala_escala:currentPlantao.ala,
-      turno_escala:currentPlantao.turno
+      ala_escala:activeScaleReference().ala,
+      turno_escala:activeScaleReference().turno
     });
     if(error)throw error;
     markOperationalDirty();
@@ -2609,11 +2695,12 @@ async function loadBookData(){
   if(!currentPlantao)await ensurePlantaoForBook();
   const ala=currentPlantao.ala||alaForDate(currentPlantao.data_plantao);
   const turno=normalizeTurno(currentPlantao.turno||operationalShiftContext().turno);
+  const fixedReference=activeScaleReference();
   const [bm,di,fi,fd]=await Promise.all([
     supabase.from('livro_plantao').select('*').eq('plantao_id',currentPlantao.id).maybeSingle(),
     supabase.from('escala_interna_plantao').select('*').eq('plantao_id',currentPlantao.id).eq('status','ATIVO').order('ordem'),
     supabase.from('escala_fixa_interna_anapolis').select('*').eq('ala',ala).eq('turno',turno).eq('ativo',true).order('ordem'),
-    supabase.from('escala_fixa_anapolis').select('*').eq('ala',ala).eq('turno',turno).eq('ativo',true).order('ordem')
+    supabase.from('escala_fixa_anapolis').select('*').eq('ala',fixedReference.ala).eq('turno',fixedReference.turno).eq('ativo',true).order('ordem')
   ]);
   if(bm.error)throw bm.error;if(di.error)throw di.error;if(fi.error)throw fi.error;if(fd.error)throw fd.error;
   bookMeta=bm.data||null;internalScaleRows=di.data||[];fixedInternalRows=fi.data||[];bookDriverFixedRows=fd.data||[];
@@ -3180,6 +3267,8 @@ async function applySession(s){
   // Segue automaticamente o plantão vigente. A virada 07:00/19:00
   // atualiza Escala Operacional e Serviço Interno juntos.
   autoFollowCurrentShift=true;
+  manualScaleReference=null;
+  pendingScaleReference=null;
   lastOperationalShiftKey='';
   await synchronizeCurrentOperationalShift(true);
   subscribeRealtime();
@@ -3238,6 +3327,9 @@ $('#shiftDate').onchange=async()=>{
   }
   const ctx=operationalShiftContext();
   const date=$('#shiftDate').value;
+  // Mudança deliberada de data/plantão restaura as referências automáticas.
+  manualScaleReference=null;
+  pendingScaleReference=null;
   autoFollowCurrentShift=date===ctx.date;
   if(autoFollowCurrentShift){
     await synchronizeCurrentOperationalShift(true);
@@ -3260,19 +3352,16 @@ $('#teamReloadBtn').onclick=()=>{
   autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadAll(selectedDate());
 };
 $('#saveOcc').onclick=saveOccurrence;$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
-$('#loadScaleBtn').onclick=()=>autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadExpressScale();
-$('#expressAla').onchange=()=>{
-  const scaleCtx=currentScaleContext();
-  $('#expressAla').value=scaleCtx.ala;
-  $('#expressStatus').className='express-status ok';
-  $('#expressStatus').innerHTML='A Ala da escala acompanha automaticamente o plantão: <b>'+esc(scaleCtx.ala)+' • '+esc(scaleCtx.turno)+'</b>.';
-};
-$('#expressTurno').onchange=()=>{
-  const scaleCtx=currentScaleContext();
-  $('#expressTurno').value=scaleCtx.turno;
-  $('#expressStatus').className='express-status ok';
-  $('#expressStatus').innerHTML='O turno acompanha automaticamente o plantão: <b>'+esc(scaleCtx.ala)+' • '+esc(scaleCtx.turno)+'</b>.';
-};
+$('#loadScaleBtn').onclick=askToApplyScaleReference;
+$('#autoScaleReferenceBtn').onclick=()=>restoreAutomaticScaleReference().catch(e=>alert(e.message||e));
+$('#scaleReferenceAcknowledge').onchange=()=>{$('#applyScaleReferenceBtn').disabled=!$('#scaleReferenceAcknowledge').checked};
+$('#applyScaleReferenceBtn').onclick=()=>applyManualScaleReference().catch(e=>alert(e.message||e));
+['#expressAla','#expressTurno'].forEach(sel=>{
+  $(sel).addEventListener('change',()=>{
+    $('#expressStatus').className='express-status warn';
+    $('#expressStatus').textContent='Escolha preparada. Clique em APLICAR ESCALA para revisar o aviso e confirmar com CIENTE.';
+  });
+});
 $('#allDriversRotationBtn').onclick=setAllDriversRotation;$('#restoreFixedDriversBtn').onclick=restoreFixedDrivers;
 $('#expressTechSearch').oninput=e=>expressSearch('tech',e.target.value);$('#expressNurseSearch').oninput=e=>expressSearch('nurse',e.target.value);
 $('#expressTechAddBtn').onclick=()=>openExpressRegistration('tech');
