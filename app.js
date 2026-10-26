@@ -2990,13 +2990,104 @@ async function saveBook(){
   await loadBookData();renderBook();alert('Livro salvo.');
 }
 
-/* ---------- shift ---------- */
+/* ---------- Troca e encerramento manual de plantão ---------- */
+function openShiftTransition(){
+  if(!isOperator())return;
+  if(!currentPlantao)return alert('Nenhum plantão carregado.');
+  const p=currentPlantao;
+  const open=norm(p.status)==='ABERTO';
+  const next=nextShiftContext(p);
+  const earlyEnd=open&&Date.now()<shiftExpectedEnd(p).getTime();
+  const earlyStart=Date.now()<shiftExpectedStart(next).getTime();
+  const active=occurrences.filter(o=>!['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status))).length;
+  const points=[
+    '<b>Plantão atual:</b> '+esc(shiftTitle(p))+' — '+(open?'ABERTO':'ENCERRADO'),
+    '<b>Próximo plantão:</b> '+esc(shiftTitle(next)),
+    earlyEnd?'<strong>O turno atual ainda não chegou ao horário previsto de encerramento.</strong>':'',
+    earlyStart?'<strong>O próximo turno será iniciado antes do horário previsto.</strong>':'',
+    open&&active?'<strong>'+active+' ocorrência(s) em andamento.</strong> Serão mantidas no registro do plantão anterior; confira o repasse.':'',
+    open&&(operationalNeedsConfirmation()||internalNeedsConfirmation()||unsavedBook||anyDraftModalOpen())
+      ?'<strong>Há informações não confirmadas ou não salvas.</strong> Elas podem ser perdidas ao trocar de escala.':'',
+    'A escala anterior fica no histórico. O sistema não encerra ocorrências nem altera automaticamente a situação das viaturas.'
+  ].filter(Boolean);
+  $('#shiftTransitionTitle').textContent=open?'Trocar ou encerrar plantão':'Iniciar próxima escala';
+  $('#shiftTransitionDetails').innerHTML=points.map(p=>'<p>'+p+'</p>').join('');
+  $('#shiftTransitionAcknowledge').checked=false;
+  $('#shiftEndOnlyBtn').classList.toggle('hidden',!open);
+  $('#shiftEndStartBtn').classList.toggle('hidden',!open);
+  $('#shiftStartOnlyBtn').classList.toggle('hidden',open);
+  ['#shiftEndOnlyBtn','#shiftEndStartBtn','#shiftStartOnlyBtn'].forEach(id=>$(id).disabled=true);
+  shiftTransitionPlantaoId=p.id;
+  openModal('shiftTransitionModal');
+}
+function updateShiftTransitionButtons(){
+  const allowed=$('#shiftTransitionAcknowledge').checked&&!shiftTransitionBusy;
+  ['#shiftEndOnlyBtn','#shiftEndStartBtn','#shiftStartOnlyBtn'].forEach(id=>$(id).disabled=!allowed);
+}
+async function executeShiftTransition(mode){
+  if(!isOperator()||shiftTransitionBusy||!$('#shiftTransitionAcknowledge').checked)return;
+  if(!currentPlantao||shiftTransitionPlantaoId!==currentPlantao.id){
+    alert('O plantão mudou. Abra novamente a janela para conferir os dados.');
+    closeModal('shiftTransitionModal');
+    return;
+  }
+  const old={...currentPlantao};
+  const open=norm(old.status)==='ABERTO';
+  if(mode!=='start'&&!open)return alert('O plantão já foi encerrado.');
+  if(mode==='start'&&open)return alert('Encerre o plantão atual antes de iniciar o próximo.');
+  shiftTransitionBusy=true;
+  updateShiftTransitionButtons();
+  let closed=false;
+  try{
+    if(open){
+      const {data,error}=await supabase.from('plantoes')
+        .update({status:'ENCERRADO',encerrado_em:new Date().toISOString(),operador_encerramento:profile?.nome||session?.user?.email||'OPERADOR'})
+        .eq('id',old.id).eq('status','ABERTO').select('id').maybeSingle();
+      if(error)throw error;
+      if(!data)throw new Error('Este plantão já foi modificado por outro operador. Atualize a tela.');
+      closed=true;
+    }
+    if(mode==='end'){
+      autoFollowCurrentShift=false;
+      await loadAll(old.data_plantao,old.turno);
+      await loadExpressScale();
+      lastClockShiftKey=operationalShiftKey();
+      closeModal('shiftTransitionModal');
+      setSync('Plantão encerrado. Você pode iniciar o próximo quando quiser.','warn');
+      return;
+    }
+    const next=nextShiftContext(old);
+    const np=await ensureOperationalPlantao(next.date,next.turno,next.ala);
+    if(norm(np.status)!=='ABERTO')throw new Error('O próximo plantão não está aberto.');
+    autoFollowCurrentShift=true;
+    await loadAll(next.date,next.turno);
+    await loadExpressScale();
+    if(currentPlantao)await loadBookData();
+    lastOperationalShiftKey=operationalShiftKey(next);
+    lastClockShiftKey=operationalShiftKey();
+    clearOperationalDirty();
+    clearInternalDirty();
+    unsavedBook=false;
+    closeModal('shiftTransitionModal');
+    setSync('Novo plantão iniciado • '+shiftTitle(next));
+    alert('Próximo plantão iniciado. Confira a escala e confirme os profissionais em serviço.');
+  }catch(error){
+    console.error('Falha ao trocar plantão',error);
+    if(closed){
+      autoFollowCurrentShift=false;
+      await loadAll(old.data_plantao,old.turno);
+      closeModal('shiftTransitionModal');
+      alert('O plantão anterior foi encerrado, mas a próxima escala não pôde ser iniciada. Clique em INICIAR PRÓXIMA ESCALA para tentar novamente.\n\n'+(error.message||error));
+    }else{
+      alert('Não foi possível realizar a troca: '+(error.message||error));
+    }
+  }finally{
+    shiftTransitionBusy=false;
+    updateShiftTransitionButtons();
+  }
+}
 async function endShift(){
-  if(!isOperator()||!currentPlantao)return;
-  if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,includeBook:true,action:'encerrar o plantão'}))return;
-  if(!confirm('ENCERRAR O PLANTÃO '+fmtDate(currentPlantao.data_plantao)+'?'))return;
-  const {error}=await supabase.from('plantoes').update({status:'ENCERRADO',encerrado_em:new Date().toISOString(),operador_encerramento:profile?.nome||null}).eq('id',currentPlantao.id);
-  if(error)alert(error.message);else await loadAll();
+  openShiftTransition();
 }
 function exportCSV(){
   const rows=[['Ocorrencia','Viatura','Natureza','Bairro','Destino','Endereco','Equipe','Status','Saida','QTH','Inicio retorno','Chegada base','Observacao'],
@@ -3012,8 +3103,15 @@ function exportCSV(){
 
 /* ---------- realtime ---------- */
 function scheduleReload(){
+  if(shiftTransitionBusy)return;
   clearTimeout(reloadTimer);
-  reloadTimer=setTimeout(()=>loadAll(selectedDate()),280);
+  reloadTimer=setTimeout(()=>{
+    if(shiftTransitionBusy)return;
+    const refresh=autoFollowCurrentShift
+      ? synchronizeCurrentOperationalShift(true)
+      : loadAll(selectedDate(),currentPlantao?.turno);
+    Promise.resolve(refresh).catch(console.error);
+  },280);
 }
 function subscribeRealtime(){
   if(realtimeChannel)supabase.removeChannel(realtimeChannel);
@@ -3117,6 +3215,10 @@ $('#shiftDate').onchange=async()=>{
   }
 };
 $('#exportBtn').onclick=exportCSV;$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
+$('#shiftTransitionAcknowledge').onchange=updateShiftTransitionButtons;
+$('#shiftEndOnlyBtn').onclick=()=>executeShiftTransition('end');
+$('#shiftEndStartBtn').onclick=()=>executeShiftTransition('end_start');
+$('#shiftStartOnlyBtn').onclick=()=>executeShiftTransition('start');
 $('#regionalBtn').onclick=()=>$('#regionalIntegrated').scrollIntoView({behavior:'smooth',block:'start'});
 $('#rotationCriterion').onchange=e=>persistRotationCriterion(e.target.value);
 $('#teamReloadBtn').onclick=()=>{
