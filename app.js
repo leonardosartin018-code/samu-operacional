@@ -36,6 +36,9 @@ let operationalShiftTimer = null;
 let operationalShiftSyncBusy = false;
 let autoFollowCurrentShift = true;
 let lastOperationalShiftKey = '';
+let lastClockShiftKey = '';
+let shiftTransitionBusy = false;
+let shiftTransitionPlantaoId = null;
 let expressTechSelected = new Map();
 let expressNurseSelected = new Map();
 let unsavedOperationalScale = false;
@@ -339,6 +342,30 @@ function selectedDate(){
 function operationalShiftKey(ctx=operationalShiftContext()){
   return ctx.date+'|'+ctx.turno+'|'+alaForDate(ctx.date);
 }
+function nextShiftContext(ctx){
+  const date=normalizeTurno(ctx.turno)==='NOTURNO'?addDaysIso(ctx.date,1):ctx.date;
+  const turno=normalizeTurno(ctx.turno)==='NOTURNO'?'DIURNO':'NOTURNO';
+  return {date,turno,ala:alaForDate(date)};
+}
+function shiftExpectedStart(ctx){
+  return new Date(ctx.date+'T'+(normalizeTurno(ctx.turno)==='DIURNO'?'07:00:00':'19:00:00')+'-03:00');
+}
+function shiftExpectedEnd(ctx){
+  const night=normalizeTurno(ctx.turno)==='NOTURNO';
+  return new Date((night?addDaysIso(ctx.date,1):ctx.date)+'T'+(night?'07:00:00':'19:00:00')+'-03:00');
+}
+function shiftTitle(ctx){
+  return 'ALA '+(ctx.ala||alaForDate(ctx.date))+' • '+normalizeTurno(ctx.turno)+' • '+fmtDate(ctx.date);
+}
+async function resolveOperationalShiftContext(){
+  const clock=operationalShiftContext();
+  const next=nextShiftContext(clock);
+  const {data,error}=await supabase.from('plantoes').select('id')
+    .eq('data_plantao',next.date).eq('turno',next.turno).eq('ala',next.ala)
+    .eq('status','ABERTO').limit(1);
+  if(error)throw error;
+  return data?.length?next:{...clock,ala:alaForDate(clock.date)};
+}
 function plantaoShiftKey(p=currentPlantao){
   if(!p)return '';
   return String(p.data_plantao||'')+'|'+normalizeTurno(p.turno||'')+'|'+norm(p.ala||'');
@@ -361,37 +388,35 @@ function currentScaleContext(){
 }
 async function synchronizeCurrentOperationalShift(force=false){
   if(!session||operationalShiftSyncBusy||(!autoFollowCurrentShift&&!force))return;
-  const ctx=operationalShiftContext();
-  const key=operationalShiftKey(ctx);
-  if(!force && key===lastOperationalShiftKey && plantaoShiftKey()===key)return;
-
-  if(!force && key!==plantaoShiftKey() && (unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())){
-    if(pendingShiftWarningKey!==key){
-      pendingShiftWarningKey=key;
-      alert('VIRADA DE PLANTÃO DETECTADA\n\nExistem alterações pendentes ou dados ainda não confirmados nesta tela.\nConfirme/salve antes de o sistema mudar automaticamente para a nova Ala e período.');
-    }
-    setSync('Virada de plantão aguardando confirmação/salvamento','warn');
-    return;
-  }
-
   operationalShiftSyncBusy=true;
   try{
-    setSync('Sincronizando Ala e turno atuais...','warn');
+    const clockKey=operationalShiftKey();
+    const ctx=await resolveOperationalShiftContext();
+    const key=operationalShiftKey(ctx);
+    if(!force&&clockKey===lastClockShiftKey&&plantaoShiftKey()===key)return;
+    if(key!==plantaoShiftKey()&&(unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())){
+      if(pendingShiftWarningKey!==key){
+        pendingShiftWarningKey=key;
+        alert('TROCA DE PLANTÃO DETECTADA\n\nExistem alterações não salvas nesta tela. Salve ou confirme antes de trocar o plantão.');
+      }
+      setSync('Troca de plantão aguardando salvamento','warn');
+      return;
+    }
     syncDateAndAla(ctx.date,ctx.turno);
-    await loadAll(ctx.date);
+    await loadAll(ctx.date,ctx.turno);
     await loadExpressScale();
-
-    // A escala interna usa exatamente o mesmo plantão/Ala/turno da operacional.
-    await loadBookData();
+    if(currentPlantao)await loadBookData();
     if(!$('#teamInternalPanel')?.classList.contains('hidden'))renderInternalEditors();
     if($('#book')?.classList.contains('active'))renderBook();
-
-    lastOperationalShiftKey=operationalShiftKey(ctx);
+    lastOperationalShiftKey=key;
+    lastClockShiftKey=clockKey;
     pendingShiftWarningKey='';
-    setSync('Plantão atual sincronizado • '+alaForDate(ctx.date)+' • '+ctx.turno);
+    setSync(currentPlantao&&norm(currentPlantao.status)==='ENCERRADO'
+      ?'Plantão encerrado • use INICIAR PRÓXIMA ESCALA'
+      :'Plantão sincronizado • '+shiftTitle(ctx),currentPlantao&&norm(currentPlantao.status)==='ENCERRADO'?'warn':'ok');
   }catch(error){
-    console.error('Falha ao sincronizar plantão atual',error);
-    setSync('Falha ao sincronizar o plantão atual','warn');
+    console.error('Falha ao sincronizar plantão',error);
+    setSync('Falha ao sincronizar plantão: '+(error.message||error),'warn');
   }finally{
     operationalShiftSyncBusy=false;
   }
@@ -407,7 +432,7 @@ function startOperationalShiftMonitor(){
   operationalShiftTimer=setInterval(()=>{
     if(!session||!autoFollowCurrentShift)return;
     const key=operationalShiftKey();
-    if(key!==lastOperationalShiftKey || plantaoShiftKey()!==key){
+    if(key!==lastClockShiftKey || !currentPlantao){
       synchronizeCurrentOperationalShift().catch(console.error);
     }
   },30000);
@@ -3149,7 +3174,7 @@ window.addEventListener('beforeunload',e=>{
 document.addEventListener('visibilitychange',()=>{
   if(document.visibilityState==='visible'&&session&&autoFollowCurrentShift){
     const key=operationalShiftKey();
-    if(key!==lastOperationalShiftKey || plantaoShiftKey()!==key){
+    if(key!==lastClockShiftKey || !currentPlantao){
       synchronizeCurrentOperationalShift().catch(console.error);
     }
   }
