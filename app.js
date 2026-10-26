@@ -761,7 +761,7 @@ function vehicleCardHtml(v){
   if(st.key==='returning') primary='<button class="arrive-btn" data-act="arrive" data-o="'+(o?.id||'')+'" data-v="'+v.id+'">CHEGADA À BASE</button>';
   return '<article class="vehicle-card '+st.cls+'" data-team-card data-v="'+v.id+'">'+
     (st.key==='occurrence'
-      ? '<div class="vehicle-giroflex" aria-hidden="true"><span class="giroflex-led blue"></span><span class="giroflex-led blue"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span></div>'
+      ? '<div class="vehicle-giroflex" aria-hidden="true"><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span></div>'
       : '')+
     '<div class="vehicle-top"><div><div class="vehicle-name">'+esc(v.nome||v.codigo)+'</div><div class="vehicle-subhint">CLIQUE PARA EMPENHAR / EDITAR EQUIPE</div></div><span class="status-badge">'+st.label+'</span></div>'+
     crewGridHtml(v)+
