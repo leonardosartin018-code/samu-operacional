@@ -1169,3 +1169,181 @@ nav.tabs .tab.book-tab.active{
 #teamModal .quick-register-inline:focus-visible{outline:3px solid #fbbf24;outline-offset:2px}
 #teamModal .quick-team-field .quick-current{margin-top:7px}
 #quickRegisterModal.show{z-index:220}
+
+/* ---------- Painel operacional: USA/USB em ocorrência com cartões legíveis ---------- */
+/* O grid é dimensionado pela largura disponível na coluna, não pela tela inteira. */
+#vehicles .vehicle-operational-group.occurrence{
+  padding:12px;
+  border-width:2px;
+  border-left-width:6px;
+  border-radius:12px;
+  background:#fff4f4;
+}
+#vehicles .vehicle-operational-group.occurrence-usa{
+  border-color:#ef7b7b;
+  border-left-color:#b91c1c;
+}
+#vehicles .vehicle-operational-group.occurrence-usb{
+  border-color:#f5a1a1;
+  border-left-color:#2563eb;
+  background:#fff7f7;
+}
+#vehicles .vehicle-operational-group.occurrence .vehicle-group-head{
+  flex-wrap:wrap;
+  align-items:center;
+  padding:1px 2px 10px;
+  margin-bottom:10px;
+  gap:8px;
+}
+#vehicles .vehicle-operational-group.occurrence .vehicle-group-head>div{
+  display:flex;
+  align-items:baseline;
+  flex-wrap:wrap;
+  gap:5px 10px;
+}
+#vehicles .vehicle-operational-group.occurrence .vehicle-group-head b{
+  font-size:.96rem;
+  font-weight:1000;
+  letter-spacing:.02em;
+}
+#vehicles .vehicle-operational-group.occurrence .vehicle-group-head span{
+  font-size:.76rem;
+  line-height:1.25;
+}
+#vehicles .vehicle-operational-group.occurrence .vehicle-group-head em{
+  padding:5px 8px;
+  border:1px solid #fca5a5;
+  border-radius:999px;
+  background:#fff;
+  color:#991b1b;
+  font-size:.73rem;
+}
+#vehicles .vehicle-operational-group.occurrence .vehicle-row{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));
+  gap:12px;
+  align-items:stretch;
+}
+#vehicles .vehicle-operational-group.occurrence .vehicle-card{
+  min-width:0;
+  padding:13px;
+  border-radius:12px;
+  display:flex;
+  flex-direction:column;
+  gap:0;
+}
+#vehicles .vehicle-operational-group.occurrence .vehicle-top{
+  align-items:center;
+  flex-wrap:wrap;
+  gap:8px;
+  margin-bottom:3px;
+}
+#vehicles .vehicle-operational-group.occurrence .vehicle-top>div{min-width:0;flex:1 1 170px}
+#vehicles .vehicle-operational-group.occurrence .vehicle-name{font-size:1.32rem}
+#vehicles .vehicle-operational-group.occurrence .vehicle-subhint{
+  font-size:.67rem;
+  line-height:1.35;
+  letter-spacing:.01em;
+}
+#vehicles .vehicle-operational-group.occurrence .status-badge{
+  flex:0 0 auto;
+  padding:6px 9px;
+  font-size:.70rem;
+}
+#vehicles .vehicle-operational-group.occurrence .crew-grid{
+  gap:7px;
+  margin:9px 0 7px;
+}
+#vehicles .vehicle-operational-group.occurrence .crew-grid:not(.one):not(.two){
+  grid-template-columns:repeat(2,minmax(0,1fr));
+}
+#vehicles .vehicle-operational-group.occurrence .crew-grid:not(.one):not(.two) .crew-slot:last-child:nth-child(odd){
+  grid-column:1/-1;
+}
+#vehicles .vehicle-operational-group.occurrence .crew-slot{
+  min-width:0;
+  padding:9px 10px;
+  border-radius:8px;
+}
+#vehicles .vehicle-operational-group.occurrence .crew-role{
+  font-size:.67rem;
+  line-height:1.3;
+}
+#vehicles .vehicle-operational-group.occurrence .crew-name{
+  font-size:.95rem;
+  line-height:1.25;
+  overflow-wrap:anywhere;
+}
+#vehicles .vehicle-operational-group.occurrence .crew-setup{
+  flex-wrap:wrap;
+  gap:5px 9px;
+  padding:8px 10px;
+  line-height:1.35;
+  font-size:.69rem;
+}
+#vehicles .vehicle-operational-group.occurrence .crew-setup b{font-size:.73rem}
+#vehicles .vehicle-operational-group.occurrence .occ-detail{
+  margin-top:12px;
+  font-size:.94rem;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+#vehicles .vehicle-operational-group.occurrence .occ-address{
+  font-size:.78rem;
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
+#vehicles .vehicle-operational-group.occurrence .occ-timeline{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;
+  margin-top:10px;
+}
+#vehicles .vehicle-operational-group.occurrence .occ-time-chip{
+  padding:9px 10px;
+  min-width:0;
+  min-height:59px;
+}
+#vehicles .vehicle-operational-group.occurrence .occ-time-chip span{
+  font-size:.70rem;
+  line-height:1.3;
+}
+#vehicles .vehicle-operational-group.occurrence .occ-time-chip b{
+  font-size:.91rem;
+  line-height:1.35;
+}
+#vehicles .vehicle-operational-group.occurrence .occurrence-main-actions{
+  margin-top:auto;
+  padding-top:12px;
+  gap:8px;
+}
+#vehicles .vehicle-operational-group.occurrence .qth-btn{
+  min-height:47px;
+  padding:9px 10px;
+  font-size:.83rem;
+}
+#vehicles .vehicle-operational-group.occurrence .occurrence-action-row{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:8px;
+}
+#vehicles .vehicle-operational-group.occurrence .occurrence-action-row button{
+  width:100%;
+  min-width:0;
+  min-height:45px;
+  padding:9px 10px;
+  font-size:.79rem;
+  line-height:1.2;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+#vehicles .vehicle-operational-group.occurrence .occurrence-action-row .return-btn{
+  grid-column:1/-1;
+  min-height:47px;
+  font-size:.85rem;
+}
+@media(max-width:470px){
+  #vehicles .vehicle-operational-group.occurrence{padding:8px}
+  #vehicles .vehicle-operational-group.occurrence .vehicle-card{padding:10px}
+  #vehicles .vehicle-operational-group.occurrence .vehicle-row{gap:9px}
+}
