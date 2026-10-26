@@ -1059,3 +1059,91 @@ nav.tabs .tab.book-tab.active{
 .shift-transition-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:12px}
 .shift-transition-actions .btn{min-height:37px}
 @media(max-width:560px){.shift-transition-actions .btn{flex:1 1 100%}}
+
+/* Escolha individual de FIXO ou REVEZAMENTO para técnicos e enfermeiros. */
+.express-quick-wrap .selected-chips{
+  display:grid;
+  grid-template-columns:repeat(auto-fit,minmax(195px,1fr));
+  align-items:stretch;
+  gap:9px;
+  margin-top:9px;
+}
+.express-quick-wrap .express-person-card{
+  min-width:0;
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+  background:#eaf6fd;
+  border:1px solid #7dd3fc;
+  border-radius:11px;
+  padding:10px;
+  box-shadow:0 3px 9px rgba(7,57,85,.13);
+  color:#084563;
+}
+.express-quick-wrap .express-person-card-head{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  gap:8px;
+  padding-bottom:6px;
+  border-bottom:1px solid #c4e5f8;
+}
+.express-quick-wrap .express-person-card-head strong{
+  min-width:0;
+  overflow-wrap:anywhere;
+  color:#063955;
+  font-size:.79rem;
+  font-weight:1000;
+}
+.express-quick-wrap .express-person-remove{
+  flex:none;
+  width:32px;
+  height:32px;
+  border:1px solid #fda4af;
+  border-radius:8px;
+  background:#fff1f2;
+  color:#b91c1c;
+  font-size:1.28rem;
+  font-weight:1000;
+  line-height:1;
+  cursor:pointer;
+}
+.express-quick-wrap .express-person-field{display:grid;gap:4px;color:#35596e}
+.express-quick-wrap .express-person-field span{
+  font-size:.66rem;
+  font-weight:1000;
+  letter-spacing:.025em;
+}
+.express-quick-wrap .express-person-field select{
+  display:block;
+  width:100%;
+  min-width:0;
+  min-height:36px;
+  padding:7px 8px;
+  background:#fff;
+  border:1px solid #8cbed8;
+  border-radius:7px;
+  color:#0f3550;
+  font-size:.78rem;
+  font-weight:900;
+  cursor:pointer;
+}
+.express-quick-wrap .express-person-field select:focus-visible,
+.express-quick-wrap .express-person-remove:focus-visible{
+  outline:3px solid #f59e0b;
+  outline-offset:2px;
+}
+.express-quick-wrap .express-person-hint{
+  display:inline-flex;
+  margin-top:auto;
+  align-self:flex-start;
+  border-radius:999px;
+  padding:4px 8px;
+  background:#dcfce7;
+  color:#166534;
+  font-size:.67rem;
+  font-weight:900;
+}
+@media(max-width:650px){
+  .express-quick-wrap .selected-chips{grid-template-columns:repeat(auto-fit,minmax(175px,1fr))}
+}
