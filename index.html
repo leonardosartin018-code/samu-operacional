@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261026-34-escala-limpa-plantao-flexivel">
+  <link rel="stylesheet" href="./styles.css?v=20261026-35-menu-unico">
 </head>
 <body>
 
@@ -58,29 +58,16 @@
 
   <div id="syncStatus" class="sync-strip"><span class="sync-dot"></span><span>Conectando ao banco...</span></div>
 
-  <nav class="tabs">
-    <button class="tab active" data-page="base">Painel Operacional</button>
-    <button class="tab" data-page="team">Equipe / Escala</button>
-    <button class="tab" data-page="history">Histórico</button>
+  <nav class="tabs" aria-label="Navegação principal">
+    <button class="tab active" data-page="base">PAINEL OPERACIONAL</button>
+    <button class="tab" data-page="team" data-team-view="roster">EQUIPE DO DIA</button>
+    <button class="tab" data-page="team" data-team-view="edit">MONTAR / ALTERAR EQUIPE</button>
     <button class="tab book-tab" data-page="book">LIVRO</button>
+    <button class="tab" data-page="history">HISTÓRICO</button>
   </nav>
 
   <main>
     <section id="base" class="page active">
-      <div class="ops-command">
-        <div>
-          <div class="ops-kicker">VISÃO OPERACIONAL DO PLANTÃO</div>
-          <h2>Central de despacho</h2>
-          <p>Tudo que o rádio-operador precisa para decidir, escalar e acionar sem procurar informações em várias áreas.</p>
-        </div>
-        <div class="ops-command-actions">
-          <button class="btn primary" data-open-page="team">MONTAR / ALTERAR EQUIPE</button>
-          <button class="btn" id="manualOccBtn">LANÇAR OCORRÊNCIA MANUAL</button>
-          <button class="btn" data-open-page="history">HISTÓRICO</button>
-          <button class="btn" id="regionalBtn">IR PARA BASES REGIONAIS</button>
-        </div>
-      </div>
-
       <div id="summary" class="summary ops-summary"></div>
 
       <div class="ops-main-grid">
@@ -91,7 +78,6 @@
                 <h2>Frota operacional — Anápolis</h2>
                 <p id="plantaoInfo">Carregando plantão...</p>
               </div>
-              <button class="btn primary" data-open-page="team">EQUIPE DO DIA</button>
             </div>
             <div id="vehicles"></div>
           </section>
@@ -144,6 +130,9 @@
             <span class="ops-open-hint">ABRIR</span>
           </summary>
           <div class="details-content">
+            <div class="destination-actions">
+              <button class="btn primary" id="manualOccBtn" type="button">LANÇAR OCORRÊNCIA MANUAL</button>
+            </div>
             <div class="destination-stack">
               <div class="destination-split-card">
                 <div class="destination-split-title">Ocorrências de Anápolis</div>
@@ -618,6 +607,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261026-34-escala-limpa-plantao-flexivel"></script>
+<script type="module" src="./app.js?v=20261026-35-menu-unico"></script>
 </body>
 </html>
