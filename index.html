@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261026-38-profissionais-fixo-revezamento">
+  <link rel="stylesheet" href="./styles.css?v=20261026-39-cadastro-equipe-rapida">
 </head>
 <body>
 
@@ -504,6 +504,7 @@
         <input id="qtDriver" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do condutor">
         <input id="qtDriverId" type="hidden">
         <div id="qtDriverResults" class="autocomplete-results floating"></div>
+        <button type="button" class="quick-register-inline" data-quick-register="driver">+ CADASTRAR CONDUTOR</button>
         <div class="quick-current"><span id="qtDriverCurrent"></span><button id="qtDriverRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
       <div class="quick-team-field" data-role="tech">
@@ -511,6 +512,7 @@
         <input id="qtTech" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do técnico ou enfermeiro">
         <input id="qtTechId" type="hidden">
         <div id="qtTechResults" class="autocomplete-results floating"></div>
+        <button type="button" class="quick-register-inline" data-quick-register="tech">+ CADASTRAR TÉCNICO / ENFERMEIRO</button>
         <div class="quick-current"><span id="qtTechCurrent"></span><button id="qtTechRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
       <div class="quick-team-field" data-role="nurse">
@@ -518,6 +520,7 @@
         <input id="qtNurse" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do enfermeiro">
         <input id="qtNurseId" type="hidden">
         <div id="qtNurseResults" class="autocomplete-results floating"></div>
+        <button type="button" class="quick-register-inline" data-quick-register="nurse">+ CADASTRAR ENFERMEIRO</button>
         <div class="quick-current"><span id="qtNurseCurrent"></span><button id="qtNurseRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
       <div class="quick-team-field" data-role="doctor">
@@ -525,6 +528,7 @@
         <input id="qtDoctor" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do médico">
         <input id="qtDoctorId" type="hidden">
         <div id="qtDoctorResults" class="autocomplete-results floating"></div>
+        <button type="button" class="quick-register-inline" data-quick-register="doctor">+ CADASTRAR MÉDICO</button>
         <div class="quick-current"><span id="qtDoctorCurrent"></span><button id="qtDoctorRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
     </div>
@@ -636,6 +640,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261026-38-profissionais-fixo-revezamento"></script>
+<script type="module" src="./app.js?v=20261026-39-cadastro-equipe-rapida"></script>
 </body>
 </html>
