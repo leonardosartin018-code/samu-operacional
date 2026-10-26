@@ -170,54 +170,36 @@
       </div>
       <div id="teamOperationalPanel">
       <section class="section section-scale">
-        <div class="head">
+        <div class="head simple-scale-head">
           <div>
-            <h2>Equipe de serviço do dia</h2>
-            <p>Escala fixa, exceções, revezamento e ajustes rápidos em um único fluxo.</p>
+            <h2>Escala do plantão</h2>
+            <p id="expressCurrentShift" class="simple-scale-shift">Carregando Ala e período...</p>
           </div>
           <div class="team-head-actions">
-            <button class="btn" id="teamReloadBtn">ATUALIZAR EQUIPE</button>
+            <button class="btn" id="teamReloadBtn">ATUALIZAR</button>
             <button class="btn confirm-scale-top" id="confirmExpressTopBtn">CONFIRMAR ESCALA</button>
           </div>
         </div>
-
         <div class="express-scale-wrap">
-          <div class="express-scale-head">
-            <div>
-              <div class="express-kicker">ESCALA DE PLANTÃO • ANÁPOLIS</div>
-              <div class="express-title">Escala Expressa</div>
-              <div class="express-sub">A Ala e o turno são identificados automaticamente pelo plantão atual. Confira os titulares e altere somente as exceções antes de confirmar.</div>
+          <div class="express-controls simple-express-controls">
+            <span>Condutores: escolha a situação de cada viatura.</span>
+            <select id="expressAla" class="hidden" aria-label="Ala da escala">
+              <option value="ALFA">ALFA</option><option value="BRAVO">BRAVO</option>
+              <option value="CHARLIE">CHARLIE</option><option value="DELTA">DELTA</option>
+            </select>
+            <select id="expressTurno" class="hidden" aria-label="Período da escala">
+              <option value="DIURNO">DIURNO</option><option value="NOTURNO">NOTURNO</option>
+            </select>
+            <button id="loadScaleBtn" class="hidden" type="button">ATUALIZAR ESCALA</button>
+          </div>
+          <div id="expressStatus" class="express-status">Escala em carregamento...</div>
+          <details class="express-bulk-actions">
+            <summary>Ações para todos os condutores</summary>
+            <div class="express-driver-toolbar">
+              <button id="allDriversRotationBtn" class="mini-btn rotation">COLOCAR TODOS EM REVEZAMENTO</button>
+              <button id="restoreFixedDriversBtn" class="mini-btn primary">RESTAURAR TITULARES FIXOS</button>
             </div>
-            <div class="express-head-side">
-              <div class="express-badge">CONDUTOR • TÉCNICO • ENFERMEIRO</div>
-              <div class="express-flow"><span>1. CARREGAR</span><span>2. AJUSTAR</span><span>3. CONFIRMAR</span></div>
-            </div>
-          </div>
-
-          <div class="express-controls">
-            <label>Ala do plantão
-              <select id="expressAla">
-                <option value="ALFA">ALA ALFA</option>
-                <option value="BRAVO">ALA BRAVO</option>
-                <option value="CHARLIE">ALA CHARLIE</option>
-                <option value="DELTA">ALA DELTA</option>
-              </select>
-            </label>
-            <label>Período
-              <select id="expressTurno">
-                <option value="DIURNO">DIURNO</option>
-                <option value="NOTURNO">NOTURNO</option>
-              </select>
-            </label>
-            <button id="loadScaleBtn" class="express-load-btn">ATUALIZAR ESCALA DO PLANTÃO</button>
-          </div>
-
-          <div id="expressStatus" class="express-status">Escolha a Ala e o turno e clique em <b>CARREGAR ESCALA FIXA</b>.</div>
-
-          <div class="express-driver-toolbar">
-            <button id="allDriversRotationBtn" class="mini-btn rotation">TODOS OS CONDUTORES EM REVEZAMENTO</button>
-            <button id="restoreFixedDriversBtn" class="mini-btn primary">RESTAURAR FIXOS DA ALA</button>
-          </div>
+          </details>
 
           <div id="expressDriverGrid"></div>
 
