@@ -933,16 +933,22 @@ function renderFleet(){
   const moto=all.filter(v=>vehicleType(v).includes('MOTO'));
   const usa=all.filter(v=>vehicleType(v).includes('USA')&&!vehicleType(v).includes('USB')&&stays(v));
   const usb=all.filter(v=>vehicleType(v).includes('USB')&&stays(v));
-  const lane=(key,title,subtitle,cls)=>{
-    const list=all.filter(v=>!vehicleType(v).includes('MOTO')&&statusInfo(v).key===key)
-      .sort((a,b)=>(vehicleType(a).includes('USA')?1:2)-(vehicleType(b).includes('USA')?1:2)||String(a.nome).localeCompare(String(b.nome),'pt-BR'));
+  const lane=(key,title,subtitle,cls,predicate=null)=>{
+    const list=all.filter(v=>!vehicleType(v).includes('MOTO')&&statusInfo(v).key===key&&(!predicate||predicate(v)))
+      .sort((a,b)=>(vehicleType(a).includes('USA')?1:2)-(vehicleType(b).includes('USA')?1:2)||String(a.nome).localeCompare(String(b.nome),'pt-BR',{numeric:true}));
     return list.length?operationalGroup(title,subtitle,cls,list,'dynamic-status-lane'):'';
   };
+  // Não misturar USA e USB empenhadas na mesma linha: cada grupo ganha
+  // cartões largos e seus próprios totais, sem ocultar outros tipos.
+  const isUSA=v=>vehicleType(v).includes('USA')&&!vehicleType(v).includes('USB');
+  const isUSB=v=>vehicleType(v).includes('USB');
   $('#vehicles').innerHTML=
     operationalGroup('MOTOLÂNCIA','Resposta rápida • Anápolis','moto',moto)+
     operationalGroup('USA','Unidades de Suporte Avançado • QRV e retorno','usa',usa)+
     operationalGroup('USB','Unidades de Suporte Básico • QRV e retorno','usb',usb)+
-    lane('occurrence','EM OCORRÊNCIA','Viaturas de Anápolis atualmente empenhadas','occurrence')+
+    lane('occurrence','USA EM OCORRÊNCIA','Suporte Avançado • viaturas empenhadas','occurrence occurrence-usa',isUSA)+
+    lane('occurrence','USB EM OCORRÊNCIA','Suporte Básico • viaturas empenhadas','occurrence occurrence-usb',isUSB)+
+    lane('occurrence','OUTRAS VIATURAS EM OCORRÊNCIA','Outras unidades empenhadas','occurrence occurrence-other',v=>!isUSA(v)&&!isUSB(v))+
     lane('asepsis','ASSEPSIA','Viaturas temporariamente retiradas da linha','asepsis')+
     lane('mechanical','BAIXADAS — PANE','Viaturas indisponíveis por pane / manutenção','mechanical')+
     lane('noCrew','BAIXADAS — FALTA DE EQUIPE','Viaturas indisponíveis por recurso humano','noCrew')+
