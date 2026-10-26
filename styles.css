@@ -984,6 +984,21 @@ nav.tabs .tab.book-tab.active{
 .simple-scale-shift{font-size:.82rem!important;font-weight:900;color:#075985!important;margin-top:4px!important}
 .section-scale .express-scale-wrap{margin:0;border:1px solid #d2e3ec;border-radius:10px;box-shadow:none}
 .simple-express-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-top:0;background:#f6fafc;color:#425e70;font-size:.8rem;font-weight:750}
+/* Escolha manual de escala operacional (referência sem trocar o plantão). */
+.simple-express-controls{display:block!important}
+.scale-reference-heading{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:8px}
+.scale-reference-heading strong{font-size:.84rem;color:#0f3550}
+.scale-reference-mode{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;background:#dbeafe;color:#075985;font-size:.69rem;font-weight:900}
+.scale-reference-mode.manual{background:#fff3cd;color:#92400e;border:1px solid #f59e0b}
+.scale-reference-form{display:flex;align-items:end;flex-wrap:wrap;gap:9px}
+.scale-reference-form label{display:grid;gap:4px;min-width:145px;color:#385668;font-size:.77rem;font-weight:900}
+.scale-reference-form select{width:100%;min-height:37px;margin:0;padding:7px 10px;border:1px solid #9fb7c8;border-radius:8px;background:#fff;color:#102f40;font-size:.86rem;font-weight:850}
+.scale-reference-form .btn{min-height:37px;padding:8px 12px;white-space:nowrap}
+.scale-reference-explainer{margin:8px 0 0;color:#657987;font-size:.74rem;line-height:1.4}
+@media(max-width:650px){
+  .scale-reference-form label{flex:1 1 calc(50% - 9px);min-width:0}
+  .scale-reference-form .btn{flex:1 1 100%}
+}
 .section-scale .express-status{margin:0;padding:5px 12px;border:0;border-bottom:1px solid #e3edf2;border-radius:0;background:#fff;color:#587284;font-size:.73rem}
 .section-scale .express-status.ok{background:#f7fdf9;color:#276749}
 .section-scale .express-status.warn{background:#fff8e7;color:#92400e}
