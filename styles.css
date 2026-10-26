@@ -1147,3 +1147,25 @@ nav.tabs .tab.book-tab.active{
 @media(max-width:650px){
   .express-quick-wrap .selected-chips{grid-template-columns:repeat(auto-fit,minmax(175px,1fr))}
 }
+
+/* Cadastro direto na janela Equipe rápida: cadastro sem abandonar a escala. */
+#teamModal .quick-register-inline{
+  width:100%;
+  min-height:33px;
+  margin-top:7px;
+  padding:7px 10px;
+  border:1px solid #38bdf8;
+  border-radius:7px;
+  background:#e0f2fe;
+  color:#075985;
+  font-size:.69rem;
+  font-weight:1000;
+  line-height:1.15;
+  text-align:center;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+#teamModal .quick-register-inline:hover{background:#bae6fd;border-color:#0284c7}
+#teamModal .quick-register-inline:focus-visible{outline:3px solid #fbbf24;outline-offset:2px}
+#teamModal .quick-team-field .quick-current{margin-top:7px}
+#quickRegisterModal.show{z-index:220}
