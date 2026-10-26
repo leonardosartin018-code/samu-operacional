@@ -330,6 +330,7 @@ function syncDateAndAla(dateIso,turnoOverride=null){
   $('#dayAlaBadge').textContent='ALA DO DIA: '+ala+' • '+turno;
   if($('#expressAla'))$('#expressAla').value=ala;
   if($('#expressTurno'))$('#expressTurno').value=turno;
+  if($('#expressCurrentShift'))$('#expressCurrentShift').textContent='ALA '+ala+' • '+turno+' • '+fmtDate(date);
   return {ala,turno,date};
 }
 function selectedDate(){
@@ -1786,13 +1787,12 @@ function expressCard(r){
   const currentName=current?displayName(current.profissionais):'—';
   const isFixed=st.state==='fixed';
   return '<article class="express-driver-card '+st.state+'">'+
-    '<div class="express-driver-top"><div><div class="express-vtr">'+esc(v?.nome||r.codigo_viatura)+'</div><div class="express-vtr-type">'+(v?.tipo==='USA'?'SUPORTE AVANÇADO':'SUPORTE BÁSICO')+'</div></div><span class="express-row-badge '+st.state+'">'+st.label+'</span></div>'+
-    '<div class="express-fixed-label">TITULAR DA ESCALA</div><div class="express-fixed-name">'+esc(titular||'SEM TITULAR')+'</div>'+
-    '<div class="express-current-label">EM SERVIÇO</div><div class="express-current-name">'+esc(currentName)+'</div>'+
-    (st.state==='permuta'?'<div class="express-permuta-note">SUBSTITUINDO: '+esc(titular||'TITULAR')+'</div>':'')+
+    '<div class="express-driver-top"><div class="express-vtr">'+esc(v?.nome||r.codigo_viatura)+'</div><span class="express-row-badge '+st.state+'">'+st.label+'</span></div>'+
+    '<div class="express-person-line"><span class="express-fixed-label">Titular</span><strong class="express-fixed-name">'+esc(titular||'SEM TITULAR')+'</strong></div>'+
+    '<div class="express-person-line"><span class="express-current-label">Em serviço</span><strong class="express-current-name">'+esc(currentName)+'</strong></div>'+
     '<div class="express-driver-actions">'+
-      '<button title="'+(isFixed?'Clique novamente para desescalar':'Escalar o titular fixo nesta viatura')+'" class="fixed '+(isFixed?'active':'')+'" data-exp-fixed="'+r.id+'">'+(isFixed?'✓ FIXO NA VIATURA':'✓ ESCALAR — FIXO')+'</button>'+
-      '<button class="rotation '+(st.state==='rotation'?'active':'')+'" data-exp-rotation="'+r.id+'">↻ REVEZAMENTO</button>'+
+      '<button title="'+(isFixed?'Clique novamente para desescalar':'Escalar o titular fixo nesta viatura')+'" class="fixed '+(isFixed?'active':'')+'" data-exp-fixed="'+r.id+'">'+(isFixed?'✓ FIXO':'✓ FIXO')+'</button>'+
+      '<button class="rotation '+(st.state==='rotation'?'active':'')+'" data-exp-rotation="'+r.id+'">↻ REVEZAR</button>'+
       '<button class="swap '+(st.state==='permuta'?'active':'')+'" data-exp-swap="'+r.id+'">⇄ PERMUTA</button>'+
       '<button class="absent '+(st.state==='absent'?'active':'')+'" data-exp-absent="'+r.id+'">✕ AUSENTE</button>'+
     '</div>'+
@@ -1803,7 +1803,7 @@ function renderExpressDrivers(){
   const usb=scaleRows.filter(r=>norm(r.codigo_viatura).startsWith('USB'));
   const group=(type,title,sub,list)=>{
     const ready=list.filter(r=>['fixed','rotation','permuta'].includes(expressRowState(r).state)).length;
-    return '<section class="express-vehicle-section"><div class="express-vehicle-section-head"><div><h3>'+title+'</h3><p>'+sub+'</p></div><span>'+ready+'/'+list.length+' definidos</span></div><div class="express-driver-grid">'+(list.length?list.map(expressCard).join(''):'<div class="autocomplete-empty">Nenhum registro.</div>')+'</div></section>';
+    return '<section class="express-vehicle-section"><div class="express-vehicle-section-head"><div><h3>'+title+'</h3></div><span>'+ready+' de '+list.length+' escalados</span></div><div class="express-driver-grid">'+(list.length?list.map(expressCard).join(''):'<div class="autocomplete-empty">Nenhum registro.</div>')+'</div></section>';
   };
   $('#expressDriverGrid').innerHTML=group('USA','USA — SUPORTE AVANÇADO','Condutores das Unidades de Suporte Avançado',usa)+group('USB','USB — SUPORTE BÁSICO','Condutores das Unidades de Suporte Básico',usb);
   $('#expressDriverGrid').querySelectorAll('[data-exp-fixed]').forEach(b=>b.onclick=()=>expressUseFixed(b.dataset.expFixed));
