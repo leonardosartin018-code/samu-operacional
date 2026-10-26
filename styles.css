@@ -1029,3 +1029,16 @@ nav.tabs .tab.book-tab.active{
   .simple-scale-head .team-head-actions .btn{flex:1}
   .section-scale .express-driver-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
+
+/* ---------- Confirmação compacta para troca de plantão ---------- */
+.shift-transition-dialog{width:min(600px,100%)}
+.shift-transition-dialog h2{font-size:1.2rem}
+.shift-transition-details{margin:12px 0;padding:12px;border:1px solid #dae5ea;border-radius:9px;background:#f7fafc;font-size:.87rem;line-height:1.5;color:#263e4d}
+.shift-transition-details p{margin:0 0 8px}
+.shift-transition-details p:last-child{margin-bottom:0}
+.shift-transition-details strong{color:#9a3412}
+.shift-transition-consent{display:flex;align-items:center;gap:10px;padding:10px;border:1px solid #a7c6d6;border-radius:8px;background:#eef8fd;color:#073955;font-size:.86rem;font-weight:850;cursor:pointer}
+.shift-transition-consent input{width:20px;height:20px;flex:none;accent-color:#075985}
+.shift-transition-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;flex-wrap:wrap;margin-top:12px}
+.shift-transition-actions .btn{min-height:37px}
+@media(max-width:560px){.shift-transition-actions .btn{flex:1 1 100%}}
