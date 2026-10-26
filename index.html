@@ -439,6 +439,26 @@
   </footer>
 </div>
 
+<div id="shiftTransitionModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="shiftTransitionTitle">
+  <div class="dialog shift-transition-dialog">
+    <div class="dialog-head">
+      <div><div class="dialog-kicker">CONTROLE MANUAL DE PLANTÃO</div><h2 id="shiftTransitionTitle">Trocar plantão</h2></div>
+      <button class="icon-close" type="button" data-close-modal="shiftTransitionModal" aria-label="Fechar">×</button>
+    </div>
+    <div id="shiftTransitionDetails" class="shift-transition-details"></div>
+    <label class="shift-transition-consent">
+      <input type="checkbox" id="shiftTransitionAcknowledge">
+      <span>Estou ciente dos avisos e quero continuar.</span>
+    </label>
+    <div class="modal-actions shift-transition-actions">
+      <button class="btn" type="button" data-close-modal="shiftTransitionModal">CANCELAR</button>
+      <button id="shiftEndOnlyBtn" class="btn" type="button" disabled>SOMENTE ENCERRAR</button>
+      <button id="shiftEndStartBtn" class="btn primary" type="button" disabled>ENCERRAR E INICIAR PRÓXIMO</button>
+      <button id="shiftStartOnlyBtn" class="btn primary hidden" type="button" disabled>INICIAR PRÓXIMA ESCALA</button>
+    </div>
+  </div>
+</div>
+
 <div id="occModal" class="modal">
   <div class="dialog dispatch-dialog">
     <div class="dialog-head"><div><div class="dialog-kicker">ACIONAMENTO</div><h2 id="occModalTitle">Acionar viatura</h2></div><button class="icon-close" data-close-modal="occModal">×</button></div>
