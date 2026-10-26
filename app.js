@@ -1788,7 +1788,7 @@ async function loadExpressScale(){
   }
   scaleRows=data||[];
   $('#expressStatus').className='express-status ok';
-  $('#expressStatus').innerHTML='<b>Escala automática: '+esc(ala)+' • '+esc(turno)+' — '+scaleRows.length+' posições.</b> Os nomes são a referência da escala fixa; só entra em serviço quem for efetivamente escalado/confirmado.';
+  $('#expressStatus').innerHTML='<b>'+scaleRows.length+' posições carregadas.</b> Confira e confirme os profissionais em serviço.';
   renderExpressDrivers();
 }
 function expressDecisionTime(m){
