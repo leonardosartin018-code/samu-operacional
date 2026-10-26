@@ -975,3 +975,57 @@ nav.tabs .tab.book-tab.active{
   .coverage-status,.coverage-option-body small{max-width:100%;text-align:left}
 }
 
+
+/* ---------- Escala do plantão: interface compacta e legível ---------- */
+.simple-scale-head{align-items:center;margin-bottom:7px}
+.simple-scale-head h2{font-size:1.15rem}
+.simple-scale-shift{font-size:.82rem!important;font-weight:900;color:#075985!important;margin-top:4px!important}
+.section-scale .express-scale-wrap{margin:0;border:1px solid #d2e3ec;border-radius:10px;box-shadow:none}
+.simple-express-controls{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 12px;border-top:0;background:#f6fafc;color:#425e70;font-size:.8rem;font-weight:750}
+.section-scale .express-status{margin:0;padding:5px 12px;border:0;border-bottom:1px solid #e3edf2;border-radius:0;background:#fff;color:#587284;font-size:.73rem}
+.section-scale .express-status.ok{background:#f7fdf9;color:#276749}
+.section-scale .express-status.warn{background:#fff8e7;color:#92400e}
+.express-bulk-actions{margin:0 12px 4px;border-bottom:1px solid #e2ebf0}
+.express-bulk-actions summary{cursor:pointer;display:list-item;width:max-content;max-width:100%;padding:7px 4px;color:#075985;font-size:.74rem;font-weight:800}
+.express-bulk-actions .express-driver-toolbar{padding:2px 0 10px}
+.section-scale .express-vehicle-section{margin:8px 10px;border:1px solid #dce7eb;border-radius:9px;background:#fff}
+.section-scale .express-vehicle-section-head{background:#f3f8fa;padding:8px 11px}
+.section-scale .express-vehicle-section-head h3{font-size:.87rem}
+.section-scale .express-vehicle-section-head span{font-size:.75rem}
+.section-scale .express-driver-grid{gap:8px;padding:9px}
+.section-scale .express-driver-card,
+.section-scale .express-driver-card.fixed,
+.section-scale .express-driver-card.permuta,
+.section-scale .express-driver-card.rotation,
+.section-scale .express-driver-card.absent,
+.section-scale .express-driver-card.vacant,
+.section-scale .express-driver-card.unresolved{
+  border:1px solid #dce7ee;border-left:4px solid #94a3b8;border-radius:9px;
+  padding:10px;background:#fff;color:#152f42;box-shadow:0 2px 6px rgba(15,63,88,.045)
+}
+.section-scale .express-driver-card.fixed{border-left-color:#16a34a;background:#f6fef8}
+.section-scale .express-driver-card.rotation{border-left-color:#ea580c;background:#fffaf5}
+.section-scale .express-driver-card.permuta{border-left-color:#d97706;background:#fffdf4}
+.section-scale .express-driver-card.absent{border-left-color:#64748b}
+.section-scale .express-driver-card.unresolved{border-left-color:#dc2626}
+.section-scale .express-driver-top{align-items:center;margin-bottom:8px}
+.section-scale .express-vtr{font-size:1rem;color:#0f3550}
+.section-scale .express-row-badge{font-size:.67rem;padding:4px 7px;white-space:nowrap}
+.section-scale .express-person-line{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:3px 0;line-height:1.25}
+.section-scale .express-person-line .express-fixed-label,
+.section-scale .express-person-line .express-current-label{
+  flex:0 0 77px;margin:0;font-size:.75rem;font-weight:750;letter-spacing:0;
+  text-transform:none;color:#64748b;opacity:1
+}
+.section-scale .express-person-line .express-fixed-name,
+.section-scale .express-person-line .express-current-name{
+  margin:0;font-size:.92rem;font-weight:950;color:#132e40
+}
+.section-scale .express-driver-actions{margin-top:10px;gap:5px}
+.section-scale .express-driver-actions button{min-height:36px;padding:6px 3px;font-size:.67rem;font-weight:900}
+@media(max-width:650px){
+  .simple-scale-head{align-items:stretch}
+  .simple-scale-head .team-head-actions{width:100%}
+  .simple-scale-head .team-head-actions .btn{flex:1}
+  .section-scale .express-driver-actions{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
