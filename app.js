@@ -516,7 +516,10 @@ async function choosePlantao(preferredDate,preferredTurno=null,preferredAla=null
 }
 async function ensureOperationalPlantao(date,turno,ala){
   const exact=await choosePlantao(date,turno,ala);
-  if(exact)return exact;
+  if(exact){
+    if(norm(exact.status)==='ENCERRADO')throw new Error('Este plantão já foi encerrado. Inicie a próxima escala.');
+    return exact;
+  }
   const payload={
     data_plantao:date,turno:normalizeTurno(turno),ala:norm(ala),status:'ABERTO',
     iniciado_em:new Date().toISOString(),tipo_plantao:'OPERACIONAL',operador_abertura:profile?.nome||null
@@ -529,13 +532,14 @@ async function ensureOperationalPlantao(date,turno,ala){
   return data;
 }
 
-async function loadAll(preferredDate=null){
+async function loadAll(preferredDate=null,preferredTurno=null){
   const ctx=operationalShiftContext();
+  const previous=currentPlantao;
   const date=preferredDate||selectedDate()||ctx.date;
-  const initialShift=syncDateAndAla(date);
+  const turno=normalizeTurno(preferredTurno||(previous?.data_plantao===date?previous.turno:null)||ctx.turno);
+  const initialShift=syncDateAndAla(date,turno);
   const ala=initialShift.ala;
-  const turno=(date===ctx.date)?ctx.turno:initialShift.turno;
-  const isCurrentShift=date===ctx.date;
+  const isCurrentShift=autoFollowCurrentShift&&(date===ctx.date||!!preferredTurno);
   setSync('Identificando plantão atual e pré-carregando escalas...','warn');
 
   currentPlantao=null;
@@ -545,7 +549,7 @@ async function loadAll(preferredDate=null){
   try{
     try{
       currentPlantao=await choosePlantao(date,turno,ala);
-      if(!currentPlantao&&isCurrentShift){
+      if(!currentPlantao&&isCurrentShift&&date===ctx.date&&turno===ctx.turno){
         currentPlantao=await ensureOperationalPlantao(date,turno,ala);
       }
       syncDateAndAla(date,currentPlantao?.turno||turno);
@@ -575,7 +579,7 @@ async function loadAll(preferredDate=null){
     }
     const profMap=new Map(professionals.map(p=>[p.id,p]));
 
-    if(currentPlantao&&isCurrentShift){
+    if(currentPlantao&&isCurrentShift&&norm(currentPlantao.status)==='ABERTO'){
       try{
         // Pré-carrega apenas as referências da escala. Ninguém entra como ATIVO automaticamente.
         await loadBookData();
@@ -684,6 +688,13 @@ function renderSummary(){
     ? 'Plantão '+(currentPlantao.legacy_id||'')+' • '+fmtDate(currentPlantao.data_plantao)+' • '+currentPlantao.status
     : 'Nenhum plantão encontrado';
   $('#realShiftStart').textContent=currentPlantao?.iniciado_em ? fmtTime(currentPlantao.iniciado_em) : '—';
+  if($('#endShiftBtn')){
+    const open=norm(currentPlantao?.status)==='ABERTO';
+    $('#endShiftBtn').disabled=!isOperator()||!currentPlantao;
+    $('#endShiftBtn').textContent=open?'TROCAR / ENCERRAR':'INICIAR PRÓXIMA ESCALA';
+    $('#endShiftBtn').classList.toggle('danger',open);
+    $('#endShiftBtn').classList.toggle('primary',!open);
+  }
 }
 
 function memberSlotHtml(m){
@@ -2127,6 +2138,7 @@ async function putProfessionalInRotation(pro,group,funcao){
 }
 async function confirmExpress(){
   if(!isOperator())return;
+  if(currentPlantao&&norm(currentPlantao.status)!=='ABERTO')return alert('Plantão encerrado. Inicie a próxima escala.');
   if(!currentPlantao)await ensurePlantaoForBook();
   const confirmButtons=[$('#confirmExpressBtn'),$('#confirmExpressTopBtn')].filter(Boolean);
   confirmButtons.forEach(b=>{b.disabled=true;b.textContent='CONFIRMANDO...'});
@@ -2552,29 +2564,18 @@ function findProfessionalByReference(name){
   return bestScore>=.72?best:null;
 }
 async function ensurePlantaoForBook(){
-  const ctx=operationalShiftContext();
-
-  if(autoFollowCurrentShift){
-    const expectedKey=operationalShiftKey(ctx);
-    if(plantaoShiftKey()!==expectedKey){
-      currentPlantao=await ensureOperationalPlantao(ctx.date,ctx.turno,alaForDate(ctx.date));
-      syncDateAndAla(ctx.date,currentPlantao.turno||ctx.turno);
-      lastOperationalShiftKey=expectedKey;
-    }
-    return currentPlantao;
+  if(currentPlantao&&norm(currentPlantao.status)==='ENCERRADO'){
+    throw new Error('Plantão encerrado. Use INICIAR PRÓXIMA ESCALA antes de alterar os dados.');
   }
-
-  if(currentPlantao)return currentPlantao;
-  const date=selectedDate()||ctx.date;
-  const ala=alaForDate(date);
-  const turno=date===ctx.date?ctx.turno:normalizeTurno($('#expressTurno')?.value||ctx.turno);
-  currentPlantao=await ensureOperationalPlantao(date,turno,ala);
-  syncDateAndAla(date,currentPlantao.turno||turno);
+  if(currentPlantao&&norm(currentPlantao.status)==='ABERTO')return currentPlantao;
+  const ctx=autoFollowCurrentShift?await resolveOperationalShiftContext():currentScaleContext();
+  currentPlantao=await ensureOperationalPlantao(ctx.date,ctx.turno,ctx.ala||alaForDate(ctx.date));
+  syncDateAndAla(ctx.date,currentPlantao.turno||ctx.turno);
   return currentPlantao;
 }
 async function loadBookData(){
   await ensureProfessionals();
-  await ensurePlantaoForBook();
+  if(!currentPlantao)await ensurePlantaoForBook();
   const ala=currentPlantao.ala||alaForDate(currentPlantao.data_plantao);
   const turno=normalizeTurno(currentPlantao.turno||operationalShiftContext().turno);
   const [bm,di,fi,fd]=await Promise.all([
@@ -2587,7 +2588,7 @@ async function loadBookData(){
   bookMeta=bm.data||null;internalScaleRows=di.data||[];fixedInternalRows=fi.data||[];bookDriverFixedRows=fd.data||[];
 
   // A escala fixa é apenas referência visual. A equipe ativa nasce somente após clique/confirmacão do operador.
-  await ensureAutomaticBookNumber();
+  if(norm(currentPlantao.status)==='ABERTO')await ensureAutomaticBookNumber();
 }
 async function ensureInternalScaleFromFixed(){
   if(!currentPlantao||!fixedInternalRows.length)return;
