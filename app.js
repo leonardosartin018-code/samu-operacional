@@ -3137,7 +3137,7 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'escala_interna_plantao'},()=>{
       loadBookData().then(()=>{renderInternalEditors();if($('#book')?.classList.contains('active'))renderBook()}).catch(console.error);
     })
-    .on('postgres_changes',{event:'UPDATE',schema:'public',table:'plantoes'},scheduleReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'plantoes'},scheduleReload)
     .subscribe(s=>{if(s==='SUBSCRIBED')setSync('Banco conectado • atualização em tempo real ativa')});
 }
 
