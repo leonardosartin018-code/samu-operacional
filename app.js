@@ -913,7 +913,7 @@ function vehicleCardHtml(v){
     (st.key==='occurrence'
       ? '<div class="vehicle-giroflex" aria-hidden="true"><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span></div>'
       : '')+
-    '<div class="vehicle-top"><div><div class="vehicle-name">'+esc(v.nome||v.codigo)+'</div><div class="vehicle-subhint">CLIQUE PARA EMPENHAR / EDITAR EQUIPE</div></div><span class="status-badge">'+st.label+'</span></div>'+
+    '<div class="vehicle-top"><div><div class="vehicle-name">'+esc(v.nome||v.codigo)+'</div><div class="vehicle-subhint">'+(st.key==='occurrence'?'EQUIPE EMPENHADA • CLIQUE PARA EDITAR':'CLIQUE PARA EMPENHAR / EDITAR EQUIPE')+'</div></div><span class="status-badge">'+st.label+'</span></div>'+
     crewGridHtml(v)+
     occurrenceInfoHtml(v,o)+
     (primary?'<div style="margin-top:6px">'+primary+'</div>':'')+
