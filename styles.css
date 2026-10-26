@@ -875,51 +875,64 @@ nav.tabs .tab.book-tab.active{
   outline-offset:2px;
 }
 
-/* ---------- Giroflex visual das viaturas em ocorrência ---------- */
+/* ---------- Giroflex SAMU V2: barra fina, seis módulos vermelhos ---------- */
 .vehicle-card.status-occurrence .vehicle-giroflex{
+  position:relative;
   display:flex;
   align-items:center;
-  justify-content:center;
+  justify-content:space-between;
   gap:3px;
-  width:124px;
-  height:25px;
+  width:144px;
+  height:22px;
   margin:-4px auto 7px;
   padding:4px 7px;
-  border:1px solid #b6c7d4;
-  border-radius:9px;
-  background:linear-gradient(180deg,#1e293b,#080f1d);
-  box-shadow:0 3px 9px rgba(0,0,0,.38),inset 0 1px 2px rgba(255,255,255,.16);
+  border:1px solid #fca5a5;
+  border-radius:7px;
+  background:linear-gradient(180deg,#4b1015 0%,#1c090d 53%,#120509 100%);
+  box-shadow:0 3px 10px rgba(0,0,0,.37),inset 0 1px 1px rgba(255,255,255,.19);
   pointer-events:none;
+  isolation:isolate;
+}
+.vehicle-card.status-occurrence .vehicle-giroflex::after{
+  content:"";
+  position:absolute;
+  inset:2px 5px auto;
+  height:3px;
+  border-radius:100%;
+  background:linear-gradient(90deg,transparent,rgba(255,255,255,.48),transparent);
+  pointer-events:none;
+  z-index:2;
 }
 .vehicle-card.status-occurrence .giroflex-led{
   display:block;
   flex:1 1 0;
-  height:12px;
-  border-radius:4px;
+  min-width:0;
+  height:11px;
+  border-radius:3px;
+  background:linear-gradient(180deg,#ff9b9b 0%,#ef4444 36%,#b91c1c 100%);
+  opacity:.22;
+  animation:samuRedPulse 1s steps(1,end) infinite;
   will-change:opacity,box-shadow;
 }
-.vehicle-card.status-occurrence .giroflex-led.blue{
-  background:#21b6ff;
-  animation:giroflexBlueFlash .9s steps(1,end) infinite;
+.vehicle-card.status-occurrence .giroflex-led:nth-child(1),
+.vehicle-card.status-occurrence .giroflex-led:nth-child(2),
+.vehicle-card.status-occurrence .giroflex-led:nth-child(3){
+  animation-delay:0s;
 }
-.vehicle-card.status-occurrence .giroflex-led.red{
-  background:#ff3645;
-  animation:giroflexRedFlash .9s steps(1,end) infinite;
+.vehicle-card.status-occurrence .giroflex-led:nth-child(4),
+.vehicle-card.status-occurrence .giroflex-led:nth-child(5),
+.vehicle-card.status-occurrence .giroflex-led:nth-child(6){
+  animation-delay:-.5s;
 }
-@keyframes giroflexBlueFlash{
-  0%,22%,50%,72%{
+@keyframes samuRedPulse{
+  0%,12%,24%,49%{
     opacity:1;
-    box-shadow:0 0 7px 3px rgba(56,189,248,.94),0 0 18px 4px rgba(14,165,233,.48);
+    box-shadow:0 0 7px 2px rgba(255,117,117,.9),0 0 16px 4px rgba(220,38,38,.44);
   }
-  25%,47%,75%,97%,100%{opacity:.18;box-shadow:none}
-}
-@keyframes giroflexRedFlash{
-  0%,22%,50%,72%{opacity:.18;box-shadow:none}
-  25%,47%,75%,97%{
-    opacity:1;
-    box-shadow:0 0 7px 3px rgba(248,113,113,.94),0 0 18px 4px rgba(239,68,68,.48);
+  13%,23%,25%,48%,50%,100%{
+    opacity:.22;
+    box-shadow:none;
   }
-  100%{opacity:.18;box-shadow:none}
 }
 @media(prefers-reduced-motion:reduce){
   .vehicle-card.status-occurrence .giroflex-led{
