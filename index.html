@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261026-36-botoes-restaurados">
+  <link rel="stylesheet" href="./styles.css?v=20261026-37-escala-manual">
 </head>
 <body>
 
@@ -171,15 +171,26 @@
         </div>
         <div class="express-scale-wrap">
           <div class="express-controls simple-express-controls">
-            <span>Condutores: escolha a situação de cada viatura.</span>
-            <select id="expressAla" class="hidden" aria-label="Ala da escala">
-              <option value="ALFA">ALFA</option><option value="BRAVO">BRAVO</option>
-              <option value="CHARLIE">CHARLIE</option><option value="DELTA">DELTA</option>
-            </select>
-            <select id="expressTurno" class="hidden" aria-label="Período da escala">
-              <option value="DIURNO">DIURNO</option><option value="NOTURNO">NOTURNO</option>
-            </select>
-            <button id="loadScaleBtn" class="hidden" type="button">ATUALIZAR ESCALA</button>
+            <div class="scale-reference-heading">
+              <strong>Escala de referência</strong>
+              <span id="scaleReferenceMode" class="scale-reference-mode">AUTOMÁTICA • ALA E TURNO DO PLANTÃO</span>
+            </div>
+            <div class="scale-reference-form">
+              <label for="expressAla">Ala
+                <select id="expressAla" aria-label="Escolher ala da escala">
+                  <option value="ALFA">ALFA</option><option value="BRAVO">BRAVO</option>
+                  <option value="CHARLIE">CHARLIE</option><option value="DELTA">DELTA</option>
+                </select>
+              </label>
+              <label for="expressTurno">Turno
+                <select id="expressTurno" aria-label="Escolher turno da escala">
+                  <option value="DIURNO">DIURNO</option><option value="NOTURNO">NOTURNO</option>
+                </select>
+              </label>
+              <button id="loadScaleBtn" class="btn primary" type="button">APLICAR ESCALA</button>
+              <button id="autoScaleReferenceBtn" class="btn hidden" type="button">VOLTAR À ESCALA AUTOMÁTICA</button>
+            </div>
+            <p class="scale-reference-explainer">A seleção troca apenas os titulares usados como referência. O plantão operacional e seu LIVRO continuam vinculados à data, Ala e turno efetivos.</p>
           </div>
           <div id="expressStatus" class="express-status">Escala em carregamento...</div>
           <details class="express-bulk-actions">
@@ -448,6 +459,24 @@
   </div>
 </div>
 
+<div id="scaleReferenceModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="scaleReferenceTitle">
+  <div class="dialog shift-transition-dialog">
+    <div class="dialog-head">
+      <div><div class="dialog-kicker">ESCOLHA MANUAL DE ESCALA</div><h2 id="scaleReferenceTitle">Atenção: escala diferente do plantão</h2></div>
+      <button class="icon-close" type="button" data-close-modal="scaleReferenceModal" aria-label="Fechar">×</button>
+    </div>
+    <div id="scaleReferenceDetails" class="shift-transition-details"></div>
+    <label class="shift-transition-consent">
+      <input type="checkbox" id="scaleReferenceAcknowledge">
+      <span>Estou ciente de que estou utilizando outra escala de referência e quero continuar.</span>
+    </label>
+    <div class="modal-actions shift-transition-actions">
+      <button class="btn" type="button" data-close-modal="scaleReferenceModal">CANCELAR</button>
+      <button id="applyScaleReferenceBtn" class="btn primary" type="button" disabled>CIENTE — APLICAR ESCALA</button>
+    </div>
+  </div>
+</div>
+
 <div id="occModal" class="modal">
   <div class="dialog dispatch-dialog">
     <div class="dialog-head"><div><div class="dialog-kicker">ACIONAMENTO</div><h2 id="occModalTitle">Acionar viatura</h2></div><button class="icon-close" data-close-modal="occModal">×</button></div>
@@ -607,6 +636,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261026-36-botoes-restaurados"></script>
+<script type="module" src="./app.js?v=20261026-37-escala-manual"></script>
 </body>
 </html>
