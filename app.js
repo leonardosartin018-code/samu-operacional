@@ -102,6 +102,14 @@ function localDateTimeIso(date,time){
 function isOperator(){
   return ['ADMIN','RADIO_OPERADOR'].includes(profile?.papel);
 }
+function canEditOpenShift(){
+  if(!isOperator())return false;
+  if(currentPlantao&&norm(currentPlantao.status)!=='ABERTO'){
+    alert('Este plantão está encerrado. Clique em INICIAR PRÓXIMA ESCALA para fazer novos registros.');
+    return false;
+  }
+  return true;
+}
 function setSync(text,type='ok'){
   const el=$('#syncStatus');
   el.className='sync-strip'+(type==='ok'?'':' '+type);
@@ -1605,7 +1613,7 @@ function openOccurrenceModal(vId=null){
   openModal('occModal');
 }
 async function saveOccurrence(){
-  if(!isOperator()||!currentPlantao)return;
+  if(!canEditOpenShift()||!currentPlantao)return;
   const vId=$('#occVehicleSelect').value||null;
   const v=vehicleById(vId);
   if(vId&&!validateDispatchCrew(v))return;
@@ -1848,7 +1856,7 @@ function renderExpressDrivers(){
   $('#expressDriverGrid').querySelectorAll('[data-exp-absent]').forEach(b=>b.onclick=()=>expressAbsent(b.dataset.expAbsent));
 }
 async function expressUseFixed(rowId){
-  if(!isOperator())return;
+  if(!canEditOpenShift())return;
   if(!currentPlantao)await ensurePlantaoForBook();
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
   if(!r?.profissional_id||!v)return alert('Titular ou viatura não vinculado ao banco.');
@@ -1886,6 +1894,7 @@ async function expressUseFixed(rowId){
   }catch(e){alert(e.message||e)}
 }
 function expressSwap(rowId){
+  if(!canEditOpenShift())return;
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
   if(!r||!v)return alert('Viatura não encontrada.');
   selectedExpressPermutaRow=r;
@@ -1972,7 +1981,7 @@ async function saveExpressPermuta(){
   }catch(e){alert(e.message||e)}
 }
 async function expressToggleRotation(rowId){
-  if(!isOperator())return;
+  if(!canEditOpenShift())return;
   if(!currentPlantao)await ensurePlantaoForBook();
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
   if(!r?.profissional_id||!v)return alert('Titular ou viatura não vinculado ao banco.');
@@ -2017,7 +2026,7 @@ async function expressToggleRotation(rowId){
   }catch(e){alert(e.message||e)}
 }
 async function expressAbsent(rowId){
-  if(!isOperator())return;
+  if(!canEditOpenShift())return;
   if(!currentPlantao)await ensurePlantaoForBook();
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
   if(!r?.profissional_id||!v)return;
@@ -2051,7 +2060,7 @@ async function expressAbsent(rowId){
   }catch(e){alert(e.message||e)}
 }
 async function setAllDriversRotation(){
-  if(!isOperator())return;
+  if(!canEditOpenShift())return;
   if(!currentPlantao)await ensurePlantaoForBook();
   const rows=activeTeamRows().filter(m=>teamRoleKey(m)==='driver'&&m.viatura_id&&isAnapolisVehicle(vehicleById(m.viatura_id))&&['USA','USB'].some(t=>vehicleType(vehicleById(m.viatura_id)).includes(t)));
   if(!rows.length)return alert('Não há condutores fixos ativos para colocar em revezamento.');
@@ -2066,7 +2075,7 @@ async function setAllDriversRotation(){
   await loadAll(selectedDate());await loadExpressScale();
 }
 async function restoreFixedDrivers(){
-  if(!isOperator()||!scaleRows.length)return;
+  if(!canEditOpenShift()||!scaleRows.length)return;
   if(!currentPlantao)await ensurePlantaoForBook();
   if(!confirm('Restaurar todos os condutores fixos desta Ala/turno? As exceções atuais de condutor serão substituídas.'))return;
   for(const r of scaleRows){
@@ -2814,7 +2823,7 @@ function buildInternalPayloadFromCard(slot,root){
   };
 }
 async function confirmInternalTeam(rootSelector='#teamInternalEditor'){
-  if(!isOperator())return;
+  if(!canEditOpenShift())return;
   await ensurePlantaoForBook();
   await ensureProfessionals();
   const root=$(rootSelector);
@@ -2887,7 +2896,7 @@ async function refreshBookProjection(){
   if($('#book')?.classList.contains('active'))renderBook();
 }
 async function saveInternalSlot(code,root=document){
-  if(!isOperator())return;
+  if(!canEditOpenShift())return;
   await ensurePlantaoForBook();
   const slot=BOOK_INTERNAL_SLOTS.find(x=>x.code===code),fixed=fixedInternalRow(code);
   const type=root.querySelector('[data-int-type="'+code+'"]')?.value||'ESCALADO';
@@ -2973,7 +2982,7 @@ function renderBook(){
   $('#bookObsPreview').textContent=bookMeta?.observacoes||'';
 }
 async function saveBook(){
-  if(!isOperator())return;
+  if(!canEditOpenShift())return;
   await ensurePlantaoForBook();
   const r1=confirmedInternalRow('RADIO-01'),r2=confirmedInternalRow('RADIO-02');
   const p1=r1?.profissional_id||null;
@@ -3049,8 +3058,11 @@ async function executeShiftTransition(mode){
     }
     if(mode==='end'){
       autoFollowCurrentShift=false;
+      unsavedBook=false;
       await loadAll(old.data_plantao,old.turno);
       await loadExpressScale();
+      clearOperationalDirty();
+      clearInternalDirty();
       lastClockShiftKey=operationalShiftKey();
       closeModal('shiftTransitionModal');
       setSync('Plantão encerrado. Você pode iniciar o próximo quando quiser.','warn');
