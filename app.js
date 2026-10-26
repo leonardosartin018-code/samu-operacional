@@ -3226,7 +3226,7 @@ $('#logoutBtn').onclick=()=>{
   if(anyDraftModalOpen()&&!confirm('Há uma janela com dados não salvos. Sair mesmo assim?'))return;
   supabase.auth.signOut();
 };
-$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page,{teamView:b.dataset.teamView}));
+$$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page,{teamView:b.dataset.teamView}));
 $$('[data-open-page]').forEach(b=>b.onclick=()=>openPage(b.dataset.openPage));
 $$('[data-close-modal]').forEach(b=>b.onclick=()=>requestCloseModal(b.dataset.closeModal));
 $$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)requestCloseModal(m.id)}));
