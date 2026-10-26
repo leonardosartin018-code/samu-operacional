@@ -1624,11 +1624,18 @@ async function openTeamModal(vId){
   configureQuickTeamFields(v);
   Object.entries(quickCfg()).forEach(([key,cfg])=>{
     const cur=currentQuickMember(vId,key);
-    $(cfg.input).value='';
-    $(cfg.hidden).value='';
+    const pro=cur && (
+      professionals.find(p=>p.id===cur.profissional_id) ||
+      cur.profissionais ||
+      {nome_completo:cur.nome_snapshot||'PROFISSIONAL ESCALADO'}
+    );
+    // Exibe a equipe já gravada no próprio campo: ao adicionar outra função,
+    // não é necessário escolher novamente condutor, técnico, enfermeiro ou médico.
+    $(cfg.input).value=pro?professionalLabel(pro,effectiveQuickRole(key)):'';
+    $(cfg.hidden).value=cur?.profissional_id||'';
     $(cfg.results).innerHTML='';
     $(cfg.results).classList.remove('show');
-    $(cfg.current).textContent=cur?'Atual: '+displayName(cur.profissionais):'Nenhum profissional nesta função.';
+    $(cfg.current).textContent=cur?'Já escalado: '+displayName(pro)+' • mantido ao salvar':'Nenhum profissional nesta função.';
     $(cfg.remove).classList.toggle('show',!!cur);
   });
   openModal('teamModal');
@@ -1709,6 +1716,9 @@ async function saveQuickTeam(){
         if(cur)await deactivateTeamRow(cur,new Date().toISOString());
         continue;
       }
+      // Ao complementar uma equipe parcial, não regrave nem substitua quem
+      // já estava escalado na viatura. Só processe nomes realmente alterados.
+      if(cur?.profissional_id===value)continue;
       const pro=professionals.find(p=>p.id===value);
       if(!pro||!allowedForField(pro,allowedKey))throw new Error('Profissional inválido para o campo '+(mode==='moto'?funcao:roleLabel(allowedKey))+'.');
       await assignProfessionalToVehicle(value,selectedTeamVehicle,funcao);
