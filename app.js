@@ -245,7 +245,8 @@ function requiredDispatchRoles(v){
   return [];
 }
 function crewHasRole(mem,role){
-  return mem.some(m=>teamRoleKey(m)===role || (role==='tech' && teamRoleKey(m)==='nurse' && norm(m.funcao).includes('TECN')));
+  return mem.some(m=>teamRoleKey(m)===role || (role==='tech' && teamRoleKey(m)==='nurse' &&
+    (norm(m.funcao).includes('TECN')||norm(m.grupo_revezamento).includes('USB_TECNICO'))));
 }
 function crewCompleteness(v,mem=vehicleMembers(v)){
   const req=requiredDispatchRoles(v);
@@ -1565,7 +1566,7 @@ function usaTeamRotationCard(){
 }
 function automaticDispatchCrew(v){
   const type=vehicleType(v);
-  const fixed=vehicleMembers(v).filter(m=>!isRotationMember(m));
+  const fixed=vehicleMembers(v).filter(m=>!isRotationMember(m)&&!memberIsBusy(m));
   if(type.includes('MOTO'))return fixed;
   const roles=type.includes('USA')?['driver','nurse','doctor']:type.includes('USB')?['driver','tech']:[];
   const used=new Set();
@@ -2363,7 +2364,10 @@ function dispatchCrewOptions(v,role){
     if(!m||added.has(m.profissional_id)||memberIsBusy(m)||
        norm(m.status||'ATIVO')!=='ATIVO'||!dispatchRoleMatch(m,role,v))return;
     if(isRotationMember(m)&&earlyExitStatus(m)?.cutoff)return;
-    if(!isRotationMember(m)&&m.viatura_id!==v.id&&m.viatura_id)return;
+    if(!isRotationMember(m)&&m.viatura_id&&m.viatura_id!==v.id){
+      const other=vehicleById(m.viatura_id);
+      if(!other||other.base_id!==v.base_id)return;
+    }
     // Revezamento de condutores respeita o tipo de unidade.
     if(isRotationMember(m)&&role==='driver'&&!driverRotationAllowsMember(m,type))return;
     if(isRotationMember(m)&&role!=='driver'&&role!=='doctor'&&
@@ -2383,6 +2387,10 @@ function dispatchCrewOptions(v,role){
         norm(m.grupo_revezamento).includes('USB_TECNICO')).forEach(append);
     }
   }
+  // Substituição pontual: permite selecionar outro fixo da mesma base, mas
+  // exige confirmação explícita porque a viatura de origem perderá a função.
+  activeTeamRows().filter(m=>!isRotationMember(m)&&m.viatura_id&&m.viatura_id!==v.id&&
+    dispatchRoleMatch(m,role,v)).forEach(append);
   return choices;
 }
 function dispatchRoleName(role){
@@ -2413,7 +2421,10 @@ function renderDispatchCrewPanel(){
     const required=requiredDispatchRoles(v).includes(role);
     const display=options.map(m=>{
       const fixed=!isRotationMember(m)&&m.viatura_id===v.id;
-      const status=fixed?' • FIXO NA VIATURA':' • REVEZAMENTO';
+      const elsewhere=!isRotationMember(m)&&m.viatura_id&&m.viatura_id!==v.id;
+      const origin=elsewhere?vehicleById(m.viatura_id):null;
+      const status=fixed?' • FIXO NESTA VIATURA':elsewhere
+        ?' • FIXO '+(origin?.nome||'EM OUTRA VIATURA')+' (TROCA PONTUAL)':' • REVEZAMENTO';
       return '<option value="'+esc(m.id)+'"'+(m.id===suggested?.id?' selected':'')+'>'+
         esc(displayName(m.profissionais))+status+'</option>';
     }).join('');
@@ -2473,7 +2484,9 @@ function updateDispatchCrewStatus(){
     const m=activeTeamRows().find(x=>x.id===chosen);
     const fixed=m&&!isRotationMember(m)&&m.viatura_id===v.id;
     if(note){
-      note.textContent=!chosen?'NÃO SELECIONADO':different?'ESCOLHA MANUAL':
+      const otherVehicle=m&&!isRotationMember(m)&&m.viatura_id!==v.id?vehicleById(m.viatura_id):null;
+      note.textContent=!chosen?'NÃO SELECIONADO':otherVehicle
+        ?'TROCA PONTUAL • FIXO '+(otherVehicle.nome||otherVehicle.codigo):different?'ESCOLHA MANUAL':
         fixed?'FIXO NA VIATURA':'SUGESTÃO • PRÓXIMO DA VEZ';
       note.classList.toggle('manual',different&&!!chosen);
     }
@@ -2510,9 +2523,15 @@ async function saveOccurrence(){
       '. Preencha '+missing.map(dispatchRoleName).join(' e ')+' antes de acionar.');
     const manual=[...$('#dispatchCrewFields').querySelectorAll('[data-dispatch-role]')]
       .filter(el=>el.value!==el.dataset.suggestedId);
-    if(manual.length&&!confirm('CONFIRMAR EQUIPE ESCOLHIDA?\n\n'+
-      dispatchCrew.map(m=>displayName(m.profissionais)+' — '+m.funcao).join('\n')+
-      '\n\nEssa escolha será registrada somente nesta ocorrência. Deseja acionar?'))return;
+    const shiftedFixed=dispatchCrew.filter(m=>!isRotationMember(m)&&m.viatura_id&&m.viatura_id!==v.id);
+    if(manual.length||shiftedFixed.length){
+      const changes=shiftedFixed.length?'\n\nATENÇÃO: '+shiftedFixed.map(m=>
+        displayName(m.profissionais)+' é FIXO na '+(vehicleById(m.viatura_id)?.nome||'outra viatura')).join('; ')+
+        '. A viatura de origem ficará sem esse profissional enquanto ele estiver empenhado.':'';
+      if(!confirm('CONFIRMAR EQUIPE ESCOLHIDA?\n\n'+
+        dispatchCrew.map(m=>displayName(m.profissionais)+' — '+m.funcao).join('\n')+
+        changes+'\n\nEssa escolha será registrada somente nesta ocorrência. Deseja acionar?'))return;
+    }
   }
   const now=localDateTimeIso(currentPlantao.data_plantao,$('#occStart').value||nowLocalTime());
   const crit=currentRotationCriterion();
