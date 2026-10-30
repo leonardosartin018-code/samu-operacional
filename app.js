@@ -1639,7 +1639,7 @@ function nextVehicleRotationCard(type,hasRotation){
   html+='<div class="manual-vehicle-header"><span class="rotation-vehicle-label">PRÓXIMA '+type+' DA VEZ</span>'+
     (isOperator()&&list.length>1?'<button type="button" class="manual-order-btn" data-manual-order="'+type+'_VIATURA">↕ ORDENAR VIATURAS</button>':'')+
     '</div><strong class="rotation-vehicle-prefix">'+esc(prefix)+'</strong>'+
-    (vehicleManualRank(first.v)!==null?'<span class="manual-order-active">PRIORIDADE MANUAL TEMPORÁRIA</span>':'');
+    (manualRankVehicle(first.v)!==null?'<span class="manual-order-active">PRIORIDADE MANUAL TEMPORÁRIA</span>':'');
   if(hasRotation){
     const roles=type==='USA'
       ? [['Condutor',first.driver],['Enfermeiro',first.nurse]]
