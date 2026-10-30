@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261030-46-saida-antecipada">
+  <link rel="stylesheet" href="./styles.css?v=20261030-47-ordem-manual-temporaria">
 </head>
 <body>
 
@@ -480,6 +480,23 @@
   </div>
 </div>
 
+<div id="manualRotationModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="manualRotationTitle">
+  <div class="dialog manual-rotation-dialog">
+    <div class="dialog-head">
+      <div><div class="dialog-kicker">REVEZAMENTO • AJUSTE PONTUAL</div><h2 id="manualRotationTitle">Personalizar sequência</h2></div>
+      <button class="icon-close" type="button" data-close-modal="manualRotationModal" aria-label="Fechar">×</button>
+    </div>
+    <p class="manual-rotation-info">Organize quem será sugerido em 1º, 2º, 3º e assim por diante. Esta ordem vale apenas para os próximos acionamentos: ao voltar à base, cada profissional ou viatura perde sua posição manual e retorna à regra automática de tempo de base e número de ocorrências. Indisponibilidade, equipe mínima e bloqueio por saída antecipada continuam valendo.</p>
+    <div id="manualRotationList" class="manual-rotation-list"></div>
+    <p id="manualRotationNotice" class="manual-rotation-notice">Use as setas para alterar a ordem. Nenhuma mudança é aplicada antes de salvar.</p>
+    <div class="modal-actions">
+      <button id="manualRotationReset" type="button" class="btn" style="margin-right:auto">VOLTAR AO AUTOMÁTICO</button>
+      <button type="button" class="btn" data-close-modal="manualRotationModal">CANCELAR</button>
+      <button id="manualRotationSave" type="button" class="btn primary">SALVAR ORDEM DESTA VEZ</button>
+    </div>
+  </div>
+</div>
+
 <div id="earlyExitModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="earlyExitTitle">
   <div class="dialog early-exit-dialog">
     <div class="dialog-head"><div><div class="dialog-kicker">REVEZAMENTO • SAÍDA ANTECIPADA</div><h2 id="earlyExitTitle">Programar saída antecipada</h2></div>
@@ -702,6 +719,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261030-46-saida-antecipada"></script>
+<script type="module" src="./app.js?v=20261030-47-ordem-manual-temporaria"></script>
 </body>
 </html>
