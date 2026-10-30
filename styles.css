@@ -1890,3 +1890,23 @@ nav.tabs .tab.book-tab.active{
 .roster-person .early-exit-roster-label{display:inline-block;margin-top:5px;padding:5px 8px;border:1px solid #fdba74;border-radius:7px;background:#fff7ed;color:#92400e;font-size:.66rem;font-weight:900;line-height:1.4}
 .roster-person-actions .person-early-exit{min-height:31px;padding:6px 8px;border:1px solid #fb923c;border-radius:7px;background:#fff7ed;color:#9a3412;font-size:.68rem;font-weight:1000;cursor:pointer}
 @media(max-width:560px){.early-exit-form{grid-template-columns:1fr}.early-exit-dialog .modal-actions{flex-wrap:wrap}}
+
+/* Ordem de acionamento personalizada somente até o próximo retorno. */
+.manual-rotation-dialog{width:min(650px,100%);max-height:92vh}
+.manual-rotation-info{font-size:.79rem;color:#395e73;line-height:1.5;margin:10px 0 13px}
+.manual-rotation-list{display:grid;gap:7px;max-height:52vh;overflow-y:auto;scrollbar-width:thin}
+.manual-rotation-item{display:flex;align-items:center;gap:10px;min-width:0;background:#f8fbfd;border:1px solid #cbdde8;border-radius:9px;padding:9px}
+.manual-rotation-position{display:inline-flex;align-items:center;justify-content:center;min-width:34px;min-height:34px;border-radius:8px;background:#fef3c7;color:#92400e;font-size:.96rem}
+.manual-rotation-description{display:grid;min-width:0;flex:1;gap:4px}
+.manual-rotation-description strong{font-size:.84rem;color:#163b54;overflow-wrap:anywhere}
+.manual-rotation-description small{font-size:.7rem;color:#667e8f;overflow-wrap:anywhere}
+.manual-rotation-actions{display:flex;gap:6px;flex:none}
+.manual-rotation-actions button{width:37px;height:37px;border:1px solid #9ec9e2;border-radius:8px;background:#e0f2fe;color:#075985;font-weight:1000;font-size:1.09rem;cursor:pointer}
+.manual-rotation-actions button:disabled{opacity:.28;cursor:not-allowed}
+.manual-rotation-notice{font-size:.72rem;line-height:1.5;margin:12px 0 7px;color:#7c4f21;background:#fff7ed;padding:9px;border:1px solid #fed7aa;border-radius:8px}
+.cockpit-rotation .manual-order-btn{border:1px solid #f4c994;border-radius:7px;background:#fff6e8;color:#8a4d17;font-size:.65rem;font-weight:1000;padding:7px 9px;cursor:pointer}
+.cockpit-rotation .manual-order-btn:hover{background:#ffedd5}
+.cockpit-rotation .rotation-people-head .manual-order-btn{margin:3px 0 0}
+.cockpit-rotation .manual-vehicle-header{display:flex;justify-content:space-between;gap:6px;align-items:center;flex-wrap:wrap}
+.cockpit-rotation .manual-order-active{display:inline-block;margin-top:5px;border-radius:5px;padding:3px 7px;background:#ffedd5;color:#9a3412;font-size:.63rem;font-weight:1000}
+@media(max-width:540px){.manual-rotation-item{gap:6px;padding:7px}.manual-rotation-actions button{width:34px;height:34px}.manual-rotation-dialog .modal-actions{flex-wrap:wrap}}
