@@ -2564,15 +2564,28 @@ async function saveOccurrence(){
             .select('id,profissional_id,status,viatura_id,tipo_escala')
             .eq('plantao_id',currentPlantao.id).in('id',dispatchCrew.map(m=>m.id))
           :Promise.resolve({data:[],error:null}),
-        supabase.from('ocorrencias').select('id').eq('viatura_id',v.id)
-          .in('status',['EM OCORRENCIA','RETORNANDO']).limit(1)
+        supabase.from('ocorrencias').select('id,plantao_id,acionada_em,criado_em')
+          .eq('viatura_id',v.id)
+          .in('status',['EM OCORRENCIA','RETORNANDO'])
       ]);
       if(liveVehicle.error)throw liveVehicle.error;
       if(liveCrew.error)throw liveCrew.error;
       if(liveOccurrence.error)throw liveOccurrence.error;
-      if(!liveVehicle.data||statusInfo(liveVehicle.data).key!=='base'||
-         (liveOccurrence.data||[]).length){
-        throw new Error('Esta viatura já mudou de situação. Atualize o painel antes de acionar.');
+      // Ocorrências de outros plantões podem ter ficado com baixa pendente.
+      // Enquanto a viatura estiver realmente na BASE, registros de mais de 48h
+      // não impedem novos empenhos. O plantão atual e as últimas 48h
+      // continuam protegidos contra acionamento duplicado.
+      const recentWindowMs=48*60*60*1000;
+      const activeConflicts=(liveOccurrence.data||[]).filter(o=>{
+        if(o.plantao_id===currentPlantao.id)return true;
+        const startedAt=new Date(o.acionada_em||o.criado_em||'').getTime();
+        return !Number.isFinite(startedAt) || Date.now()-startedAt<=recentWindowMs;
+      });
+      if(!liveVehicle.data||statusInfo(liveVehicle.data).key!=='base'){
+        throw new Error('A viatura não está mais na BASE. Atualize o painel antes de acionar.');
+      }
+      if(activeConflicts.length){
+        throw new Error('Já existe uma ocorrência em andamento para esta viatura. Confira o atendimento antes de acionar novamente.');
       }
       for(const m of dispatchCrew){
         const live=(liveCrew.data||[]).find(x=>x.id===m.id);
