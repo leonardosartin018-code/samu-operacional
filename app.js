@@ -2029,6 +2029,22 @@ function configureQuickTeamFields(v){
   };
   const visible=mode==='moto'?['driver','tech']:mode==='usa'?['driver','nurse','doctor']:mode==='usb'?['driver','tech']:Object.keys(fields);
   Object.entries(fields).forEach(([k,el])=>el?.classList.toggle('hidden',!visible.includes(k)));
+  for(const [key,element] of Object.entries(fields)){
+    const select=element?.querySelector('[data-quick-placement] select');
+    const wrapper=element?.querySelector('[data-quick-placement]');
+    if(!select||!wrapper)continue;
+    const canRotate=(mode==='usa'||mode==='usb')&&(
+      key==='driver'||(mode==='usa'&&key==='nurse')||(mode==='usb'&&key==='tech')
+    );
+    wrapper.classList.toggle('hidden',!canRotate);
+    select.value='FIXO';
+    select.onchange=()=>{
+      const hint=element.querySelector('[data-quick-placement-hint]');
+      if(hint)hint.textContent=select.value==='REVEZAMENTO'
+        ? 'Compartilhado: entra na fila de '+mode.toUpperCase()+', sem ficar fixo nesta viatura.'
+        : 'Fixo: profissional vinculado a esta viatura.';
+    };
+  }
   Object.entries(fields).forEach(([key,el])=>{
     const register=el?.querySelector('[data-quick-register]');
     if(!register)return;
@@ -2210,18 +2226,38 @@ async function saveQuickTeam(){
   try{
     for(const [key,idSel,funcao,allowedKey] of rows){
       const value=$(idSel).value;
-      if(!value)continue;
+      const placement=$('#'+idSel.slice(1).replace(/Id$/,'Mode'));
+      const wantsRotation=(mode==='usa'||mode==='usb')&&placement?.value==='REVEZAMENTO';
+      if(!value){
+        if(wantsRotation)throw new Error('Selecione um profissional para o revezamento de '+roleLabel(allowedKey)+'.');
+        continue;
+      }
       const cur=currentQuickMember(selectedTeamVehicle,key);
       if(value==='__REMOVE__'){
         if(cur)await deactivateTeamRow(cur,new Date().toISOString());
         continue;
       }
-      // Ao complementar uma equipe parcial, não regrave nem substitua quem
-      // já estava escalado na viatura. Só processe nomes realmente alterados.
-      if(cur?.profissional_id===value)continue;
+      // O atalho rápido antes salvava TODOS como fixos, mesmo quando o operador
+      // pretendia colocá-los na fila. A escolha explícita corrige a divergência.
+      // Não altera o registro de ninguém se o operador não confirmar SALVAR.
+      if(!wantsRotation&&cur?.profissional_id===value)continue;
       const pro=professionals.find(p=>p.id===value);
       if(!pro||!allowedForField(pro,allowedKey))throw new Error('Profissional inválido para o campo '+(mode==='moto'?funcao:roleLabel(allowedKey))+'.');
-      await assignProfessionalToVehicle(value,selectedTeamVehicle,funcao);
+      if(wantsRotation){
+        const type=mode.toUpperCase();
+        const group=type+'_'+(key==='driver'?'CONDUTOR':type==='USA'?'ENFERMEIRO':'TECNICO');
+        const rotationRole=key==='driver'?'Condutor':type==='USA'?'Enfermeiro':'Técnico de Enfermagem';
+        const earlier=activeTeamRows().find(m=>m.profissional_id===pro.id);
+        if(earlier&&!isRotationMember(earlier)){
+          const otherVehicle=vehicleById(earlier.viatura_id);
+          if(!confirm(displayName(pro)+' está FIXO em '+(otherVehicle?.nome||earlier.viatura_snapshot||'outra viatura')+
+            '.\n\nAo continuar, ele deixará a posição fixa e entrará na fila de revezamento '+type+
+            '. Deseja confirmar esta mudança?'))return;
+        }
+        await putProfessionalInRotation(pro,group,rotationRole);
+      }else{
+        await assignProfessionalToVehicle(value,selectedTeamVehicle,funcao);
+      }
     }
     closeModal('teamModal');
     selectedTeamVehicle=null;
