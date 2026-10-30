@@ -25,6 +25,7 @@ let bookDriverFixedRows = [];
 let selectedVehicle = null;
 let selectedTeamVehicle = null;
 let selectedEditOccurrence = null;
+let selectedVictimOccurrenceId = null;
 let selectedAssignProfessional = null;
 let selectedAssignTeamRow = null;
 let selectedIndividualMember = null;
@@ -50,7 +51,7 @@ let unsavedBook = false;
 let pendingShiftWarningKey = '';
 const modalDraftSnapshots = new Map();
 const TRACKED_DRAFT_MODALS = new Set([
-  'teamModal','occModal','occEditModal','expressPermutaModal',
+  'teamModal','occModal','occEditModal','victimDestinationModal','expressPermutaModal',
   'quickRegisterModal','assignModal','individualOccModal'
 ]);
 
@@ -866,6 +867,86 @@ function crewGridHtml(v){
   return '<div class="crew-grid '+cls+'">'+slots.join('')+'</div>'+
     '<div class="crew-setup '+state+'"><b>'+label+'</b><span>'+(o?'Equipe efetivamente empenhada':'Fixo + próximo do revezamento')+'</span></div>';
 }
+/* Desfecho da ocorrência reutiliza o destino persistido no banco. */
+const VICTIM_DESTINATION_OPTIONS=['UPA','UPA PED','HOSPITAL MUNICIPAL','SANTA CASA','ALFREDO ABRAAO','HEANA','HEG','TRANSPORTADO POR TERCEIROS','RECUSA','NÃO ENCONTRADO','QTA'];
+function victimDestinationDisplay(value){
+  const dest=String(value||'').trim();
+  if(!dest)return 'NÃO INFORMADO';
+  if(norm(dest)==='UPA PED')return 'UPA PEDIÁTRICA';
+  if(norm(dest)==='ALFREDO ABRAAO')return 'ALFREDO ABRAÃO';
+  if(norm(dest)==='RECUSA')return 'RECUSA DE TRANSPORTE';
+  return dest;
+}
+function victimDestinationControlsHtml(o,v){
+  if(!o?.chegada_qth_em||!v||!['occurrence','returning'].includes(statusInfo(v).key))return '';
+  const recorded=!!String(o.destino||'').trim();
+  return '<div class="victim-destination-card '+(recorded?'recorded':'pending')+'">'+
+    '<div class="victim-destination-result"><span>DESTINO DA VÍTIMA</span><strong>'+esc(victimDestinationDisplay(o.destino))+'</strong></div>'+
+    (isOperator()?'<button type="button" class="victim-destination-btn" data-act="victim-destination" data-o="'+esc(o.id)+'">'+
+      (recorded?'✎ EDITAR DESTINO':'✎ INFORMAR DESTINO')+'</button>':'')+
+  '</div>';
+}
+function refreshVictimDestinationChoice(){
+  const choice=$('#victimDestinationChoice')?.value;
+  $('#victimDestinationOtherWrap')?.classList.toggle('hidden',choice!=='OUTROS');
+  $('#victimDestinationQtaHint')?.classList.toggle('hidden',choice!=='QTA');
+  if($('#saveVictimDestinationBtn'))$('#saveVictimDestinationBtn').textContent=choice==='QTA'?'CONFIRMAR QTA':'SALVAR DESTINO';
+}
+function openVictimDestination(occId){
+  if(!isOperator())return;
+  const o=occurrences.find(x=>x.id===occId);
+  if(!o)return alert('Ocorrência não encontrada.');
+  const v=vehicleById(o.viatura_id);
+  if(!o.chegada_qth_em||!v||!['occurrence','returning'].includes(statusInfo(v).key)){
+    return alert('O destino da vítima fica disponível após a chegada no QTH, durante a ocorrência ou o retorno.');
+  }
+  selectedVictimOccurrenceId=o.id;
+  $('#victimDestinationTitle').textContent='Destino da vítima • '+(v.nome||v.codigo)+' • OC. '+(o.numero||'—');
+  $('#victimDestinationCurrent').textContent='Destino atual: '+victimDestinationDisplay(o.destino);
+  const saved=String(o.destino||'').trim();
+  const preset=VICTIM_DESTINATION_OPTIONS.includes(saved)?saved:(saved?'OUTROS':'');
+  $('#victimDestinationChoice').value=preset;
+  $('#victimDestinationOther').value=preset==='OUTROS'?saved:'';
+  refreshVictimDestinationChoice();
+  openModal('victimDestinationModal');
+}
+async function saveVictimDestination(){
+  if(!isOperator()||!selectedVictimOccurrenceId)return;
+  const oid=selectedVictimOccurrenceId;
+  const selected=$('#victimDestinationChoice').value;
+  const custom=$('#victimDestinationOther').value.trim();
+  if(!selected)return alert('Escolha onde a vítima ficou.');
+  if(selected==='OUTROS'&&!custom)return alert('Digite o local onde a vítima ficou em OUTROS.');
+  const dest=selected==='OUTROS'?custom:selected;
+  if(dest.length>180)return alert('O destino informado é muito longo.');
+  const button=$('#saveVictimDestinationBtn');
+  button.disabled=true;
+  try{
+    const {data:record,error:readError}=await supabase.from('ocorrencias')
+      .select('id,status,chegada_qth_em,viatura_id').eq('id',oid).maybeSingle();
+    if(readError)throw readError;
+    if(!record||!record.chegada_qth_em||['FINALIZADA','QTA','CANCELADA'].includes(norm(record.status))){
+      throw new Error('A ocorrência foi encerrada ou ainda não tem chegada ao QTH. Atualize o painel.');
+    }
+    const v=vehicleById(record.viatura_id);
+    if(!v||!['occurrence','returning'].includes(statusInfo(v).key)){
+      throw new Error('A viatura não está mais em ocorrência ou retorno. Atualize o painel.');
+    }
+    if(dest==='QTA'){
+      const saved=await setOccurrenceQta(oid,record.viatura_id);
+      if(!saved)return;
+    }else{
+      const {error}=await supabase.from('ocorrencias').update({destino:dest}).eq('id',oid);
+      if(error)throw error;
+      await loadAll(selectedDate());
+    }
+    selectedVictimOccurrenceId=null;
+    closeModal('victimDestinationModal');
+  }catch(error){
+    alert('Não foi possível salvar o destino da vítima: '+(error.message||error));
+  }finally{button.disabled=false}
+}
+
 function occurrenceInfoHtml(v,o){
   if(!o) return '';
   const qthRecorded=!!o.chegada_qth_em;
@@ -879,6 +960,7 @@ function occurrenceInfoHtml(v,o){
       '<div class="occ-time-chip qth-duration"><span>TEMPO ATÉ QTH</span><b>'+fmtMinutes(tempoQth)+'</b></div>'+
       '<div class="occ-time-chip"><span>INÍCIO RETORNO</span><b>'+fmtTime(o.inicio_retorno_em)+'</b></div>'+
     '</div>'+
+    victimDestinationControlsHtml(o,v)+
     (statusInfo(v).key==='occurrence'
       ? '<div class="occurrence-main-actions">'+
           '<button class="qth-btn '+(qthRecorded?'recorded':'')+'" data-act="qth" data-o="'+o.id+'">'+(qthRecorded?'QTH REGISTRADO • '+fmtTime(o.chegada_qth_em)+' • '+fmtMinutes(tempoQth):'CHEGADA NO QTH')+'</button>'+
@@ -1439,7 +1521,7 @@ function regionalVehicleHtml(v){
     '<div class="regional-crew '+(mem.length===1?'one':mem.length===2?'two':'')+'">'+crew+'</div>'+
     '<div class="crew-setup '+comp.state+'"><b>'+comp.label+'</b><span>'+mem.length+' profissional(is)</span></div>'+
     (o?'<div class="regional-occ">OC. '+esc(o.numero||'—')+' • '+esc(o.natureza||'SEM NATUREZA')+'</div>'+occurrenceInfoHtml(v,o).replace(/^<div class="occ-detail"[\s\S]*?<div class="occurrence-main-actions">/,'<div class="occurrence-main-actions">'):'')+
-    '<div class="regional-controls">'+actions+select+'</div>'+
+    '<div class="regional-controls">'+actions+victimDestinationControlsHtml(o,v)+select+'</div>'+
   '</div>';
 }
 function renderRegional(){
@@ -1469,14 +1551,15 @@ function renderRegional(){
 function destinationCard(o){
   const v=vehicleById(o.viatura_id);
   return '<div class="destination-card">'+
-    '<div class="occ-number">#'+esc(o.numero||'—')+'</div>'+
-    '<div class="occ-place">'+esc(o.destino||o.bairro||'Destino não informado')+'</div>'+
+    '<div class="occ-number">OC. '+esc(o.numero||'—')+'</div>'+
     '<div class="occ-vehicle">'+esc(v?.nome||o.viatura_snapshot||'Sem viatura')+'</div>'+
+    '<div class="destination-victim-label">VÍTIMA FICOU / RESULTADO</div>'+
+    '<div class="occ-place">'+esc(victimDestinationDisplay(o.destino))+'</div>'+
     (isOperator()?'<div class="destination-actions"><button class="edit" data-edit-occ="'+o.id+'">EDITAR</button><button class="delete" data-delete-occ="'+o.id+'">EXCLUIR</button></div>':'')+
   '</div>';
 }
 function renderDestinations(){
-  const active=occurrences.filter(o=>!['QTA','CANCELADA'].includes(norm(o.status)));
+  const active=occurrences.filter(o=>norm(o.status)!=='CANCELADA');
   const anIds=new Set(vehicles.filter(isAnapolisVehicle).map(v=>v.id));
   const an=active.filter(o=>o.viatura_id&&anIds.has(o.viatura_id));
   const rg=active.filter(o=>o.viatura_id&&!anIds.has(o.viatura_id));
@@ -1551,7 +1634,7 @@ function renderHistory(){
     const tr=minutesBetween(o.inicio_retorno_em,o.retorno_base_em);
     const tt=minutesBetween(o.saida_em||o.acionada_em,o.retorno_base_em||o.finalizado_em);
     return '<tr>'+
-      '<td>'+esc(o.numero||'—')+'</td><td>'+esc(v?.nome||o.viatura_snapshot||'—')+'</td><td>'+esc(o.natureza||'—')+'</td><td>'+esc(o.bairro||'—')+'</td><td>'+esc(o.destino||'—')+'</td><td>'+esc(o.endereco||'—')+'</td><td>'+esc(occurrenceCrewText(o))+'</td>'+
+      '<td>'+esc(o.numero||'—')+'</td><td>'+esc(v?.nome||o.viatura_snapshot||'—')+'</td><td>'+esc(o.natureza||'—')+'</td><td>'+esc(o.bairro||'—')+'</td><td>'+esc(victimDestinationDisplay(o.destino))+'</td><td>'+esc(o.endereco||'—')+'</td><td>'+esc(occurrenceCrewText(o))+'</td>'+
       '<td>'+fmtTime(o.saida_em||o.acionada_em)+'</td><td>'+fmtTime(o.chegada_qth_em)+'</td><td>'+fmtMinutes(tq)+'</td><td>'+fmtTime(o.inicio_retorno_em)+'</td><td>'+fmtTime(o.retorno_base_em)+'</td><td>'+fmtMinutes(tr)+'</td><td>'+fmtMinutes(tt)+'</td><td>'+esc(o.observacao||'—')+'</td>'+
       '<td>'+(isOperator()?'<div class="history-actions"><button class="history-edit" data-edit-occ="'+o.id+'">EDITAR</button><button class="history-delete" data-delete-occ="'+o.id+'">EXCLUIR</button></div>':'—')+'</td>'+
     '</tr>';
@@ -1572,6 +1655,7 @@ function bindVehicleActions(root){
     openOccurrenceModal(b.dataset.v);
   });
   root.querySelectorAll('[data-act="qth"]').forEach(b=>b.onclick=()=>setOccurrenceQth(b.dataset.o));
+  root.querySelectorAll('[data-act="victim-destination"]').forEach(b=>b.onclick=()=>openVictimDestination(b.dataset.o));
   root.querySelectorAll('[data-act="qta"]').forEach(b=>b.onclick=()=>setOccurrenceQta(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="return"]').forEach(b=>b.onclick=()=>setReturning(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="arrive"]').forEach(b=>b.onclick=()=>setArrived(b.dataset.o,b.dataset.v));
@@ -1912,10 +1996,10 @@ async function setOccurrenceQth(id){
   await loadAll(selectedDate());
 }
 async function setOccurrenceQta(oid,vid){
-  if(!isOperator()||!confirm('CONFIRMAR QTA?\n\nA ocorrência não será contabilizada no revezamento e a viatura volta para BASE.'))return;
+  if(!isOperator()||!confirm('CONFIRMAR QTA?\n\nA ocorrência não será contabilizada no revezamento e a viatura volta para BASE.'))return false;
   const now=new Date().toISOString();
-  const r=await supabase.from('ocorrencias').update({status:'QTA',qta_em:now,finalizado_em:now,finalizado_por:profile?.nome||null,creditou_revezamento:false}).eq('id',oid);
-  if(r.error)return alert(r.error.message);
+  const r=await supabase.from('ocorrencias').update({status:'QTA',destino:'QTA',qta_em:now,finalizado_em:now,finalizado_por:profile?.nome||null,creditou_revezamento:false}).eq('id',oid);
+  if(r.error){alert(r.error.message);return false;}
 
   // QTA não soma ocorrência, mas reinicia o relógio de tempo na base
   // para quem chegou a ser empenhado.
@@ -1926,6 +2010,7 @@ async function setOccurrenceQta(oid,vid){
   }
   if(vid)await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid);
   await loadAll(selectedDate());
+  return true;
 }
 async function setReturning(oid,vid){
   if(!isOperator())return;
@@ -3471,7 +3556,7 @@ async function endShift(){
   openShiftTransition();
 }
 function exportCSV(){
-  const rows=[['Ocorrencia','Viatura','Natureza','Bairro','Destino','Endereco','Equipe','Status','Saida','QTH','Inicio retorno','Chegada base','Observacao'],
+  const rows=[['Ocorrencia','Viatura','Natureza','Bairro','Destino da vitima','Endereco','Equipe','Status','Saida','QTH','Inicio retorno','Chegada base','Observacao'],
     ...occurrences.map(o=>{
       const v=vehicleById(o.viatura_id);
       return [o.numero||'',v?.nome||o.viatura_snapshot||'',o.natureza||'',o.bairro||'',o.destino||'',o.endereco||'',occurrenceCrewText(o),o.status||'',o.saida_em||'',o.chegada_qth_em||'',o.inicio_retorno_em||'',o.retorno_base_em||'',o.observacao||''];
@@ -3612,6 +3697,8 @@ $('#teamReloadBtn').onclick=()=>{
   autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadAll(selectedDate());
 };
 $('#saveOcc').onclick=saveOccurrence;$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
+$('#victimDestinationChoice').onchange=refreshVictimDestinationChoice;
+$('#saveVictimDestinationBtn').onclick=saveVictimDestination;
 $('#loadScaleBtn').onclick=askToApplyScaleReference;
 $('#autoScaleReferenceBtn').onclick=()=>restoreAutomaticScaleReference().catch(e=>alert(e.message||e));
 $('#scaleReferenceAcknowledge').onchange=()=>{$('#applyScaleReferenceBtn').disabled=!$('#scaleReferenceAcknowledge').checked};
