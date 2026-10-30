@@ -1180,7 +1180,7 @@ function earlyExitSummaryHtml(){
     '<p class="early-exit-summary-note">A saída é programada, não automática. Se houver ocorrência em andamento, o operador deve acompanhar e decidir o encerramento com segurança.</p></section>';
 }
 function earlyExitIsoForShift(time){
-  if(!currentPlantao||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time))throw new Error('Informe um horário válido.');
+  if(!currentPlantao||!/^([01]\d|2[0-3]):[0-5]\d$/.test(time))throw new Error('Informe um horário válido.');
   const shiftDate=currentPlantao.data_plantao;
   const isNight=normalizeTurno(currentPlantao.turno)==='NOTURNO';
   const targetDate=isNight&&time<'19:00'?addDaysIso(shiftDate,1):shiftDate;
