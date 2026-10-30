@@ -1208,14 +1208,114 @@ function automaticDispatchCrew(v){
   fixed.forEach(m=>{if(!used.has(m.profissional_id)){crew.push(m);used.add(m.profissional_id)}});
   return crew;
 }
+/* ---------- Painel lateral de prioridade: somente filas reais ---------- */
+function availableUsbTeams(){
+  const crit=currentRotationCriterion();
+  return vehicles.filter(v=>
+    isAnapolisVehicle(v)&&vehicleType(v).includes('USB')&&
+    v.participa_revezamento!==false&&vehicleAvailableForRotation(v)
+  ).map(v=>{
+    const used=new Set();
+    const driver=dispatchCandidateForVehicleRole(v,'driver',used);
+    if(driver)used.add(driver.profissional_id);
+    const tech=dispatchCandidateForVehicleRole(v,'tech',used);
+    return {
+      v,driver,tech,complete:!!driver&&!!tech,
+      base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)
+    };
+  }).filter(x=>x.complete).sort((a,b)=>{
+    if(crit==='occurrences'){
+      if(a.occ!==b.occ)return a.occ-b.occ;
+      if(a.base!==b.base)return b.base-a.base;
+    }else{
+      if(a.base!==b.base)return b.base-a.base;
+      if(a.occ!==b.occ)return a.occ-b.occ;
+    }
+    return String(a.v.nome||a.v.codigo).localeCompare(String(b.v.nome||b.v.codigo),'pt-BR',{numeric:true});
+  });
+}
+function rotationMembersForDisplay(role,type){
+  return activeTeamRows().filter(m=>
+    isRotationMember(m)&&teamRoleKey(m)===role&&
+    (role!=='driver'||driverRotationAllowsMember(m,type))
+  );
+}
+function priorityPersonName(m){
+  return m?.profissionais?displayName(m.profissionais):(m?.nome_snapshot||'—');
+}
+function compactRotationQueue(role,type,label){
+  const members=rotationMembersForDisplay(role,type);
+  if(!members.length)return '';
+  // A ordenação permanece a mesma usada para escolher profissionais no despacho.
+  const available=priorityPeopleForRole(role,type,{rotationOnly:true})
+    .filter(m=>isRotationMember(m));
+  let html='<div class="rotation-people-card">'+
+    '<div class="rotation-people-head"><b>'+esc(label)+' EM REVEZAMENTO</b>'+
+    '<small>'+available.length+' disponível(is)</small></div>';
+  if(available.length){
+    html+='<div class="rotation-person-next">'+
+      '<span class="rotation-next-tag">PRÓXIMO DA VEZ</span>'+
+      '<strong>'+esc(priorityPersonName(available[0]))+'</strong></div>';
+    if(available.length>1){
+      html+='<div class="rotation-person-order">'+available.slice(1,6).map((m,i)=>
+        '<div class="rotation-person-row"><span>'+(i+2)+'.</span><b>'+
+        esc(priorityPersonName(m))+'</b></div>').join('')+'</div>';
+    }
+  }else{
+    html+='<p class="rotation-person-unavailable">Profissionais em revezamento, mas nenhum disponível na base agora.</p>';
+  }
+  return html+'</div>';
+}
+function nextVehicleRotationCard(type,hasRotation){
+  const list=type==='USA'?availableUsaTeams():availableUsbTeams();
+  const first=list[0];
+  let html='<div class="rotation-next-vehicle">';
+  if(!first){
+    return html+'<span class="rotation-vehicle-label">PRÓXIMA '+type+'</span>'+
+      '<p class="rotation-vehicle-empty">Nenhuma '+type+' apta para empenho na base neste momento.</p></div>';
+  }
+  const prefix=first.v.nome||first.v.codigo;
+  html+='<span class="rotation-vehicle-label">PRÓXIMA '+type+' DA VEZ</span>'+
+    '<strong class="rotation-vehicle-prefix">'+esc(prefix)+'</strong>';
+  if(hasRotation){
+    const roles=type==='USA'
+      ? [['Condutor',first.driver],['Enfermeiro',first.nurse]]
+      : [['Condutor',first.driver],['Técnico / Enfermeiro',first.tech]];
+    const fixed=roles.filter(([,m])=>
+      m?.viatura_id===first.v.id&&!isRotationMember(m)
+    );
+    if(fixed.length){
+      html+='<div class="rotation-fixed-crew">'+fixed.map(([role,m])=>
+        '<div class="rotation-fixed-person"><b>'+esc(priorityPersonName(m))+'</b>'+
+        '<small>'+esc(role)+' • FIXO NA '+esc(prefix)+'</small></div>'
+      ).join('')+'</div>';
+    }
+  }
+  return html+'</div>';
+}
+function rotationPanelGroup(type){
+  const roles=type==='USA'
+    ? [['driver','Condutores'],['nurse','Enfermeiros']]
+    : [['driver','Condutores'],['tech','Técnicos / Enfermeiros']];
+  const queues=roles.map(([role,title])=>compactRotationQueue(role,type,title));
+  const hasRotation=roles.some(([role])=>rotationMembersForDisplay(role,type).length>0);
+  return '<section class="rotation-panel-group rotation-panel-'+type.toLowerCase()+'">'+
+    '<div class="rotation-panel-heading"><b>'+type+'</b>'+
+    '<span>'+(hasRotation?'ESCALA COM REVEZAMENTO':'EQUIPE FIXA')+'</span></div>'+
+    nextVehicleRotationCard(type,hasRotation)+
+    queues.join('')+
+  '</section>';
+}
 function renderRotation(){
   renderRotationRuleHelp();
+  const hasAnyRotation=['USA','USB'].some(type=>
+    (type==='USA'?['driver','nurse']:['driver','tech'])
+      .some(role=>rotationMembersForDisplay(role,type).length>0)
+  );
   $('#priority').innerHTML=
-    rotationPersonCard('USB — Condutor da vez','driver','USB')+
-    rotationPersonCard('USB — Técnico da vez','tech','USB')+
-    usaTeamRotationCard()+
-    rotationPersonCard('USA — Condutor da vez','driver','USA')+
-    rotationPersonCard('USA — Enfermeiro da vez','nurse','USA');
+    (!hasAnyRotation?'<p class="rotation-no-revezamento">Sem revezamento de profissionais neste plantão. Exibindo somente as próximas viaturas.</p>':'')+
+    rotationPanelGroup('USA')+
+    rotationPanelGroup('USB');
 }
 
 /* Valores rodoviários de referência do estudo da SES/GO para a Região Pireneus.
