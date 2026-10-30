@@ -1347,3 +1347,219 @@ nav.tabs .tab.book-tab.active{
   #vehicles .vehicle-operational-group.occurrence .vehicle-card{padding:10px}
   #vehicles .vehicle-operational-group.occurrence .vehicle-row{gap:9px}
 }
+
+/* ---------- Painel lateral limpo: viatura da vez e equipes em revezamento ---------- */
+.cockpit-rotation{
+  border-top:5px solid #d97706;
+  background:#fffdfa;
+  border-color:#f0cfaa;
+  border-top-color:#d97706;
+  min-width:0;
+}
+.cockpit-rotation .head h2{color:#7c3f12}
+.cockpit-rotation .head p{color:#7b6557;line-height:1.4}
+.cockpit-rotation .criterion-row{
+  background:#fff7ed;
+  border-color:#f4d9b7;
+  gap:7px;
+}
+.cockpit-rotation .criterion-row label{font-size:.74rem;color:#754c27}
+.cockpit-rotation .criterion-row select{font-size:.78rem}
+.cockpit-rotation .criterion-start{display:none}
+.cockpit-rotation .rotation-rule-help{
+  background:transparent;
+  border:0;
+  margin:3px 0 0;
+  padding:4px 1px;
+  color:#82634b;
+  font-size:.67rem;
+  line-height:1.4;
+}
+.cockpit-rotation .priority-list{
+  display:flex;
+  flex-direction:column;
+  gap:16px;
+  margin-top:12px;
+}
+.cockpit-rotation .rotation-no-revezamento{
+  margin:0;
+  padding:9px 10px;
+  border:1px solid #f4d4aa;
+  border-radius:9px;
+  background:#fff7ed;
+  color:#8b541d;
+  font-size:.74rem;
+  font-weight:750;
+  line-height:1.4;
+}
+.cockpit-rotation .rotation-panel-group{
+  min-width:0;
+  padding:10px;
+  border:1px solid #f1d8b8;
+  border-left:4px solid #d97706;
+  border-radius:11px;
+  background:#fff9f2;
+}
+.cockpit-rotation .rotation-panel-usb{
+  border-top:3px solid #dbeafe;
+  border-left-color:#2563eb;
+  background:#f8fbff;
+  border-color:#cfe0f5;
+  border-left-width:4px;
+}
+.cockpit-rotation .rotation-panel-heading{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  flex-wrap:wrap;
+  gap:6px;
+  margin-bottom:9px;
+}
+.cockpit-rotation .rotation-panel-heading b{
+  font-size:.99rem;
+  font-weight:1000;
+  color:#753f15;
+  letter-spacing:.02em;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-panel-heading b{color:#164a78}
+.cockpit-rotation .rotation-panel-heading span{
+  font-size:.66rem;
+  color:#885e37;
+  background:#fff1de;
+  border:1px solid #f4d5b1;
+  border-radius:99px;
+  padding:4px 7px;
+  font-weight:850;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-panel-heading span{
+  background:#eaf3ff;
+  border-color:#bfd9f7;
+  color:#355e87;
+}
+.cockpit-rotation .rotation-next-vehicle{
+  padding:12px 13px;
+  background:#fff;
+  border:1px solid #eed5b4;
+  border-left:4px solid #ea9b35;
+  border-radius:10px;
+  min-width:0;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-next-vehicle{border-color:#bfd5ee;border-left-color:#3b82f6}
+.cockpit-rotation .rotation-vehicle-label{
+  display:block;
+  color:#99601c;
+  font-size:.69rem;
+  font-weight:950;
+  letter-spacing:.06em;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-vehicle-label{color:#2563eb}
+.cockpit-rotation .rotation-vehicle-prefix{
+  display:block;
+  margin:4px 0 0;
+  color:#56310e;
+  font-size:1.27rem;
+  font-weight:1000;
+  line-height:1.1;
+  overflow-wrap:anywhere;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-vehicle-prefix{color:#123e66}
+.cockpit-rotation .rotation-vehicle-empty{
+  margin:8px 0 0;
+  color:#776355;
+  font-size:.75rem;
+  line-height:1.4;
+}
+.cockpit-rotation .rotation-fixed-crew{
+  display:grid;
+  gap:5px;
+  margin-top:10px;
+}
+.cockpit-rotation .rotation-fixed-person{
+  padding:7px 9px;
+  border-radius:8px;
+  border:1px solid #dce7e8;
+  background:#f8fafc;
+}
+.cockpit-rotation .rotation-fixed-person b{
+  display:block;
+  color:#183d51;
+  font-size:.82rem;
+  font-weight:950;
+  overflow-wrap:anywhere;
+}
+.cockpit-rotation .rotation-fixed-person small{
+  display:block;
+  color:#526d7c;
+  font-size:.67rem;
+  margin-top:2px;
+}
+.cockpit-rotation .rotation-people-card{
+  min-width:0;
+  padding:10px;
+  margin-top:10px;
+  border:1px solid #ecd6bc;
+  border-radius:10px;
+  background:#fff;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-people-card{border-color:#cbdff1}
+.cockpit-rotation .rotation-people-head{
+  display:flex;
+  align-items:baseline;
+  justify-content:space-between;
+  flex-wrap:wrap;
+  gap:5px 8px;
+  padding-bottom:7px;
+  border-bottom:1px solid #eee3d7;
+}
+.cockpit-rotation .rotation-people-head b{
+  font-size:.74rem;
+  font-weight:950;
+  color:#704016;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-people-head b{color:#1c537d}
+.cockpit-rotation .rotation-people-head small{
+  font-size:.66rem;
+  color:#85766c;
+  font-weight:800;
+}
+.cockpit-rotation .rotation-person-next{
+  margin-top:8px;
+  padding:10px 11px;
+  border:1px solid #f2bb72;
+  border-radius:9px;
+  background:#fff1da;
+}
+.cockpit-rotation .rotation-next-tag{
+  display:block;
+  font-size:.65rem;
+  font-weight:950;
+  color:#9a540e;
+  letter-spacing:.06em;
+}
+.cockpit-rotation .rotation-person-next strong{
+  display:block;
+  margin-top:4px;
+  font-size:1.04rem;
+  font-weight:1000;
+  line-height:1.25;
+  color:#713c0e;
+  overflow-wrap:anywhere;
+}
+.cockpit-rotation .rotation-person-order{margin-top:6px}
+.cockpit-rotation .rotation-person-row{
+  display:flex;
+  align-items:baseline;
+  gap:7px;
+  border-top:1px solid #eef0f2;
+  padding:7px 2px;
+  color:#334b5a;
+  font-size:.76rem;
+}
+.cockpit-rotation .rotation-person-row span{font-weight:900;color:#ad7332}
+.cockpit-rotation .rotation-person-row b{font-weight:900;overflow-wrap:anywhere}
+.cockpit-rotation .rotation-person-unavailable{
+  margin:8px 1px 0;
+  color:#8b5f3c;
+  font-size:.74rem;
+  line-height:1.35;
+}
