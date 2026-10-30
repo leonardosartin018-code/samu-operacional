@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261030-45-vizinho-mais-proximo">
+  <link rel="stylesheet" href="./styles.css?v=20261030-46-saida-antecipada">
 </head>
 <body>
 
@@ -480,6 +480,30 @@
   </div>
 </div>
 
+<div id="earlyExitModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="earlyExitTitle">
+  <div class="dialog early-exit-dialog">
+    <div class="dialog-head"><div><div class="dialog-kicker">REVEZAMENTO • SAÍDA ANTECIPADA</div><h2 id="earlyExitTitle">Programar saída antecipada</h2></div>
+      <button type="button" class="icon-close" data-close-modal="earlyExitModal" aria-label="Fechar">×</button>
+    </div>
+    <div id="earlyExitProfessional" class="early-exit-person"></div>
+    <p class="early-exit-explainer">Prioridade leve e temporária, sem colocar o profissional sempre em primeiro. A quantidade de ocorrências é uma meta, não uma garantia. Uma hora antes da saída, ele deixa de ser sugerido para novos acionamentos.</p>
+    <div class="early-exit-form">
+      <label for="earlyExitTime">Horário solicitado de saída
+        <input id="earlyExitTime" type="time" required step="300">
+      </label>
+      <label for="earlyExitExtra">Meta de atendimentos após programar
+        <select id="earlyExitExtra"><option value="1">Até 1 ocorrência</option><option value="2" selected>Até 2 ocorrências</option></select>
+      </label>
+    </div>
+    <div id="earlyExitPreview" class="early-exit-preview"></div>
+    <div class="modal-actions">
+      <button id="earlyExitRemoveBtn" type="button" class="btn" style="margin-right:auto">CANCELAR PROGRAMAÇÃO</button>
+      <button type="button" class="btn" data-close-modal="earlyExitModal">FECHAR</button>
+      <button id="earlyExitSaveBtn" type="button" class="btn primary">SALVAR PROGRAMAÇÃO</button>
+    </div>
+  </div>
+</div>
+
 <div id="occModal" class="modal">
   <div class="dialog dispatch-dialog">
     <div class="dialog-head"><div><div class="dialog-kicker">ACIONAMENTO</div><h2 id="occModalTitle">Acionar viatura</h2></div><button class="icon-close" data-close-modal="occModal">×</button></div>
@@ -678,6 +702,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261030-45-vizinho-mais-proximo"></script>
+<script type="module" src="./app.js?v=20261030-46-saida-antecipada"></script>
 </body>
 </html>
