@@ -834,7 +834,7 @@ function namedMemberSlotHtml(m,label){
 }
 function rotationPreviewSlotHtml(m,role){
   if(!m)return memberSlotHtml(null);
-  return '<div class="crew-slot rotation-preview"><div class="crew-role">'+esc(roleLabel(role))+'</div><div class="crew-name">'+esc(displayName(m.profissionais))+'</div></div>';
+  return '<div class="crew-slot rotation-preview"><div class="crew-role">'+esc(roleLabel(role))+' • PRÓXIMO DA FILA</div><div class="crew-name">'+esc(displayName(m.profissionais))+'</div><small class="crew-preview-note">PRÉVIA COMPARTILHADA • NÃO É FIXO</small></div>';
 }
 function crewRowsForCard(v){
   const o=activeOccurrence(v);
@@ -1662,9 +1662,20 @@ function rotationPanelGroup(type){
     : [['driver','Condutores'],['tech','Técnicos / Enfermeiros']];
   const queues=roles.map(([role,title])=>compactRotationQueue(role,type,title));
   const hasRotation=roles.some(([role])=>rotationMembersForDisplay(role,type).length>0);
+  // Somente em equipes mistas, esclarece quais funções foram salvas como
+  // fixas e por isso não devem aparecer na fila compartilhada.
+  const fixedRoleNotes=hasRotation?roles.filter(([role])=>rotationMembersForDisplay(role,type).length===0)
+    .map(([role,title])=>{
+      const fixed=activeTeamRows().filter(m=>{
+        const v=vehicleById(m.viatura_id);
+        return !isRotationMember(m)&&teamRoleKey(m)===role&&v&&isAnapolisVehicle(v)&&vehicleType(v).includes(type);
+      });
+      return fixed.length?esc(title)+': '+fixed.length+' fixo(s) — não entram no revezamento':'';
+    }).filter(Boolean):[];
   return '<section class="rotation-panel-group rotation-panel-'+type.toLowerCase()+'">'+
     '<div class="rotation-panel-heading"><b>'+type+'</b>'+
     '<span>'+(hasRotation?'ESCALA COM REVEZAMENTO':'EQUIPE FIXA')+'</span></div>'+
+    (fixedRoleNotes.length?'<p class="rotation-mode-clarity">'+fixedRoleNotes.join(' • ')+'</p>':'')+
     nextVehicleRotationCard(type,hasRotation)+
     queues.join('')+
   '</section>';
