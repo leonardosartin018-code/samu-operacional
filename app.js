@@ -3149,7 +3149,13 @@ async function saveIndividualOccurrence(){
   if(error)return alert(error.message);
   const eo=await supabase.from('equipe_ocorrencia').insert({ocorrencia_id:o.id,profissional_id:m.profissional_id,funcao:m.funcao,nome_snapshot:m.nome_snapshot||m.profissionais?.nome_completo,tipo_escala_no_momento:m.tipo_escala});
   if(eo.error)return alert(eo.error.message);
-  await supabase.from('equipe_plantao').update({ocorrencias_validas:Number(m.ocorrencias_validas||0)+1,ultima_ocorrencia_em:now,ultimo_retorno_em:now}).eq('id',m.id);
+  const {error:memberError}=await supabase.from('equipe_plantao')
+    .update({ocorrencias_validas:Number(m.ocorrencias_validas||0)+1,ultima_ocorrencia_em:now,ultimo_retorno_em:now})
+    .eq('id',m.id);
+  if(memberError)return alert('Ocorrência registrada, mas a atualização individual falhou: '+memberError.message);
+  const {error:manualError}=await supabase.from('prioridade_manual_revezamento')
+    .delete().eq('plantao_id',currentPlantao.id).eq('equipe_plantao_id',m.id);
+  if(manualError)console.warn('Prioridade pontual invalidada pelo retorno individual:',manualError);
   closeModal('individualOccModal');selectedIndividualMember=null;await loadAll(selectedDate());
 }
 
