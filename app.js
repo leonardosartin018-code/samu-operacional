@@ -1719,18 +1719,37 @@ function rotationPanelGroup(type){
   '</section>';
 }
 function renderRotation(){
-  renderRotationRuleHelp();
-  const hasAnyRotation=['USA','USB'].some(type=>
-    (type==='USA'?['driver','nurse']:['driver','tech'])
-      .some(role=>rotationMembersForDisplay(role,type).length>0)
-  );
-  $('#priority').innerHTML=
-    earlyExitSummaryHtml()+
-    (!hasAnyRotation?'<p class="rotation-no-revezamento">Sem revezamento de profissionais neste plantão. Exibindo somente as próximas viaturas.</p>':'')+
-    rotationPanelGroup('USA')+
-    rotationPanelGroup('USB');
-  bindEarlyExitButtons($('#priority'));
-  bindManualQueueButtons($('#priority'));
+  const root=$('#priority');
+  if(!root)return;
+  // Renderiza USA e USB independentemente: um erro numa das filas jamais
+  // deve apagar a outra, nem deixar o quadro operacional inteiro vazio.
+  try{
+    renderRotationRuleHelp();
+    const sections=['USA','USB'].map(type=>{
+      try{return rotationPanelGroup(type)}
+      catch(e){
+        console.error('Falha ao apresentar o revezamento '+type,e);
+        return '<section class="rotation-panel-group rotation-panel-'+type.toLowerCase()+'">'+
+          '<div class="rotation-panel-heading"><b>'+type+'</b></div>'+
+          '<p class="rotation-render-error">Não foi possível calcular esta fila. Confira a escala antes do acionamento e atualize o painel.</p></section>';
+      }
+    });
+    const hasAnyRotation=['USA','USB'].some(type=>
+      (type==='USA'?['driver','nurse']:['driver','tech'])
+        .some(role=>rotationMembersForDisplay(role,type).length>0)
+    );
+    let exitSummary='';
+    try{exitSummary=earlyExitSummaryHtml()}
+    catch(e){console.error('Falha no resumo de saída antecipada',e)}
+    root.innerHTML=exitSummary+
+      (!hasAnyRotation?'<p class="rotation-no-revezamento">Sem revezamento de profissionais neste plantão. Exibindo somente as próximas viaturas.</p>':'')+
+      sections.join('');
+    bindEarlyExitButtons(root);
+    bindManualQueueButtons(root);
+  }catch(e){
+    console.error('Falha geral ao renderizar as próximas viaturas',e);
+    root.innerHTML='<p class="rotation-render-error">Painel de revezamento indisponível. Não utilize esta indicação para empenho sem conferir a escala e a equipe.</p>';
+  }
 }
 
 /* Valores rodoviários de referência do estudo da SES/GO para a Região Pireneus.
