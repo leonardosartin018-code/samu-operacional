@@ -2027,11 +2027,7 @@ function bindVehicleActions(root){
       openTeamModal(card.dataset.v);
     };
   });
-  root.querySelectorAll('[data-act="dispatch"]').forEach(b=>b.onclick=()=>{
-    const v=vehicleById(b.dataset.v);
-    if(!validateDispatchCrew(v))return;
-    openOccurrenceModal(b.dataset.v);
-  });
+  root.querySelectorAll('[data-act="dispatch"]').forEach(b=>b.onclick=()=>openOccurrenceModal(b.dataset.v));
   root.querySelectorAll('[data-act="qth"]').forEach(b=>b.onclick=()=>setOccurrenceQth(b.dataset.o));
   root.querySelectorAll('[data-act="victim-destination"]').forEach(b=>b.onclick=()=>openVictimDestination(b.dataset.o));
   root.querySelectorAll('[data-act="qta"]').forEach(b=>b.onclick=()=>setOccurrenceQta(b.dataset.o,b.dataset.v));
@@ -2340,6 +2336,155 @@ function populateVehicleSelect(selectEl,selected=null,allowEmpty=true){
     vehicles.map(v=>'<option value="'+v.id+'">'+esc(v.nome||v.codigo)+' • '+esc(v.bases?.nome||'')+'</option>').join('');
   if(selected)selectEl.value=selected;
 }
+/* ---------- Guarnição confirmada pelo operador no acionamento ---------- */
+function dispatchUsesCrewChoice(v){
+  const type=vehicleType(v);
+  return type.includes('USA')||type.includes('USB');
+}
+function dispatchSlotRoles(v){
+  const type=vehicleType(v);
+  return type.includes('USA')?['driver','nurse','doctor']:
+    type.includes('USB')?['driver','tech']:[];
+}
+function dispatchRoleMatch(m,role,v){
+  if(!m)return false;
+  if(teamRoleKey(m)===role)return true;
+  // Enfermeiro cadastrado como apoio técnico no USB é compatível com essa função.
+  return role==='tech'&&teamRoleKey(m)==='nurse'&&
+    (norm(m.grupo_revezamento).includes('USB_TECNICO')||
+      (m.viatura_id===v.id&&norm(m.funcao).includes('TECN')));
+}
+function dispatchCrewOptions(v,role){
+  if(!v)return [];
+  const type=vehicleType(v).includes('USA')?'USA':'USB';
+  const added=new Set();
+  const choices=[];
+  const append=m=>{
+    if(!m||added.has(m.profissional_id)||memberIsBusy(m)||
+       norm(m.status||'ATIVO')!=='ATIVO'||!dispatchRoleMatch(m,role,v))return;
+    if(isRotationMember(m)&&earlyExitStatus(m)?.cutoff)return;
+    if(!isRotationMember(m)&&m.viatura_id!==v.id&&m.viatura_id)return;
+    // Revezamento de condutores respeita o tipo de unidade.
+    if(isRotationMember(m)&&role==='driver'&&!driverRotationAllowsMember(m,type))return;
+    if(isRotationMember(m)&&role!=='driver'&&role!=='doctor'&&
+       !norm(m.grupo_revezamento).includes(type))return;
+    added.add(m.profissional_id);
+    choices.push(m);
+  };
+  vehicleMembers(v).filter(m=>dispatchRoleMatch(m,role,v)).forEach(append);
+  if(role==='doctor'){
+    activeTeamRows().filter(m=>teamRoleKey(m)==='doctor'&&
+      (isRotationMember(m)||!m.viatura_id)).sort((a,b)=>
+      personBaseMinutes(b,type)-personBaseMinutes(a,type)).forEach(append);
+  }else{
+    priorityPeopleForRole(role,type,{rotationOnly:true}).forEach(append);
+    if(role==='tech'){
+      activeTeamRows().filter(m=>isRotationMember(m)&&teamRoleKey(m)==='nurse'&&
+        norm(m.grupo_revezamento).includes('USB_TECNICO')).forEach(append);
+    }
+  }
+  return choices;
+}
+function dispatchRoleName(role){
+  return role==='tech'?'TÉCNICO / ENFERMEIRO':roleLabel(role);
+}
+function dispatchSuggestion(v,role,choices){
+  const suggested=automaticDispatchCrew(v).find(m=>dispatchRoleMatch(m,role,v));
+  return choices.find(m=>m.profissional_id===suggested?.profissional_id)||choices[0]||null;
+}
+function renderDispatchCrewPanel(){
+  const v=vehicleById($('#occVehicleSelect').value);
+  const panel=$('#dispatchCrewPanel'),root=$('#dispatchCrewFields');
+  const choose=v&&dispatchUsesCrewChoice(v)&&!vehicleType(v).includes('MOTO');
+  panel.classList.toggle('hidden',!choose);
+  if(!choose){
+    root.innerHTML='';
+    $('#dispatchCrewWarning').classList.add('hidden');
+    $('#dispatchCrewHint').textContent='';
+    updateDispatchCrewStatus();
+    return;
+  }
+  const type=vehicleType(v).includes('USA')?'USA':'USB';
+  $('#dispatchCrewHint').textContent='A sugestão respeita a fila '+type+
+    ' e os profissionais fixos desta viatura. Você pode trocar o nome antes de acionar, sem alterar a escala.';
+  root.innerHTML=dispatchSlotRoles(v).map(role=>{
+    const options=dispatchCrewOptions(v,role);
+    const suggested=dispatchSuggestion(v,role,options);
+    const required=requiredDispatchRoles(v).includes(role);
+    const display=options.map(m=>{
+      const fixed=!isRotationMember(m)&&m.viatura_id===v.id;
+      const status=fixed?' • FIXO NA VIATURA':' • REVEZAMENTO';
+      return '<option value="'+esc(m.id)+'"'+(m.id===suggested?.id?' selected':'')+'>'+
+        esc(displayName(m.profissionais))+status+'</option>';
+    }).join('');
+    return '<div class="dispatch-crew-field" data-dispatch-slot="'+role+'">'+
+      '<div class="dispatch-crew-label"><b>'+esc(dispatchRoleName(role))+'</b>'+
+      '<span>'+(required?'OBRIGATÓRIO':'OPCIONAL')+'</span></div>'+
+      '<select id="dispatchCrew_'+role+'" data-dispatch-role="'+role+'" data-suggested-id="'+esc(suggested?.id||'')+'" aria-label="Selecionar '+esc(dispatchRoleName(role))+' para o acionamento">'+
+        '<option value="">'+(required?'SELECIONE UM PROFISSIONAL':'SEM MÉDICO')+'</option>'+
+        display+'</select>'+
+      '<div class="dispatch-crew-choice-label" data-dispatch-choice="'+role+'"></div>'+
+    '</div>';
+  }).join('');
+  root.querySelectorAll('[data-dispatch-role]').forEach(el=>el.onchange=updateDispatchCrewStatus);
+  updateDispatchCrewStatus();
+}
+function chosenDispatchCrew(v){
+  if(!v)return [];
+  if(!dispatchUsesCrewChoice(v)||vehicleType(v).includes('MOTO'))return automaticDispatchCrew(v);
+  const taken=new Set(),selected=[];
+  for(const role of dispatchSlotRoles(v)){
+    const input=$('#dispatchCrew_'+role);
+    const id=input?.value;
+    if(!id){
+      if(requiredDispatchRoles(v).includes(role))throw new Error(
+        'Escolha '+dispatchRoleName(role)+' para '+(v.nome||v.codigo)+'.');
+      continue;
+    }
+    const options=dispatchCrewOptions(v,role);
+    const m=options.find(row=>row.id===id);
+    if(!m)throw new Error(dispatchRoleName(role)+' indisponível ou fora da escala. Reabra o acionamento.');
+    if(taken.has(m.profissional_id))throw new Error(
+      'O mesmo profissional não pode ocupar duas funções na mesma ocorrência.');
+    taken.add(m.profissional_id);
+    selected.push(m);
+  }
+  return selected;
+}
+function updateDispatchCrewStatus(){
+  const v=vehicleById($('#occVehicleSelect').value);
+  const status=$('#dispatchTeamStatus'),warning=$('#dispatchCrewWarning');
+  if(!v){
+    status.textContent='Lançamento manual, sem viatura.';
+    warning.classList.add('hidden');
+    return;
+  }
+  if(!dispatchUsesCrewChoice(v)||vehicleType(v).includes('MOTO')){
+    status.textContent='Equipe atual da viatura preservada.';
+    warning.classList.add('hidden');
+    return;
+  }
+  const selectors=[...$('#dispatchCrewFields').querySelectorAll('[data-dispatch-role]')];
+  let changed=0;
+  selectors.forEach(input=>{
+    const chosen=input.value;
+    const different=chosen!==input.dataset.suggestedId;
+    const note=$('#dispatchCrewFields').querySelector('[data-dispatch-choice="'+input.dataset.dispatchRole+'"]');
+    const m=activeTeamRows().find(x=>x.id===chosen);
+    const fixed=m&&!isRotationMember(m)&&m.viatura_id===v.id;
+    if(note){
+      note.textContent=!chosen?'NÃO SELECIONADO':different?'ESCOLHA MANUAL':
+        fixed?'FIXO NA VIATURA':'SUGESTÃO • PRÓXIMO DA VEZ';
+      note.classList.toggle('manual',different&&!!chosen);
+    }
+    if(different)changed++;
+    input.classList.toggle('manual-choice',different&&!!chosen);
+  });
+  status.textContent=changed?'Equipe alterada manualmente • revise antes de confirmar.':
+    'Guarnição sugerida pelo revezamento pronta para conferência.';
+  warning.classList.toggle('hidden',!changed);
+  if(changed)warning.textContent='A escolha manual vale somente para esta ocorrência. A escala e a sequência do revezamento não serão alteradas permanentemente.';
+}
 function openOccurrenceModal(vId=null){
   if(!isOperator())return;
   if(!currentPlantao)return alert('Selecione um plantão antes de lançar ocorrência.');
@@ -2347,16 +2492,30 @@ function openOccurrenceModal(vId=null){
   populateVehicleSelect($('#occVehicleSelect'),vId,true);
   $('#occModalTitle').textContent=vId?'Acionar '+(vehicleById(vId)?.nome||'viatura'):'Lançar ocorrência manual';
   $('#occNumber').value='';$('#occNature').value='';$('#occBairro').value='';$('#occDestino').value='';$('#occEndereco').value='';$('#occObs').value='';$('#occStart').value=nowLocalTime();
+  renderDispatchCrewPanel();
   openModal('occModal');
 }
 async function saveOccurrence(){
   if(!canEditOpenShift()||!currentPlantao)return;
   const vId=$('#occVehicleSelect').value||null;
   const v=vehicleById(vId);
-  if(vId&&!validateDispatchCrew(v))return;
+  if(vId&&!v)return alert('Viatura não encontrada. Abra o acionamento novamente.');
+  if(v&&(activeOccurrence(v)||statusInfo(v).key!=='base'))
+    return alert('A viatura não está disponível na base para um novo acionamento.');
+  let dispatchCrew=[];
+  try{dispatchCrew=v?chosenDispatchCrew(v):[]}catch(e){return alert(e.message||e)}
+  if(v){
+    const missing=requiredDispatchRoles(v).filter(role=>!crewHasRole(dispatchCrew,role));
+    if(missing.length)return alert('Guarnição incompleta para '+(v.nome||v.codigo)+
+      '. Preencha '+missing.map(dispatchRoleName).join(' e ')+' antes de acionar.');
+    const manual=[...$('#dispatchCrewFields').querySelectorAll('[data-dispatch-role]')]
+      .filter(el=>el.value!==el.dataset.suggestedId);
+    if(manual.length&&!confirm('CONFIRMAR EQUIPE ESCOLHIDA?\n\n'+
+      dispatchCrew.map(m=>displayName(m.profissionais)+' — '+m.funcao).join('\n')+
+      '\n\nEssa escolha será registrada somente nesta ocorrência. Deseja acionar?'))return;
+  }
   const now=localDateTimeIso(currentPlantao.data_plantao,$('#occStart').value||nowLocalTime());
   const crit=currentRotationCriterion();
-  const autoCrew=v?automaticDispatchCrew(v):[];
   const payload={
     plantao_id:currentPlantao.id,viatura_id:vId,numero:$('#occNumber').value.trim()||null,natureza:$('#occNature').value.trim()||null,
     bairro:$('#occBairro').value.trim()||null,destino:$('#occDestino').value.trim()||null,endereco:$('#occEndereco').value.trim()||null,
@@ -2377,8 +2536,8 @@ async function saveOccurrence(){
 
       // Mantém fixos na própria viatura e completa as vagas com quem está da vez
       // nas filas de condutor/técnico/enfermeiro.
-      if(autoCrew.length){
-        const er=await supabase.from('equipe_ocorrencia').insert(autoCrew.map(m=>({
+      if(dispatchCrew.length){
+        const er=await supabase.from('equipe_ocorrencia').insert(dispatchCrew.map(m=>({
           ocorrencia_id:o.id,profissional_id:m.profissional_id,funcao:m.funcao,nome_snapshot:m.nome_snapshot||m.profissionais?.nome_completo,
           viatura_id:vId,viatura_snapshot:v.nome,tipo_escala_no_momento:m.tipo_escala
         })));
@@ -4125,7 +4284,7 @@ $('#teamReloadBtn').onclick=()=>{
   if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,action:'atualizar a equipe'}))return;
   autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadAll(selectedDate());
 };
-$('#saveOcc').onclick=saveOccurrence;$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
+$('#saveOcc').onclick=saveOccurrence;$('#occVehicleSelect').onchange=renderDispatchCrewPanel;$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
 $('#victimDestinationChoice').onchange=refreshVictimDestinationChoice;
 $('#saveVictimDestinationBtn').onclick=saveVictimDestination;
 $('#loadScaleBtn').onclick=askToApplyScaleReference;
