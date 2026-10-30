@@ -520,7 +520,12 @@ function stopOperationalShiftMonitor(){
 function startOperationalShiftMonitor(){
   stopOperationalShiftMonitor();
   operationalShiftTimer=setInterval(()=>{
-    if(!session||!autoFollowCurrentShift)return;
+    if(!session)return;
+    // O alerta de última hora deve atualizar sem precisar recarregar o banco,
+    // inclusive se o plantão tiver sido selecionado manualmente.
+    if(currentPlantao&&$('#base')?.classList.contains('active'))renderRotation();
+    if(currentPlantao&&$('#team')?.classList.contains('active'))renderTeamPreview();
+    if(!autoFollowCurrentShift)return;
     const key=operationalShiftKey();
     if(key!==lastClockShiftKey || !currentPlantao){
       synchronizeCurrentOperationalShift().catch(console.error);
@@ -1495,11 +1500,16 @@ function compactRotationQueue(role,type,label){
   if(available.length){
     html+='<div class="rotation-person-next">'+
       '<span class="rotation-next-tag">PRÓXIMO DA VEZ</span>'+
-      '<strong>'+esc(priorityPersonName(available[0]))+'</strong></div>';
+      '<strong>'+esc(priorityPersonName(available[0]))+'</strong>'+
+      (earlyExitStatus(available[0])?'<small class="early-exit-queue-note">'+esc(earlyExitStatusLabel(available[0]))+'</small>':'')+
+      (isOperator()?'<button type="button" class="early-exit-mini" data-schedule-exit="'+esc(available[0].id)+'">SAÍDA</button>':'')+'</div>';
     if(available.length>1){
       html+='<div class="rotation-person-order">'+available.slice(1,6).map((m,i)=>
         '<div class="rotation-person-row"><span>'+(i+2)+'.</span><b>'+
-        esc(priorityPersonName(m))+'</b></div>').join('')+'</div>';
+        esc(priorityPersonName(m))+'</b>'+
+        (earlyExitStatus(m)?'<small class="early-exit-queue-note">'+esc(earlyExitStatusLabel(m))+'</small>':'')+
+        (isOperator()?'<button type="button" class="early-exit-mini" data-schedule-exit="'+esc(m.id)+'">SAÍDA</button>':'')+
+        '</div>').join('')+'</div>';
     }
   }else{
     html+='<p class="rotation-person-unavailable">Profissionais em revezamento, mas nenhum disponível na base agora.</p>';
@@ -1553,9 +1563,11 @@ function renderRotation(){
       .some(role=>rotationMembersForDisplay(role,type).length>0)
   );
   $('#priority').innerHTML=
+    earlyExitSummaryHtml()+
     (!hasAnyRotation?'<p class="rotation-no-revezamento">Sem revezamento de profissionais neste plantão. Exibindo somente as próximas viaturas.</p>':'')+
     rotationPanelGroup('USA')+
     rotationPanelGroup('USB');
+  bindEarlyExitButtons($('#priority'));
 }
 
 /* Valores rodoviários de referência do estudo da SES/GO para a Região Pireneus.
@@ -1771,9 +1783,13 @@ function renderTeamSearch(q){
 function rosterPersonHtml(m){
   const v=vehicleById(m.viatura_id);
   const assign=v?.nome||m.viatura_snapshot||m.grupo_revezamento||m.tipo_escala||'SEM VIATURA';
-  return '<div class="roster-person"><div><div class="roster-person-name">'+esc(displayName(m.profissionais))+'</div><div class="roster-person-meta">'+esc(m.funcao)+' • '+esc(assign)+'</div></div>'+
+  return '<div class="roster-person"><div><div class="roster-person-name">'+esc(displayName(m.profissionais))+'</div><div class="roster-person-meta">'+esc(m.funcao)+' • '+esc(assign)+'</div>'+
+    (earlyExitStatus(m)?'<div class="early-exit-roster-label">'+esc(earlyExitStatusLabel(m))+'</div>':'')+'</div>'+
     '<div class="roster-person-actions">'+
       '<button class="person-occ" data-individual-occ="'+m.id+'">LANÇAR Nº OCORRÊNCIA</button>'+
+      (isOperator()&&isRotationMember(m)&&['driver','tech','nurse'].includes(teamRoleKey(m))
+        ?'<button type="button" class="person-early-exit" data-schedule-exit="'+esc(m.id)+'">'+
+          (earlyExitStatus(m)?'EDITAR SAÍDA':'PROGRAMAR SAÍDA')+'</button>':'')+
       (isOperator()?'<button class="person-edit" data-edit-member="'+m.id+'">EDITAR</button><button class="person-remove" data-remove-member="'+m.id+'">RETIRAR DA ESCALA</button>':'')+
     '</div></div>';
 }
@@ -1799,6 +1815,7 @@ function renderTeamPreview(){
   $('#teamPreview').querySelectorAll('[data-individual-occ]').forEach(b=>b.onclick=()=>openIndividualOccurrence(b.dataset.individualOcc));
   $('#teamPreview').querySelectorAll('[data-edit-member]').forEach(b=>b.onclick=()=>openEditTeamMember(b.dataset.editMember));
   $('#teamPreview').querySelectorAll('[data-remove-member]').forEach(b=>b.onclick=()=>removeTeamMember(b.dataset.removeMember));
+  bindEarlyExitButtons($('#teamPreview'));
 }
 
 function renderHistory(){
@@ -3871,6 +3888,10 @@ $('#shiftEndStartBtn').onclick=()=>executeShiftTransition('end_start');
 $('#shiftStartOnlyBtn').onclick=()=>executeShiftTransition('start');
 $('#regionalBtn')?.addEventListener('click',()=>$('#regionalIntegrated').scrollIntoView({behavior:'smooth',block:'start'}));
 $('#rotationCriterion').onchange=e=>persistRotationCriterion(e.target.value);
+$('#earlyExitTime').oninput=updateEarlyExitPreview;
+$('#earlyExitExtra').onchange=updateEarlyExitPreview;
+$('#earlyExitSaveBtn').onclick=saveEarlyExit;
+$('#earlyExitRemoveBtn').onclick=removeEarlyExit;
 $('#teamReloadBtn').onclick=()=>{
   if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,action:'atualizar a equipe'}))return;
   autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadAll(selectedDate());
