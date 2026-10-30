@@ -1860,3 +1860,33 @@ nav.tabs .tab.book-tab.active{
   overflow-wrap:anywhere;
 }
 #regionalGrid .regional-sequence{min-width:27px;justify-content:center}
+
+/* Saída antecipada programada no revezamento: aviso persistente e discreto. */
+.early-exit-dialog{width:min(620px,100%);max-height:90vh}
+.early-exit-person{padding:10px 12px;margin:9px 0;border:1px solid #bfdbfe;border-radius:8px;background:#eff6ff;color:#134665;font-weight:1000;font-size:.91rem}
+.early-exit-explainer{color:#496579;line-height:1.5;font-size:.79rem;margin:9px 0 12px}
+.early-exit-form{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.early-exit-form label{display:grid;gap:5px;font-size:.76rem;font-weight:950;color:#315268}
+.early-exit-form input,.early-exit-form select{width:100%;min-height:42px;border:1px solid #a5c0d1;border-radius:8px;padding:9px;background:#fff;color:#163950;font-size:.88rem;font-weight:850}
+.early-exit-preview{margin:12px 0;padding:10px 12px;background:#fff7ed;border:1px solid #fed7aa;border-radius:8px;color:#92400e;font-size:.76rem;line-height:1.5}
+#earlyExitRemoveBtn{border-color:#fca5a5;color:#b91c1c;background:#fff1f2}
+.cockpit-rotation .early-exit-summary{padding:10px;border:1px solid #f2c58b;border-left:4px solid #d97706;border-radius:10px;background:#fffbf4}
+.cockpit-rotation .early-exit-summary-head{font-size:.73rem;font-weight:1000;color:#92400e;letter-spacing:.04em;margin-bottom:7px}
+.cockpit-rotation .early-exit-summary-line{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:7px;padding:8px 0;border-top:1px solid #f2e1c8}
+.cockpit-rotation .early-exit-summary-line.warning{background:#fff4eb;padding:8px;border:1px solid #fdba74;border-radius:7px;margin-top:5px}
+.cockpit-rotation .early-exit-summary-line>div{flex:1 1 140px;min-width:0;display:grid;gap:3px}
+.cockpit-rotation .early-exit-summary-line b{font-size:.83rem;color:#713f12}
+.cockpit-rotation .early-exit-summary-line small{font-size:.67rem;font-weight:900;color:#9a6b32}
+.cockpit-rotation .early-exit-summary-line span{font-size:.69rem;line-height:1.35;color:#7c4b21}
+.cockpit-rotation .early-exit-summary-line button,.cockpit-rotation .early-exit-mini{
+  min-height:29px;padding:5px 8px;border:1px solid #f2b66c;border-radius:7px;background:#fff5e6;color:#92400e;font-size:.66rem;font-weight:1000;cursor:pointer
+}
+.cockpit-rotation .early-exit-mini{margin:5px 0 0}
+.cockpit-rotation .rotation-person-next .early-exit-mini{display:block}
+.cockpit-rotation .rotation-person-row{align-items:center;flex-wrap:wrap}
+.cockpit-rotation .rotation-person-row .early-exit-mini{margin-left:auto}
+.cockpit-rotation .early-exit-queue-note{display:block;width:100%;font-size:.63rem;color:#9a5b19;font-weight:850;line-height:1.35}
+.cockpit-rotation .early-exit-summary-note{font-size:.66rem;color:#85674c;line-height:1.45;margin:8px 0 0}
+.roster-person .early-exit-roster-label{display:inline-block;margin-top:5px;padding:5px 8px;border:1px solid #fdba74;border-radius:7px;background:#fff7ed;color:#92400e;font-size:.66rem;font-weight:900;line-height:1.4}
+.roster-person-actions .person-early-exit{min-height:31px;padding:6px 8px;border:1px solid #fb923c;border-radius:7px;background:#fff7ed;color:#9a3412;font-size:.68rem;font-weight:1000;cursor:pointer}
+@media(max-width:560px){.early-exit-form{grid-template-columns:1fr}.early-exit-dialog .modal-actions{flex-wrap:wrap}}
