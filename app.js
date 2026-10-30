@@ -26,6 +26,7 @@ let selectedVehicle = null;
 let selectedTeamVehicle = null;
 let selectedEditOccurrence = null;
 let selectedVictimOccurrenceId = null;
+let selectedEarlyExitMemberId = null;
 let selectedAssignProfessional = null;
 let selectedAssignTeamRow = null;
 let selectedIndividualMember = null;
@@ -51,7 +52,7 @@ let unsavedBook = false;
 let pendingShiftWarningKey = '';
 const modalDraftSnapshots = new Map();
 const TRACKED_DRAFT_MODALS = new Set([
-  'teamModal','occModal','occEditModal','victimDestinationModal','expressPermutaModal',
+  'teamModal','occModal','occEditModal','victimDestinationModal','earlyExitModal','expressPermutaModal',
   'quickRegisterModal','assignModal','individualOccModal'
 ]);
 
@@ -1117,9 +1118,159 @@ function driverRotationAllowsMember(m,type){
 function vehicleAvailableForRotation(v){
   return !!v && isAnapolisVehicle(v) && statusInfo(v).key==='base' && !activeOccurrence(v);
 }
+/* ---------- Saída antecipada programada: justiça e bloqueio preventivo ---------- */
+const EARLY_EXIT_CUTOFF_MINUTES=60;
+const EARLY_EXIT_BASE_BONUS_MINUTES=18;
+const EARLY_EXIT_OCCURRENCE_BONUS=0.5;
+function earlyExitTimeLabel(m){
+  if(!m?.saida_prevista_em)return '';
+  const date=new Date(m.saida_prevista_em);
+  return Number.isFinite(date.getTime())?
+    date.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'}):'—';
+}
+function earlyExitStatus(m,nowMs=Date.now()){
+  if(!isRotationMember(m)||!m?.saida_prevista_em)return null;
+  const ms=new Date(m.saida_prevista_em).getTime();
+  if(!Number.isFinite(ms))return null;
+  const minutesLeft=Math.ceil((ms-nowMs)/60000);
+  const goal=Math.max(0,Math.min(2,Number(m.antecipacao_meta_extra||0)));
+  const baseline=Math.max(0,Number(m.antecipacao_ocorrencias_inicio??personOccurrenceCount(m)));
+  const completed=Math.max(0,personOccurrenceCount(m)-baseline);
+  const remaining=Math.max(0,goal-completed);
+  return {
+    minutesLeft,goal,baseline,completed,remaining,
+    // Regra operacional absoluta, independentemente de ocorrências pendentes.
+    cutoff:minutesLeft<=EARLY_EXIT_CUTOFF_MINUTES,
+    due:minutesLeft<=0,
+    bonusActive:minutesLeft>EARLY_EXIT_CUTOFF_MINUTES&&remaining>0&&goal>0
+  };
+}
+function earlyExitPriorityBonus(m){
+  const p=earlyExitStatus(m);
+  return p?.bonusActive?{base:EARLY_EXIT_BASE_BONUS_MINUTES,occ:EARLY_EXIT_OCCURRENCE_BONUS}:{base:0,occ:0};
+}
+function earlyExitStatusLabel(m){
+  const p=earlyExitStatus(m);
+  if(!p)return '';
+  if(p.due)return 'SAÍDA '+earlyExitTimeLabel(m)+' • HORÁRIO ATINGIDO';
+  if(p.cutoff)return 'SAÍDA '+earlyExitTimeLabel(m)+' • NÃO SUGERIR NOVOS ACIONAMENTOS';
+  return 'SAÍDA '+earlyExitTimeLabel(m)+' • '+p.completed+'/'+p.goal+' ATENDIMENTOS DA META';
+}
+function earlyExitSummaryHtml(){
+  const scheduled=activeTeamRows().filter(m=>isRotationMember(m)&&earlyExitStatus(m));
+  if(!scheduled.length)return '';
+  return '<section class="early-exit-summary"><div class="early-exit-summary-head">SAÍDAS ANTECIPADAS PROGRAMADAS</div>'+
+    scheduled.map(m=>{
+      const st=earlyExitStatus(m);
+      const urgent=st.cutoff;
+      const note=st.due?'HORÁRIO DE SAÍDA ATINGIDO • conferir retorno e retirar da escala.':
+        st.cutoff?'ÚLTIMA HORA • fora de novas sugestões de revezamento.':
+        'Prioridade moderada • '+st.completed+' de '+st.goal+' atendimentos da meta.';
+      return '<div class="early-exit-summary-line '+(urgent?'warning':'')+'">'+
+        '<div><b>'+esc(priorityPersonName(m))+'</b><small>'+esc(earlyExitTimeLabel(m))+' • '+esc(roleLabel(teamRoleKey(m)))+
+        '</small><span>'+esc(note)+'</span></div>'+
+        (isOperator()?'<button type="button" data-schedule-exit="'+esc(m.id)+'">✎ EDITAR</button>':'')+
+      '</div>';
+    }).join('')+
+    '<p class="early-exit-summary-note">A saída é programada, não automática. Se houver ocorrência em andamento, o operador deve acompanhar e decidir o encerramento com segurança.</p></section>';
+}
+function earlyExitIsoForShift(time){
+  if(!currentPlantao||!/^([01]\\d|2[0-3]):[0-5]\\d$/.test(time))throw new Error('Informe um horário válido.');
+  const shiftDate=currentPlantao.data_plantao;
+  const isNight=normalizeTurno(currentPlantao.turno)==='NOTURNO';
+  const targetDate=isNight&&time<'19:00'?addDaysIso(shiftDate,1):shiftDate;
+  const ts=new Date(targetDate+'T'+time+':00-03:00');
+  const start=shiftExpectedStart({date:shiftDate,turno:currentPlantao.turno});
+  const end=shiftExpectedEnd({date:shiftDate,turno:currentPlantao.turno});
+  if(ts<start||ts>end)throw new Error('O horário de saída precisa estar dentro deste plantão ('+
+    start.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'})+' até '+
+    end.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'})+').');
+  if(ts.getTime()<=Date.now())throw new Error('O horário de saída precisa ser posterior ao horário atual.');
+  return ts.toISOString();
+}
+function openEarlyExitModal(teamId){
+  if(!isOperator())return;
+  const m=activeTeamRows().find(row=>row.id===teamId);
+  if(!m||!isRotationMember(m)||!['driver','tech','nurse'].includes(teamRoleKey(m))){
+    return alert('A saída antecipada pode ser programada para condutores, técnicos e enfermeiros em revezamento.');
+  }
+  selectedEarlyExitMemberId=m.id;
+  $('#earlyExitProfessional').textContent=priorityPersonName(m)+' • '+roleLabel(teamRoleKey(m))+
+    ' • '+(m.grupo_revezamento||'REVEZAMENTO');
+  const existing=earlyExitStatus(m);
+  $('#earlyExitTime').value=existing?earlyExitTimeLabel(m):'';
+  $('#earlyExitExtra').value=existing&&existing.goal>0?String(existing.goal):'2';
+  $('#earlyExitRemoveBtn').classList.toggle('hidden',!existing);
+  updateEarlyExitPreview();
+  openModal('earlyExitModal');
+}
+function updateEarlyExitPreview(){
+  const m=activeTeamRows().find(x=>x.id===selectedEarlyExitMemberId);
+  if(!m)return;
+  const time=$('#earlyExitTime').value;
+  const target=Number($('#earlyExitExtra').value||2);
+  let note='Escolha um horário para calcular a última hora de revezamento.';
+  if(time){
+    try{
+      const iso=earlyExitIsoForShift(time);
+      const cutoff=new Date(new Date(iso).getTime()-EARLY_EXIT_CUTOFF_MINUTES*60000);
+      note='Último horário de indicação: '+cutoff.toLocaleTimeString('pt-BR',{timeZone:'America/Sao_Paulo',hour:'2-digit',minute:'2-digit'})+
+        '. Meta de até '+target+' ocorrência(s) adicionais após o registro, sem garantia de cumprimento.';
+      if(cutoff.getTime()<=Date.now())note+=' A última hora já começou: nenhuma prioridade extra será aplicada.';
+    }catch(e){note=e.message||String(e)}
+  }
+  $('#earlyExitPreview').textContent=note;
+}
+async function saveEarlyExit(){
+  if(!canEditOpenShift()||!currentPlantao||!selectedEarlyExitMemberId)return;
+  const m=activeTeamRows().find(x=>x.id===selectedEarlyExitMemberId);
+  if(!m||!isRotationMember(m))return alert('O profissional não está mais no revezamento. Atualize a escala.');
+  let iso;
+  try{iso=earlyExitIsoForShift($('#earlyExitTime').value)}catch(e){return alert(e.message||e)}
+  const target=Number($('#earlyExitExtra').value);
+  if(![1,2].includes(target))return alert('Escolha uma meta de 1 ou 2 atendimentos.');
+  const nowCutoff=new Date(iso).getTime()-EARLY_EXIT_CUTOFF_MINUTES*60000<=Date.now();
+  if(nowCutoff&&!confirm('Este profissional já está na última hora antes da saída. Ele não receberá prioridade extra nem será sugerido para novos acionamentos. Deseja registrar mesmo assim?'))return;
+  const button=$('#earlyExitSaveBtn');button.disabled=true;
+  try{
+    const {data,error}=await supabase.from('equipe_plantao').update({
+      saida_prevista_em:iso,antecipacao_meta_extra:target,
+      antecipacao_ocorrencias_inicio:personOccurrenceCount(m)
+    }).eq('id',m.id).eq('plantao_id',currentPlantao.id).eq('status','ATIVO').select('id').maybeSingle();
+    if(error)throw error;
+    if(!data)throw new Error('A escala deste profissional mudou. Atualize a página.');
+    selectedEarlyExitMemberId=null;
+    closeModal('earlyExitModal');
+    await loadAll(selectedDate());
+    setSync('Saída antecipada registrada. A última hora bloqueia novos acionamentos deste profissional.','warn');
+  }catch(e){alert('Erro ao programar saída: '+(e.message||e))}
+  finally{button.disabled=false}
+}
+async function removeEarlyExit(){
+  if(!canEditOpenShift()||!currentPlantao||!selectedEarlyExitMemberId)return;
+  const m=activeTeamRows().find(x=>x.id===selectedEarlyExitMemberId);
+  if(!m||!confirm('Cancelar a saída antecipada de '+priorityPersonName(m)+'? Ele voltará à prioridade normal do revezamento.'))return;
+  const button=$('#earlyExitRemoveBtn');button.disabled=true;
+  try{
+    const {data,error}=await supabase.from('equipe_plantao').update({
+      saida_prevista_em:null,antecipacao_meta_extra:null,antecipacao_ocorrencias_inicio:null
+    }).eq('id',m.id).eq('plantao_id',currentPlantao.id).eq('status','ATIVO').select('id').maybeSingle();
+    if(error)throw error;
+    if(!data)throw new Error('O profissional já não está ativo no plantão.');
+    selectedEarlyExitMemberId=null;closeModal('earlyExitModal');
+    await loadAll(selectedDate());
+    setSync('Programação cancelada; prioridade normal restaurada.');
+  }catch(e){alert('Erro ao cancelar a programação: '+(e.message||e))}
+  finally{button.disabled=false}
+}
+function bindEarlyExitButtons(root){
+  root?.querySelectorAll('[data-schedule-exit]').forEach(b=>
+    b.onclick=()=>openEarlyExitModal(b.dataset.scheduleExit));
+}
 function memberEligibleForPriority(m,role,type){
   if(!m||norm(m.status||'ATIVO')!=='ATIVO')return false;
   if(teamRoleKey(m)!==role||memberIsBusy(m))return false;
+  if(isRotationMember(m)&&earlyExitStatus(m)?.cutoff)return false;
 
   const fixed=fixedVehicleForMemberType(m,type);
   if(fixed)return vehicleAvailableForRotation(fixed);
@@ -1179,8 +1330,12 @@ function priorityPeopleForRole(role,type,{rotationOnly=false}={}){
     .filter(m=>memberEligibleForPriority(m,role,type))
     .filter(m=>!rotationOnly||isRotationMember(m)||!m.viatura_id)
     .sort((a,b)=>{
-      const ab=personBaseMinutes(a,type),bb=personBaseMinutes(b,type);
-      const ao=personOccurrenceCount(a),bo=personOccurrenceCount(b);
+      // Bônus pequeno e limitado a 1-2 atendimentos desde a programação.
+      // Quem está realmente à frente por tempo/ocorrências mantém vantagem.
+      const ab=personBaseMinutes(a,type)+earlyExitPriorityBonus(a).base;
+      const bb=personBaseMinutes(b,type)+earlyExitPriorityBonus(b).base;
+      const ao=personOccurrenceCount(a)-earlyExitPriorityBonus(a).occ;
+      const bo=personOccurrenceCount(b)-earlyExitPriorityBonus(b).occ;
       if(crit==='occurrences'){
         if(ao!==bo)return ao-bo;
         if(ab!==bb)return bb-ab;
