@@ -2376,6 +2376,13 @@ function dispatchCrewOptions(v,role){
     choices.push(m);
   };
   vehicleMembers(v).filter(m=>dispatchRoleMatch(m,role,v)).forEach(append);
+  if(!isAnapolisVehicle(v)){
+    // Bases descentralizadas não puxam profissionais do revezamento de
+    // Anápolis. Só oferecem profissionais escalados da própria base.
+    activeTeamRows().filter(m=>!isRotationMember(m)&&m.viatura_id&&m.viatura_id!==v.id&&
+      dispatchRoleMatch(m,role,v)).forEach(append);
+    return choices;
+  }
   if(role==='doctor'){
     activeTeamRows().filter(m=>teamRoleKey(m)==='doctor'&&
       (isRotationMember(m)||!m.viatura_id)).sort((a,b)=>
