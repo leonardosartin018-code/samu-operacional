@@ -1967,3 +1967,9 @@ nav.tabs .tab.book-tab.active{
 }
 .cockpit-rotation .rotation-panel-usb .rotation-vehicle-order-title{color:#1d5d91}
 .cockpit-rotation .rotation-panel-usb .rotation-vehicle-order-row>b{color:#2563eb}
+
+.cockpit-rotation .rotation-render-error{
+  margin:7px 0 0;padding:10px 12px;border:1px solid #fca5a5;
+  border-radius:9px;background:#fff7ed;color:#9a3412;
+  font-size:.77rem;font-weight:850;line-height:1.5;
+}
