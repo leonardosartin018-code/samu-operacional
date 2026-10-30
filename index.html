@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261030-47-ordem-manual-temporaria">
+  <link rel="stylesheet" href="./styles.css?v=20261030-48-revezamento-equipe-rapida">
 </head>
 <body>
 
@@ -548,6 +548,14 @@
         <input id="qtDriver" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do condutor">
         <input id="qtDriverId" type="hidden">
         <div id="qtDriverResults" class="autocomplete-results floating"></div>
+        <div class="quick-scale-placement" data-quick-placement="driver">
+          <label for="qtDriverMode">Como escalar</label>
+          <select id="qtDriverMode" aria-label="Tipo de escala para driver">
+            <option value="FIXO">FIXO NESTA VIATURA</option>
+            <option value="REVEZAMENTO">REVEZAMENTO COMPARTILHADO</option>
+          </select>
+          <small data-quick-placement-hint="driver">Fixo: profissional vinculado a esta viatura.</small>
+        </div>
         <button type="button" class="quick-register-inline" data-quick-register="driver">+ CADASTRAR CONDUTOR</button>
         <div class="quick-current"><span id="qtDriverCurrent"></span><button id="qtDriverRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
@@ -556,6 +564,14 @@
         <input id="qtTech" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do técnico ou enfermeiro">
         <input id="qtTechId" type="hidden">
         <div id="qtTechResults" class="autocomplete-results floating"></div>
+        <div class="quick-scale-placement" data-quick-placement="tech">
+          <label for="qtTechMode">Como escalar</label>
+          <select id="qtTechMode" aria-label="Tipo de escala para tech">
+            <option value="FIXO">FIXO NESTA VIATURA</option>
+            <option value="REVEZAMENTO">REVEZAMENTO COMPARTILHADO</option>
+          </select>
+          <small data-quick-placement-hint="tech">Fixo: profissional vinculado a esta viatura.</small>
+        </div>
         <button type="button" class="quick-register-inline" data-quick-register="tech">+ CADASTRAR TÉCNICO / ENFERMEIRO</button>
         <div class="quick-current"><span id="qtTechCurrent"></span><button id="qtTechRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
@@ -564,6 +580,14 @@
         <input id="qtNurse" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do enfermeiro">
         <input id="qtNurseId" type="hidden">
         <div id="qtNurseResults" class="autocomplete-results floating"></div>
+        <div class="quick-scale-placement" data-quick-placement="nurse">
+          <label for="qtNurseMode">Como escalar</label>
+          <select id="qtNurseMode" aria-label="Tipo de escala para nurse">
+            <option value="FIXO">FIXO NESTA VIATURA</option>
+            <option value="REVEZAMENTO">REVEZAMENTO COMPARTILHADO</option>
+          </select>
+          <small data-quick-placement-hint="nurse">Fixo: profissional vinculado a esta viatura.</small>
+        </div>
         <button type="button" class="quick-register-inline" data-quick-register="nurse">+ CADASTRAR ENFERMEIRO</button>
         <div class="quick-current"><span id="qtNurseCurrent"></span><button id="qtNurseRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
@@ -719,6 +743,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261030-47-ordem-manual-temporaria"></script>
+<script type="module" src="./app.js?v=20261030-48-revezamento-equipe-rapida"></script>
 </body>
 </html>
