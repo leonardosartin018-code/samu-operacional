@@ -1432,12 +1432,26 @@ function bindManualQueueButtons(root){
 }
 function priorityPeopleForRole(role,type,{rotationOnly=false}={}){
   const crit=currentRotationCriterion();
-  return activeTeamRows()
+  const candidates=activeTeamRows()
     .filter(m=>memberEligibleForPriority(m,role,type))
-    .filter(m=>!rotationOnly||isRotationMember(m)||!m.viatura_id)
-    .sort((a,b)=>{
+    .filter(m=>!rotationOnly||isRotationMember(m)||!m.viatura_id);
+  // Antes do primeiro atendimento deste grupo, respeita a sequência inicial
+  // de escala (ordem_inicial, quando informada, ou horário de inclusão).
+  // Após qualquer retorno, vale novamente tempo de base e ocorrências.
+  const isFirstRound=candidates.length>0&&candidates.every(m=>
+    personOccurrenceCount(m)===0&&!m.ultimo_retorno_em
+  );
+  return candidates.sort((a,b)=>{
       const oneTime=compareManualRank(manualRankMember(a,role,type),manualRankMember(b,role,type));
       if(oneTime)return oneTime;
+      if(isFirstRound){
+        const ar=Number(a.ordem_inicial),br=Number(b.ordem_inicial);
+        if(a.ordem_inicial!=null&&b.ordem_inicial!=null&&Number.isFinite(ar)&&Number.isFinite(br)&&ar!==br)
+          return ar-br;
+        const at=new Date(a.entrou_em||currentPlantao?.iniciado_em||0).getTime();
+        const bt=new Date(b.entrou_em||currentPlantao?.iniciado_em||0).getTime();
+        if(Number.isFinite(at)&&Number.isFinite(bt)&&at!==bt)return at-bt;
+      }
       // Bônus pequeno e limitado a 1-2 atendimentos desde a programação.
       // Quem está realmente à frente por tempo/ocorrências mantém vantagem.
       const ab=personBaseMinutes(a,type)+earlyExitPriorityBonus(a).base;
@@ -1504,7 +1518,7 @@ function dispatchCandidateForVehicleRole(v,role,used=new Set()){
 }
 function availableUsaTeams(){
   const crit=currentRotationCriterion();
-  return vehicles.filter(v=>
+  const eligible=vehicles.filter(v=>
     isAnapolisVehicle(v)&&vehicleType(v).includes('USA')&&!vehicleType(v).includes('USB')&&
     v.participa_revezamento!==false&&vehicleAvailableForRotation(v)
   ).map(v=>{
@@ -1516,9 +1530,15 @@ function availableUsaTeams(){
       v,driver,nurse,doctor,complete:!!driver&&!!nurse,
       base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)
     };
-  }).filter(x=>x.complete).sort((a,b)=>{
+  }).filter(x=>x.complete);
+  // Antes da primeira ocorrência da frota deste tipo, USA 01 / 02 / 06
+  // e USB 01 / 02 / 03 ... ficam na sequência dos prefixos.
+  const firstRound=eligible.length>0&&eligible.every(x=>x.occ===0&&!latestReturnForVehicle(x.v));
+  return eligible.sort((a,b)=>{
     const oneTime=compareManualRank(manualRankVehicle(a.v),manualRankVehicle(b.v));
     if(oneTime)return oneTime;
+    if(firstRound)return String(a.v.nome||a.v.codigo).localeCompare(
+      String(b.v.nome||b.v.codigo),'pt-BR',{numeric:true});
     if(crit==='occurrences'){
       if(a.occ!==b.occ)return a.occ-b.occ;
       if(a.base!==b.base)return b.base-a.base;
@@ -1561,7 +1581,7 @@ function automaticDispatchCrew(v){
 /* ---------- Painel lateral de prioridade: somente filas reais ---------- */
 function availableUsbTeams(){
   const crit=currentRotationCriterion();
-  return vehicles.filter(v=>
+  const eligible=vehicles.filter(v=>
     isAnapolisVehicle(v)&&vehicleType(v).includes('USB')&&
     v.participa_revezamento!==false&&vehicleAvailableForRotation(v)
   ).map(v=>{
@@ -1573,9 +1593,15 @@ function availableUsbTeams(){
       v,driver,tech,complete:!!driver&&!!tech,
       base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)
     };
-  }).filter(x=>x.complete).sort((a,b)=>{
+  }).filter(x=>x.complete);
+  // Antes da primeira ocorrência da frota deste tipo, USA 01 / 02 / 06
+  // e USB 01 / 02 / 03 ... ficam na sequência dos prefixos.
+  const firstRound=eligible.length>0&&eligible.every(x=>x.occ===0&&!latestReturnForVehicle(x.v));
+  return eligible.sort((a,b)=>{
     const oneTime=compareManualRank(manualRankVehicle(a.v),manualRankVehicle(b.v));
     if(oneTime)return oneTime;
+    if(firstRound)return String(a.v.nome||a.v.codigo).localeCompare(
+      String(b.v.nome||b.v.codigo),'pt-BR',{numeric:true});
     if(crit==='occurrences'){
       if(a.occ!==b.occ)return a.occ-b.occ;
       if(a.base!==b.base)return b.base-a.base;
@@ -1603,10 +1629,12 @@ function compactRotationQueue(role,type,label){
     .filter(m=>isRotationMember(m));
   const group=type+'_'+(role==='driver'?'DRIVER':role==='tech'?'TECH':'NURSE');
   const hasManual=available.some(m=>manualRankMember(m,role,type)!==null);
+  const initial=available.length>0&&available.every(m=>
+    personOccurrenceCount(m)===0&&!m.ultimo_retorno_em);
   let html='<div class="rotation-people-card">'+
     '<div class="rotation-people-head"><b>'+esc(label)+' EM REVEZAMENTO</b>'+
-    '<small>'+available.length+' disponível(is)'+(hasManual?' • ORDEM PONTUAL':'')+'</small>'+
-    (isOperator()&&available.length>1?'<button type="button" class="manual-order-btn" data-manual-order="'+group+'">↕ ORDENAR FILA</button>':'')+
+    '<small>'+available.length+' disponível(is)'+(hasManual?' • ORDEM MANUAL':initial?' • ORDEM DE ESCALA':'')+'</small>'+
+    (isOperator()&&available.length>1?'<button type="button" class="manual-order-btn" data-manual-order="'+group+'">↕ PERSONALIZAR FILA</button>':'')+
     '</div>';
   if(available.length){
     html+='<div class="rotation-person-next">'+
@@ -1636,10 +1664,12 @@ function nextVehicleRotationCard(type,hasRotation){
       '<p class="rotation-vehicle-empty">Nenhuma '+type+' apta para empenho na base neste momento.</p></div>';
   }
   const prefix=first.v.nome||first.v.codigo;
+  const initial=list.every(x=>x.occ===0&&!latestReturnForVehicle(x.v));
   html+='<div class="manual-vehicle-header"><span class="rotation-vehicle-label">PRÓXIMA '+type+' DA VEZ</span>'+
-    (isOperator()&&list.length>1?'<button type="button" class="manual-order-btn" data-manual-order="'+type+'_VIATURA">↕ ORDENAR VIATURAS</button>':'')+
+    (isOperator()&&list.length>1?'<button type="button" class="manual-order-btn" data-manual-order="'+type+'_VIATURA">↕ PERSONALIZAR ORDEM</button>':'')+
     '</div><strong class="rotation-vehicle-prefix">'+esc(prefix)+'</strong>'+
-    (manualRankVehicle(first.v)!==null?'<span class="manual-order-active">PRIORIDADE MANUAL TEMPORÁRIA</span>':'');
+    (manualRankVehicle(first.v)!==null?'<span class="manual-order-active">ORDEM MANUAL TEMPORÁRIA</span>':
+      (initial?'<span class="rotation-default-order">SEQUÊNCIA INICIAL POR PREFIXO</span>':''));
   if(hasRotation){
     const roles=type==='USA'
       ? [['Condutor',first.driver],['Enfermeiro',first.nurse]]
@@ -1653,6 +1683,14 @@ function nextVehicleRotationCard(type,hasRotation){
         '<small>'+esc(role)+' • FIXO NA '+esc(prefix)+'</small></div>'
       ).join('')+'</div>';
     }
+  }
+  if(list.length>1){
+    html+='<div class="rotation-vehicle-order">'+
+      '<div class="rotation-vehicle-order-title">PRÓXIMAS NA SEQUÊNCIA</div>'+
+      list.slice(1,9).map((x,i)=>
+        '<div class="rotation-vehicle-order-row"><b>'+(i+2)+'º</b><strong>'+esc(x.v.nome||x.v.codigo)+'</strong>'+
+        (manualRankVehicle(x.v)!==null?'<small>ORDEM MANUAL</small>':'')+'</div>'
+      ).join('')+'</div>';
   }
   return html+'</div>';
 }
