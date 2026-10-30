@@ -55,7 +55,10 @@ const TRACKED_DRAFT_MODALS = new Set([
   'quickRegisterModal','assignModal','individualOccModal'
 ]);
 
-const REGIONAL_ORDER = ['ABADIÂNIA','ALEXÂNIA','COCALZINHO','CORUMBÁ','GOIANÁPOLIS','JARANÁPOLIS','PIRENÓPOLIS','TEREZÓPOLIS'];
+// Agrupamento visual por proximidade rodoviária aproximada (não é rota de despacho).
+// Pares confirmados na região: Abadiânia/Alexânia, Corumbá/Cocalzinho,
+// Pirenópolis/Jaranápolis e Goianápolis/Terezópolis.
+const REGIONAL_ORDER = ['ABADIÂNIA','ALEXÂNIA','CORUMBÁ','COCALZINHO','PIRENÓPOLIS','JARANÁPOLIS','GOIANÁPOLIS','TEREZÓPOLIS'];
 const BOOK_INTERNAL_SLOTS = [
   {code:'AMB-S1',label:'S 01 - IRACEMA',bookLabel:'AMB - S1',setor:'SANITARIA',funcao:'SANITARIA',order:10},
   {code:'AMB-S2',label:'S 02 - EXTRA',bookLabel:'AMB - S2',setor:'SANITARIA',funcao:'SANITARIA',order:20},
@@ -1487,8 +1490,8 @@ function renderRegionalCoverage(){
     '</article>';
   }).join('');
   panel.innerHTML=
-    '<div class="coverage-header"><div><h3>Apoio à cobertura entre bases</h3>'+
-    '<p>Se a viatura local estiver indisponível, compare outras bases e confirme o trajeto antes do acionamento.</p></div>'+
+    '<div class="coverage-header"><div><h3>Guia de cobertura entre bases</h3>'+
+    '<p>Consulte quais viaturas podem cobrir outra cidade e compare a distância rodoviária de referência. Confira o tempo estimado no Maps antes de decidir.</p></div>'+
     '<span class="coverage-counter">'+readyCount+' base(s) com QRV e equipe mínima</span></div>'+
     '<div class="coverage-filters"><label>Cidade que precisa de atendimento<select id="coverageTarget">'+destinations+'</select></label>'+
     '<label>Recurso definido pela regulação<select id="coverageType">'+types+'</select></label></div>'+
@@ -1504,25 +1507,10 @@ function regionalOrderIndex(name){
   return i<0?99:i;
 }
 function regionalVehicleHtml(v){
-  const st=statusInfo(v), mem=vehicleMembers(v), comp=crewCompleteness(v), o=activeOccurrence(v);
-  const crew=mem.length?mem.map(memberSlotHtml).join(''):memberSlotHtml(null);
-  let actions='';
-  if(st.key==='base') actions='<button class="dispatch-btn" data-act="dispatch" data-v="'+v.id+'">ACIONAR</button>';
-  if(st.key==='returning') actions='<button class="arrive-btn" data-act="arrive" data-o="'+(o?.id||'')+'" data-v="'+v.id+'">CHEGADA À BASE</button>';
-  if(st.key==='occurrence'&&o){
-    actions='<button class="qth-btn '+(o.chegada_qth_em?'recorded':'')+'" data-act="qth" data-o="'+o.id+'">'+(o.chegada_qth_em?'QTH • '+fmtTime(o.chegada_qth_em):'CHEGADA NO QTH')+'</button>'+
-      '<div class="occurrence-action-row"><button class="qta-btn" data-act="qta" data-o="'+o.id+'" data-v="'+v.id+'">QTA</button><button class="edit-team-btn" data-act="edit-team" data-v="'+v.id+'">EDITAR EQUIPE</button><button class="return-btn" data-act="return" data-o="'+o.id+'" data-v="'+v.id+'">RETORNAR À BASE</button></div>';
-  }
-  const select=isOperator() && st.key!=='occurrence'
-    ? '<select class="status-select" data-status-select data-v="'+v.id+'"><option value="">ALTERAR SITUAÇÃO...</option><option value="base">BASE / QRV</option><option value="asepsis">ASSEPSIA</option><option value="mechanical">PANE / BAIXADA</option><option value="noCrew">FALTA DE EQUIPE</option><option value="noStretcher">SEM MACA</option></select>'
-    : '';
-  return '<div class="regional-vehicle '+st.cls+'" data-team-card data-v="'+v.id+'">'+
-    '<div class="regional-vehicle-top"><div><div class="regional-vehicle-name">'+esc(v.nome||v.codigo)+'<span class="type-badge">'+esc(v.tipo||'')+'</span></div><div class="vehicle-subhint">CLIQUE PARA EDITAR EQUIPE</div></div><span class="status-badge">'+st.label+'</span></div>'+
-    '<div class="regional-crew '+(mem.length===1?'one':mem.length===2?'two':'')+'">'+crew+'</div>'+
-    '<div class="crew-setup '+comp.state+'"><b>'+comp.label+'</b><span>'+mem.length+' profissional(is)</span></div>'+
-    (o?'<div class="regional-occ">OC. '+esc(o.numero||'—')+' • '+esc(o.natureza||'SEM NATUREZA')+'</div>'+occurrenceInfoHtml(v,o).replace(/^<div class="occ-detail"[\s\S]*?<div class="occurrence-main-actions">/,'<div class="occurrence-main-actions">'):'')+
-    '<div class="regional-controls">'+actions+victimDestinationControlsHtml(o,v)+select+'</div>'+
-  '</div>';
+  // Reutiliza os mesmos cartões da frota de Anápolis: guarnição, ocorrência,
+  // QTH, destino da vítima, retorno, edição e cores de situação permanecem
+  // consistentes em todas as bases descentralizadas.
+  return vehicleCardHtml(v);
 }
 function renderRegional(){
   const reg=vehicles.filter(v=>!isAnapolisVehicle(v));
