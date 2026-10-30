@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261030-50-revezamento-inicial-estavel">
+  <link rel="stylesheet" href="./styles.css?v=20261030-51-equipe-escolhida-no-acionamento">
 </head>
 <body>
 
@@ -523,18 +523,41 @@
 
 <div id="occModal" class="modal">
   <div class="dialog dispatch-dialog">
-    <div class="dialog-head"><div><div class="dialog-kicker">ACIONAMENTO</div><h2 id="occModalTitle">Acionar viatura</h2></div><button class="icon-close" data-close-modal="occModal">×</button></div>
-    <div class="form-grid">
-      <label>Viatura<select id="occVehicleSelect"></select></label>
-      <label>Nº ocorrência<input id="occNumber" inputmode="numeric"></label>
-      <label>Hora início / saída<input id="occStart" type="time"></label>
-      <label>Natureza<input id="occNature" placeholder="Ex.: Colisão, clínico, transferência"></label>
-      <label>Bairro<input id="occBairro" placeholder="Ex.: Jundiaí, Jaiara, Centro"></label>
-      <label>Destino<input id="occDestino" placeholder="Ex.: HEANA, HUGO, UPA"></label>
-      <label class="full">Endereço<input id="occEndereco" placeholder="Endereço / referência"></label>
-      <label class="full">Observação operacional<textarea id="occObs" placeholder="Observação operacional"></textarea></label>
+    <div class="dialog-head">
+      <div><div class="dialog-kicker">CENTRAL DE DESPACHO • ACIONAMENTO</div><h2 id="occModalTitle">Acionar viatura</h2></div>
+      <button type="button" class="icon-close" data-close-modal="occModal" aria-label="Fechar">×</button>
     </div>
-    <div class="modal-actions"><button class="btn" data-close-modal="occModal">Cancelar</button><button id="saveOcc" class="btn primary">ACIONAR</button></div>
+    <div class="dispatch-sections">
+      <section class="dispatch-section dispatch-basics">
+        <div class="dispatch-section-heading"><b>DADOS DO ACIONAMENTO</b><span>Identificação e horário</span></div>
+        <div class="form-grid dispatch-basic-grid">
+          <label>Viatura<select id="occVehicleSelect"></select></label>
+          <label>Nº ocorrência<input id="occNumber" inputmode="numeric" placeholder="Número da ocorrência"></label>
+          <label>Hora início / saída<input id="occStart" type="time"></label>
+        </div>
+      </section>
+      <section id="dispatchCrewPanel" class="dispatch-section dispatch-crew-panel hidden" aria-label="Guarnição escolhida para o acionamento">
+        <div class="dispatch-section-heading"><b>EQUIPE DO ACIONAMENTO</b><span>Revise antes de empenhar</span></div>
+        <p id="dispatchCrewHint" class="dispatch-crew-hint">A sugestão segue o revezamento e mantém os fixos da viatura.</p>
+        <div id="dispatchCrewFields" class="dispatch-crew-grid"></div>
+        <p id="dispatchCrewWarning" class="dispatch-crew-warning hidden"></p>
+      </section>
+      <section class="dispatch-section dispatch-location">
+        <div class="dispatch-section-heading"><b>LOCAL E DETALHES</b><span>Preencha o que estiver disponível</span></div>
+        <div class="form-grid">
+          <label>Natureza<input id="occNature" placeholder="Ex.: clínico, colisão, transferência"></label>
+          <label>Bairro<input id="occBairro" placeholder="Ex.: Jundiaí, Jaiara, Centro"></label>
+          <label class="full">Endereço / referência<input id="occEndereco" placeholder="Rua, número, ponto de referência"></label>
+          <label class="full">Destino informado na abertura (opcional)<input id="occDestino" placeholder="Se já for conhecido; poderá atualizar após o QTH"></label>
+          <label class="full">Observação operacional<textarea id="occObs" placeholder="Informações complementares para o empenho"></textarea></label>
+        </div>
+      </section>
+    </div>
+    <div class="modal-actions dispatch-actions">
+      <span id="dispatchTeamStatus" class="dispatch-team-status">Confira os dados do acionamento.</span>
+      <button type="button" class="btn" data-close-modal="occModal">CANCELAR</button>
+      <button type="button" id="saveOcc" class="btn primary">CONFIRMAR ACIONAMENTO</button>
+    </div>
   </div>
 </div>
 
@@ -743,6 +766,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261030-50-revezamento-inicial-estavel"></script>
+<script type="module" src="./app.js?v=20261030-51-equipe-escolhida-no-acionamento"></script>
 </body>
 </html>
