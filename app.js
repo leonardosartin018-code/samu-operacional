@@ -1601,9 +1601,13 @@ function compactRotationQueue(role,type,label){
   // A ordenação permanece a mesma usada para escolher profissionais no despacho.
   const available=priorityPeopleForRole(role,type,{rotationOnly:true})
     .filter(m=>isRotationMember(m));
+  const group=type+'_'+(role==='driver'?'DRIVER':role==='tech'?'TECH':'NURSE');
+  const hasManual=available.some(m=>manualRankMember(m,role,type)!==null);
   let html='<div class="rotation-people-card">'+
     '<div class="rotation-people-head"><b>'+esc(label)+' EM REVEZAMENTO</b>'+
-    '<small>'+available.length+' disponível(is)</small></div>';
+    '<small>'+available.length+' disponível(is)'+(hasManual?' • ORDEM PONTUAL':'')+'</small>'+
+    (isOperator()&&available.length>1?'<button type="button" class="manual-order-btn" data-manual-order="'+group+'">↕ ORDENAR FILA</button>':'')+
+    '</div>';
   if(available.length){
     html+='<div class="rotation-person-next">'+
       '<span class="rotation-next-tag">PRÓXIMO DA VEZ</span>'+
@@ -1632,8 +1636,10 @@ function nextVehicleRotationCard(type,hasRotation){
       '<p class="rotation-vehicle-empty">Nenhuma '+type+' apta para empenho na base neste momento.</p></div>';
   }
   const prefix=first.v.nome||first.v.codigo;
-  html+='<span class="rotation-vehicle-label">PRÓXIMA '+type+' DA VEZ</span>'+
-    '<strong class="rotation-vehicle-prefix">'+esc(prefix)+'</strong>';
+  html+='<div class="manual-vehicle-header"><span class="rotation-vehicle-label">PRÓXIMA '+type+' DA VEZ</span>'+
+    (isOperator()&&list.length>1?'<button type="button" class="manual-order-btn" data-manual-order="'+type+'_VIATURA">↕ ORDENAR VIATURAS</button>':'')+
+    '</div><strong class="rotation-vehicle-prefix">'+esc(prefix)+'</strong>'+
+    (vehicleManualRank(first.v)!==null?'<span class="manual-order-active">PRIORIDADE MANUAL TEMPORÁRIA</span>':'');
   if(hasRotation){
     const roles=type==='USA'
       ? [['Condutor',first.driver],['Enfermeiro',first.nurse]]
@@ -1675,6 +1681,7 @@ function renderRotation(){
     rotationPanelGroup('USA')+
     rotationPanelGroup('USB');
   bindEarlyExitButtons($('#priority'));
+  bindManualQueueButtons($('#priority'));
 }
 
 /* Valores rodoviários de referência do estudo da SES/GO para a Região Pireneus.
@@ -2311,6 +2318,7 @@ async function setOccurrenceQta(oid,vid){
     const row=activeTeamRows().find(m=>m.profissional_id===id);
     if(row)await supabase.from('equipe_plantao').update({ultimo_retorno_em:now}).eq('id',row.id);
   }
+  await clearManualOnReturn(oid,vid);
   if(vid)await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid);
   await loadAll(selectedDate());
   return true;
@@ -2346,6 +2354,7 @@ async function setArrived(oid,vid){
     const r=await supabase.from('ocorrencias').update({status:'FINALIZADA',retorno_base_em:now,finalizado_em:now,finalizado_por:profile?.nome||null}).eq('id',oid);
     if(r.error)return alert(r.error.message);
     await creditOccurrence(o);
+    await clearManualOnReturn(oid,vid);
   }
   if(vid)await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid);
   await loadAll(selectedDate());
@@ -3890,6 +3899,7 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'ocorrencias'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'equipe_ocorrencia'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'revezamento_plantao'},scheduleReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'prioridade_manual_revezamento'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'livro_plantao'},()=>{if($('#book')?.classList.contains('active'))loadBookData().then(renderBook)})
     .on('postgres_changes',{event:'*',schema:'public',table:'escala_interna_plantao'},()=>{
       loadBookData().then(()=>{renderInternalEditors();if($('#book')?.classList.contains('active'))renderBook()}).catch(console.error);
@@ -3999,6 +4009,8 @@ $('#earlyExitTime').oninput=updateEarlyExitPreview;
 $('#earlyExitExtra').onchange=updateEarlyExitPreview;
 $('#earlyExitSaveBtn').onclick=saveEarlyExit;
 $('#earlyExitRemoveBtn').onclick=removeEarlyExit;
+$('#manualRotationSave').onclick=()=>persistManualQueue();
+$('#manualRotationReset').onclick=()=>{if(confirm('Cancelar a prioridade manual desta fila e voltar ao revezamento automático?'))persistManualQueue(true)};
 $('#teamReloadBtn').onclick=()=>{
   if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,action:'atualizar a equipe'}))return;
   autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadAll(selectedDate());
