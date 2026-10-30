@@ -16,6 +16,8 @@ let team = [];
 let occurrences = [];
 let occurrenceTeam = [];
 let rotation = [];
+let manualRotation = [];
+let manualRotationDraft = null;
 let professionals = [];
 let scaleRows = [];
 let bookMeta = null;
@@ -52,7 +54,7 @@ let unsavedBook = false;
 let pendingShiftWarningKey = '';
 const modalDraftSnapshots = new Map();
 const TRACKED_DRAFT_MODALS = new Set([
-  'teamModal','occModal','occEditModal','victimDestinationModal','earlyExitModal','expressPermutaModal',
+  'teamModal','occModal','occEditModal','victimDestinationModal','earlyExitModal','manualRotationModal','expressPermutaModal',
   'quickRegisterModal','assignModal','individualOccModal'
 ]);
 
@@ -666,7 +668,7 @@ async function loadAll(preferredDate=null,preferredTurno=null){
   setSync('Identificando plantão atual e pré-carregando escalas...','warn');
 
   currentPlantao=null;
-  vehicles=[];team=[];occurrences=[];rotation=[];occurrenceTeam=[];
+  vehicles=[];team=[];occurrences=[];rotation=[];manualRotation=[];occurrenceTeam=[];
   const warnings=[];
 
   try{
@@ -713,10 +715,11 @@ async function loadAll(preferredDate=null,preferredTurno=null){
     }
 
     if(currentPlantao){
-      const [tr,or,rr]=await Promise.all([
+      const [tr,or,rr,mr]=await Promise.all([
         supabase.from('equipe_plantao').select('*').eq('plantao_id',currentPlantao.id),
         supabase.from('ocorrencias').select('*').eq('plantao_id',currentPlantao.id).order('criado_em',{ascending:false}),
-        supabase.from('revezamento_plantao').select('*').eq('plantao_id',currentPlantao.id).order('grupo_revezamento').order('ordem_inicial')
+        supabase.from('revezamento_plantao').select('*').eq('plantao_id',currentPlantao.id).order('grupo_revezamento').order('ordem_inicial'),
+        supabase.from('prioridade_manual_revezamento').select('id,plantao_id,grupo,equipe_plantao_id,viatura_id,posicao,criado_em').eq('plantao_id',currentPlantao.id)
       ]);
 
       if(tr.error){console.warn(tr.error);warnings.push('equipe')}
@@ -727,6 +730,8 @@ async function loadAll(preferredDate=null,preferredTurno=null){
 
       if(rr.error){console.warn(rr.error);warnings.push('revezamento')}
       else rotation=(rr.data||[]).map(m=>({...m,profissionais:profMap.get(m.profissional_id)||null}));
+      if(mr.error){console.warn(mr.error);warnings.push('ordem manual')}
+      else manualRotation=mr.data||[];
 
       if(occurrences.length){
         const ids=occurrences.map(o=>o.id);
@@ -1329,12 +1334,110 @@ function assignmentPriorityLabel(m,type){
   if(teamRoleKey(m)==='driver')return 'REVEZAMENTO — '+driverScopeForMember(m);
   return 'REVEZAMENTO';
 }
+/* Sequência temporária por grupo, não modifica o critério automático. */
+const MANUAL_GROUPS={
+ USA_VIATURA:{label:'Viaturas USA',type:'USA'},USB_VIATURA:{label:'Viaturas USB',type:'USB'},
+ USA_DRIVER:{label:'Condutores USA',type:'USA',role:'driver'},
+ USA_NURSE:{label:'Enfermeiros USA',type:'USA',role:'nurse'},
+ USB_DRIVER:{label:'Condutores USB',type:'USB',role:'driver'},
+ USB_TECH:{label:'Técnicos / Enfermeiros USB',type:'USB',role:'tech'}
+};
+function manualRank(group,id,returnTime){
+ const row=manualRotation.find(x=>x.grupo===group&&(x.equipe_plantao_id===id||x.viatura_id===id));
+ if(!row)return null;
+ if(returnTime&&new Date(returnTime).getTime()>=new Date(row.criado_em).getTime())return null;
+ return Number(row.posicao)||null;
+}
+function manualRankMember(m,role,type){
+ if(!m||!isRotationMember(m))return null;
+ const name=type+'_'+(role==='driver'?'DRIVER':role==='tech'?'TECH':'NURSE');
+ return manualRank(name,m.id,m.ultimo_retorno_em);
+}
+function manualRankVehicle(v){
+ if(!v)return null;
+ const type=vehicleType(v).includes('USA')?'USA':vehicleType(v).includes('USB')?'USB':'';
+ return type?manualRank(type+'_VIATURA',v.id,latestReturnForVehicle(v)):null;
+}
+function compareManualRank(a,b){
+ if(a===null&&b===null)return 0;
+ return a===null?1:b===null?-1:a-b;
+}
+function manualQueueItems(group){
+ const cfg=MANUAL_GROUPS[group];if(!cfg)return [];
+ if(!cfg.role){
+  const list=cfg.type==='USA'?availableUsaTeams():availableUsbTeams();
+  return list.map(x=>({id:x.v.id,label:x.v.nome||x.v.codigo,detail:'Equipe mínima disponível'}));
+ }
+ return priorityPeopleForRole(cfg.role,cfg.type,{rotationOnly:true}).filter(isRotationMember)
+   .map(m=>({id:m.id,label:priorityPersonName(m),detail:priorityMetricText(m,cfg.type)}));
+}
+function openManualQueue(group){
+ if(!isOperator()||!currentPlantao||norm(currentPlantao.status)!=='ABERTO')return;
+ const cfg=MANUAL_GROUPS[group];if(!cfg)return;
+ const items=manualQueueItems(group);
+ if(items.length<2)return alert('É necessário ter pelo menos duas opções disponíveis para ordenar.');
+ manualRotationDraft={group,plantaoId:currentPlantao.id,items};
+ $('#manualRotationTitle').textContent='Personalizar sequência • '+cfg.label;
+ renderManualQueueDraft();openModal('manualRotationModal');
+}
+function renderManualQueueDraft(){
+ const draft=manualRotationDraft,root=$('#manualRotationList');if(!draft||!root)return;
+ root.innerHTML=draft.items.map((x,i)=>
+  '<div class="manual-rotation-item"><b class="manual-rotation-position">'+(i+1)+'º</b>'+
+  '<div class="manual-rotation-description"><strong>'+esc(x.label)+'</strong><small>'+esc(x.detail)+'</small></div>'+
+  '<div class="manual-rotation-actions"><button type="button" data-manual-move="'+i+'" data-dir="-1" '+(!i?'disabled':'')+'>↑</button>'+
+  '<button type="button" data-manual-move="'+i+'" data-dir="1" '+(i===draft.items.length-1?'disabled':'')+'>↓</button></div></div>').join('');
+ root.querySelectorAll('[data-manual-move]').forEach(b=>b.onclick=()=>{
+  const i=Number(b.dataset.manualMove),j=i+Number(b.dataset.dir);
+  if(j<0||j>=draft.items.length)return;
+  [draft.items[i],draft.items[j]]=[draft.items[j],draft.items[i]];
+  renderManualQueueDraft();
+ });
+ $('#manualRotationNotice').textContent='Prioridade temporária: após cada retorno à base, a pessoa ou viatura volta à classificação automática. A saída antecipada e os impedimentos continuam prevalecendo.';
+ $('#manualRotationReset').classList.toggle('hidden',!manualRotation.some(x=>x.grupo===draft.group));
+}
+async function persistManualQueue(reset=false){
+ const draft=manualRotationDraft;
+ if(!draft||!isOperator()||!currentPlantao)return;
+ if(norm(currentPlantao.status)!=='ABERTO'||draft.plantaoId!==currentPlantao.id)return alert('O plantão mudou. Atualize a fila.');
+ const save=$('#manualRotationSave'),resetBtn=$('#manualRotationReset');save.disabled=true;resetBtn.disabled=true;
+ try{
+  const {error}=await supabase.rpc('definir_prioridade_manual_revezamento',{
+   p_plantao_id:draft.plantaoId,p_grupo:draft.group,p_ids:reset?[]:draft.items.map(x=>x.id)
+  });
+  if(error)throw error;
+  manualRotationDraft=null;closeModal('manualRotationModal');
+  await loadAll(selectedDate());
+  setSync(reset?'Prioridade automática restaurada.':'Ordem temporária salva; cada retorno à base restaura o critério automático.','warn');
+ }catch(e){alert('Erro ao salvar a ordem: '+(e.message||e))}
+ finally{save.disabled=false;resetBtn.disabled=false}
+}
+async function clearManualOnReturn(oid,vid){
+ if(!currentPlantao)return;
+ const people=new Set(occurrenceMembers(oid).map(x=>x.profissional_id).filter(Boolean));
+ const ids=activeTeamRows().filter(m=>people.has(m.profissional_id)).map(m=>m.id);
+ if(ids.length){
+  const {error}=await supabase.from('prioridade_manual_revezamento').delete()
+   .eq('plantao_id',currentPlantao.id).in('equipe_plantao_id',ids);
+  if(error)console.warn('Prioridade manual de pessoa será invalidada pelo relógio de retorno.',error);
+ }
+ if(vid){
+  const {error}=await supabase.from('prioridade_manual_revezamento').delete()
+   .eq('plantao_id',currentPlantao.id).eq('viatura_id',vid);
+  if(error)console.warn('Prioridade manual da viatura será invalidada pelo relógio de retorno.',error);
+ }
+}
+function bindManualQueueButtons(root){
+ root?.querySelectorAll('[data-manual-order]').forEach(b=>b.onclick=()=>openManualQueue(b.dataset.manualOrder));
+}
 function priorityPeopleForRole(role,type,{rotationOnly=false}={}){
   const crit=currentRotationCriterion();
   return activeTeamRows()
     .filter(m=>memberEligibleForPriority(m,role,type))
     .filter(m=>!rotationOnly||isRotationMember(m)||!m.viatura_id)
     .sort((a,b)=>{
+      const oneTime=compareManualRank(manualRankMember(a,role,type),manualRankMember(b,role,type));
+      if(oneTime)return oneTime;
       // Bônus pequeno e limitado a 1-2 atendimentos desde a programação.
       // Quem está realmente à frente por tempo/ocorrências mantém vantagem.
       const ab=personBaseMinutes(a,type)+earlyExitPriorityBonus(a).base;
@@ -1414,6 +1517,8 @@ function availableUsaTeams(){
       base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)
     };
   }).filter(x=>x.complete).sort((a,b)=>{
+    const oneTime=compareManualRank(manualRankVehicle(a.v),manualRankVehicle(b.v));
+    if(oneTime)return oneTime;
     if(crit==='occurrences'){
       if(a.occ!==b.occ)return a.occ-b.occ;
       if(a.base!==b.base)return b.base-a.base;
@@ -1469,6 +1574,8 @@ function availableUsbTeams(){
       base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)
     };
   }).filter(x=>x.complete).sort((a,b)=>{
+    const oneTime=compareManualRank(manualRankVehicle(a.v),manualRankVehicle(b.v));
+    if(oneTime)return oneTime;
     if(crit==='occurrences'){
       if(a.occ!==b.occ)return a.occ-b.occ;
       if(a.base!==b.base)return b.base-a.base;
