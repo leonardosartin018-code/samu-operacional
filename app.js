@@ -1506,6 +1506,41 @@ function regionalOrderIndex(name){
   const i=REGIONAL_ORDER.indexOf(coverageCityKey(name));
   return i<0?99:i;
 }
+// Proximidade sequencial: a próxima base é sempre a mais próxima da anterior
+// entre as ainda não listadas, pela matriz de distâncias de referência.
+// Para Jaranápolis: Pirenópolis 35 km e Anápolis 44 km. Sem distância direta,
+// o valor calculado é a soma de trechos cadastrados, marcado como estimativa.
+function regionalConsecutiveDistance(a,b){
+  if(!a||!b)return {km:null,estimated:true};
+  if(a===b)return {km:0,estimated:false};
+  const direct=coverageRoadKm(a,b);
+  if(direct!==null)return {km:direct,estimated:false};
+  if(a!=='JARANAPOLIS'&&b!=='JARANAPOLIS')return {km:null,estimated:true};
+  const other=a==='JARANAPOLIS'?b:a;
+  const via=[['PIRENOPOLIS',35],['ANAPOLIS',44]].map(([city,first])=>{
+    const second=other===city?0:coverageRoadKm(city,other);
+    return second===null?null:{km:first+second,estimated:other!==city};
+  }).filter(Boolean).sort((x,y)=>x.km-y.km);
+  return via[0]||{km:null,estimated:true};
+}
+function regionalNearestNeighborOrder(entries){
+  const left=entries.map(([baseName,list])=>({baseName,list,key:coverageCityKey(baseName)}));
+  if(!left.length)return [];
+  const abadiania=left.findIndex(x=>x.key==='ABADIANIA');
+  const start=abadiania>=0?abadiania:left.reduce((best,x,i)=>regionalOrderIndex(x.baseName)<regionalOrderIndex(left[best].baseName)?i:best,0);
+  const first=left.splice(start,1)[0];
+  const sorted=[{...first,kmFromPrevious:null,estimated:false}];
+  while(left.length){
+    const last=sorted[sorted.length-1];
+    left.sort((a,b)=>(regionalConsecutiveDistance(last.key,a.key).km??Infinity)-
+      (regionalConsecutiveDistance(last.key,b.key).km??Infinity)||
+      regionalOrderIndex(a.baseName)-regionalOrderIndex(b.baseName)||
+      a.baseName.localeCompare(b.baseName,'pt-BR'));
+    const next=left.shift(),dist=regionalConsecutiveDistance(last.key,next.key);
+    sorted.push({...next,kmFromPrevious:dist.km,estimated:dist.estimated});
+  }
+  return sorted;
+}
 function regionalVehicleHtml(v){
   // Reutiliza os mesmos cartões da frota de Anápolis: guarnição, ocorrência,
   // QTH, destino da vítima, retorno, edição e cores de situação permanecem
@@ -1524,13 +1559,14 @@ function renderRegional(){
 
   const groups={};
   reg.forEach(v=>{const b=v.bases?.nome||'SEM BASE';(groups[b]??=[]).push(v)});
-  $('#regionalGrid').innerHTML=Object.entries(groups)
-    .sort((a,b)=>regionalOrderIndex(a[0])-regionalOrderIndex(b[0])||a[0].localeCompare(b[0],'pt-BR'))
-    .map(([baseName,list],index)=>{
+  $('#regionalGrid').innerHTML=regionalNearestNeighborOrder(Object.entries(groups))
+    .map(({baseName,list,kmFromPrevious,estimated},index)=>{
       list.sort((a,b)=>(vehicleType(a).includes('USA')?1:2)-(vehicleType(b).includes('USA')?1:2)||String(a.nome).localeCompare(String(b.nome),'pt-BR'));
       const states=list.map(statusInfo);
       const label=states.some(x=>x.key==='occurrence')?'OCORRÊNCIA':states.some(x=>x.key==='returning')?'RETORNANDO':states.every(x=>x.key==='base')?'QRV':'ATENÇÃO';
-      return '<article class="regional-card"><div class="regional-card-head"><div><div class="regional-name"><span class="regional-sequence" aria-label="Ordem '+(index+1)+'">'+(index+1)+'</span>'+esc(baseName)+'</div><div class="regional-sub">USA antes da USB • '+list.length+' viatura(s)</div></div><span class="regional-base-status">'+label+'</span></div><div class="regional-vehicles">'+list.map(regionalVehicleHtml).join('')+'</div></article>';
+      return '<article class="regional-card"><div class="regional-card-head"><div><div class="regional-name"><span class="regional-sequence" aria-label="Ordem '+(index+1)+'">'+(index+1)+'</span>'+esc(baseName)+'</div><div class="regional-sub">USA antes da USB • '+list.length+' viatura(s)</div>'+
+        '<div class="regional-distance">'+(index===0?'INÍCIO DA SEQUÊNCIA':kmFromPrevious===null?'DISTÂNCIA NÃO CADASTRADA':
+          (estimated?'≈ ':'')+kmFromPrevious+' km da base anterior'+(estimated?' • via trechos de referência':'') )+'</div></div><span class="regional-base-status">'+label+'</span></div><div class="regional-vehicles">'+list.map(regionalVehicleHtml).join('')+'</div></article>';
     }).join('');
   bindVehicleActions($('#regionalGrid'));
   renderRegionalCoverage();
