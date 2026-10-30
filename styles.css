@@ -1910,3 +1910,24 @@ nav.tabs .tab.book-tab.active{
 .cockpit-rotation .manual-vehicle-header{display:flex;justify-content:space-between;gap:6px;align-items:center;flex-wrap:wrap}
 .cockpit-rotation .manual-order-active{display:inline-block;margin-top:5px;border-radius:5px;padding:3px 7px;background:#ffedd5;color:#9a3412;font-size:.63rem;font-weight:1000}
 @media(max-width:540px){.manual-rotation-item{gap:6px;padding:7px}.manual-rotation-actions button{width:34px;height:34px}.manual-rotation-dialog .modal-actions{flex-wrap:wrap}}
+
+/* Equipe rápida: escolha explícita de fixo/revezamento para não salvar errado. */
+#teamModal .quick-scale-placement{
+  margin-top:8px;padding:7px 8px;background:#f0f9ff;
+  border:1px solid #93c5fd;border-radius:8px;
+}
+#teamModal .quick-scale-placement label{
+  display:block;font-size:.69rem;font-weight:1000;
+  color:#174b6e;margin-bottom:5px;
+}
+#teamModal .quick-scale-placement select{
+  width:100%;min-height:37px;padding:8px;
+  border:1px solid #7dbad9;border-radius:7px;
+  background:#fff;color:#124766;font-size:.78rem;font-weight:950;
+}
+#teamModal .quick-scale-placement small{
+  display:block;margin-top:5px;color:#476677;
+  font-size:.68rem;line-height:1.45;
+}
+#teamModal .quick-scale-placement.hidden{display:none!important}
+#teamModal .quick-scale-placement:has(select:focus){border-color:#f59e0b}
