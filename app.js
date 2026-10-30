@@ -2554,6 +2554,35 @@ async function saveOccurrence(){
   };
   $('#saveOcc').disabled=true;
   try{
+    if(v){
+      // Revalida a equipe e a situação da viatura no banco antes de gravar.
+      // Outros operadores podem ter mudado a escala desde a abertura da janela.
+      const [liveVehicle,liveCrew,liveOccurrence]=await Promise.all([
+        supabase.from('viaturas').select('id,status_atual').eq('id',v.id).maybeSingle(),
+        dispatchCrew.length
+          ?supabase.from('equipe_plantao')
+            .select('id,profissional_id,status,viatura_id,tipo_escala')
+            .eq('plantao_id',currentPlantao.id).in('id',dispatchCrew.map(m=>m.id))
+          :Promise.resolve({data:[],error:null}),
+        supabase.from('ocorrencias').select('id').eq('viatura_id',v.id)
+          .in('status',['EM OCORRENCIA','RETORNANDO']).limit(1)
+      ]);
+      if(liveVehicle.error)throw liveVehicle.error;
+      if(liveCrew.error)throw liveCrew.error;
+      if(liveOccurrence.error)throw liveOccurrence.error;
+      if(!liveVehicle.data||statusInfo(liveVehicle.data).key!=='base'||
+         (liveOccurrence.data||[]).length){
+        throw new Error('Esta viatura já mudou de situação. Atualize o painel antes de acionar.');
+      }
+      for(const m of dispatchCrew){
+        const live=(liveCrew.data||[]).find(x=>x.id===m.id);
+        if(!live||live.profissional_id!==m.profissional_id||norm(live.status)!=='ATIVO'||
+           (live.viatura_id||null)!==(m.viatura_id||null)||
+           norm(live.tipo_escala)!==norm(m.tipo_escala)){
+          throw new Error('A escala foi alterada por outro operador. Reabra o acionamento e confira a equipe.');
+        }
+      }
+    }
     const {data:o,error}=await supabase.from('ocorrencias').insert(payload).select().single();
     if(error)throw error;
     if(vId){
