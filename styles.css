@@ -1931,3 +1931,8 @@ nav.tabs .tab.book-tab.active{
 }
 #teamModal .quick-scale-placement.hidden{display:none!important}
 #teamModal .quick-scale-placement:has(select:focus){border-color:#f59e0b}
+
+/* Clareza da fila: prévia não significa profissional fixo na viatura. */
+.crew-slot.rotation-preview .crew-role:after{content:none}
+.crew-slot.rotation-preview .crew-preview-note{display:block;margin-top:4px;color:#92400e;font-size:.59rem;font-weight:900;line-height:1.3}
+.cockpit-rotation .rotation-mode-clarity{margin:0 0 9px;padding:7px 9px;border:1px solid #f3d3ad;border-radius:8px;background:#fffaf1;color:#885021;font-size:.69rem;font-weight:850;line-height:1.4}
