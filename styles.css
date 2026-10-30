@@ -1701,3 +1701,144 @@ nav.tabs .tab.book-tab.active{
   .victim-destination-card{flex-direction:column;align-items:stretch}
   .victim-destination-btn{width:100%}
 }
+
+/* Painel regional: mesma interface das viaturas de Anápolis, preservando
+   três colunas de cidades e distribuindo os controles dentro de cada cartão. */
+#regionalGrid .regional-card{
+  min-width:0;
+  overflow:hidden;
+  border:1px solid #d5e3ec;
+  border-radius:11px;
+  padding:10px;
+  background:#f8fbfd;
+}
+#regionalGrid .regional-card-head{
+  gap:8px;
+  flex-wrap:wrap;
+}
+#regionalGrid .regional-name{
+  font-size:.96rem;
+  line-height:1.3;
+  overflow-wrap:anywhere;
+}
+#regionalGrid .regional-vehicles{
+  display:grid;
+  grid-template-columns:minmax(0,1fr);
+  gap:10px;
+}
+#regionalGrid .vehicle-card{
+  width:100%;
+  min-width:0;
+  padding:10px;
+  border-radius:10px;
+  box-sizing:border-box;
+}
+#regionalGrid .vehicle-top{align-items:center;flex-wrap:wrap;gap:7px}
+#regionalGrid .vehicle-top>div{flex:1 1 110px;min-width:0}
+#regionalGrid .vehicle-name{font-size:1.09rem}
+#regionalGrid .vehicle-subhint{font-size:.62rem;line-height:1.35}
+#regionalGrid .status-badge{font-size:.62rem;white-space:normal;text-align:center}
+#regionalGrid .crew-grid{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+  margin:9px 0 7px;
+}
+#regionalGrid .crew-grid.one{grid-template-columns:1fr}
+#regionalGrid .crew-grid:not(.one):not(.two) .crew-slot:last-child:nth-child(odd){
+  grid-column:1/-1;
+}
+#regionalGrid .crew-slot{min-width:0;padding:8px;border-radius:7px}
+#regionalGrid .crew-role{font-size:.61rem}
+#regionalGrid .crew-name{
+  font-size:.82rem;
+  line-height:1.3;
+  overflow-wrap:anywhere;
+}
+#regionalGrid .crew-setup{
+  align-items:flex-start;
+  flex-wrap:wrap;
+  padding:7px 8px;
+  gap:5px;
+  line-height:1.35;
+}
+#regionalGrid .crew-setup b,#regionalGrid .crew-setup span{font-size:.67rem}
+#regionalGrid .occ-detail{font-size:.86rem;line-height:1.35;overflow-wrap:anywhere}
+#regionalGrid .occ-address{font-size:.73rem;line-height:1.35;overflow-wrap:anywhere}
+#regionalGrid .occ-timeline{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:6px;
+  margin-top:9px;
+}
+#regionalGrid .occ-time-chip{
+  min-width:0;
+  min-height:60px;
+  padding:8px;
+}
+#regionalGrid .occ-time-chip span{font-size:.64rem;line-height:1.35}
+#regionalGrid .occ-time-chip b{font-size:.85rem}
+#regionalGrid .occurrence-main-actions{gap:7px}
+#regionalGrid .qth-btn{min-height:43px;font-size:.76rem;padding:8px}
+#regionalGrid .occurrence-action-row{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:7px;
+}
+#regionalGrid .occurrence-action-row button{
+  min-width:0;
+  min-height:43px;
+  padding:8px 5px;
+  font-size:.75rem;
+  white-space:normal;
+  overflow-wrap:anywhere;
+}
+#regionalGrid .occurrence-action-row .return-btn{
+  grid-column:1/-1;
+  min-height:45px;
+}
+#regionalGrid .victim-destination-card{
+  margin-top:9px;
+  padding:9px;
+  gap:8px;
+}
+#regionalGrid .victim-destination-btn{width:100%;flex-basis:100%}
+#regionalGrid .status-strip{
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:5px;
+  margin-top:9px;
+}
+#regionalGrid .status-strip button{
+  min-height:29px;
+  padding:7px 3px;
+  font-size:.61rem;
+  line-height:1.25;
+}
+#regionalGrid .vehicle-giroflex{max-width:145px}
+#regionalGrid .regional-sequence{
+  display:inline-flex;
+  margin-right:6px;
+  padding:3px 6px;
+  border:1px solid #bfdbfe;
+  border-radius:6px;
+  background:#e0f2fe;
+  color:#075985;
+  font-size:.66rem;
+  font-weight:1000;
+  vertical-align:middle;
+}
+.cockpit-coverage-guide{
+  margin-top:12px;
+  padding:10px;
+  border-top:4px solid #0e7490;
+  background:#f6fbfd;
+}
+.cockpit-coverage-guide .regional-coverage{
+  margin:0;
+  border:1px solid #a5cadb;
+  border-left:5px solid #0e7490;
+}
+@media(max-width:720px){
+  #regionalGrid .regional-card{padding:9px}
+  #regionalGrid .vehicle-card{padding:10px}
+}
