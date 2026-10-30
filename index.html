@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261029-42-revezamento-lateral">
+  <link rel="stylesheet" href="./styles.css?v=20261030-43-destino-vitima-qth">
 </head>
 <body>
 
@@ -422,7 +422,7 @@
           <table>
             <thead>
               <tr>
-                <th>Oc.</th><th>Viatura</th><th>Natureza</th><th>Bairro</th><th>Destino</th><th>Endereço</th><th>Equipe</th>
+                <th>Oc.</th><th>Viatura</th><th>Natureza</th><th>Bairro</th><th>Destino da vítima</th><th>Endereço</th><th>Equipe</th>
                 <th>Início / saída</th><th>Chegada QTH</th><th>Tempo até QTH</th><th>Início retorno</th><th>Chegada base</th><th>Tempo retorno</th><th>Tempo total</th><th>Observação</th><th>Ações</th>
               </tr>
             </thead>
@@ -536,6 +536,41 @@
   </div>
 </div>
 
+<div id="victimDestinationModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="victimDestinationTitle">
+  <div class="dialog victim-destination-dialog">
+    <div class="dialog-head">
+      <div><div class="dialog-kicker">DESFECHO DO ATENDIMENTO</div><h2 id="victimDestinationTitle">Destino da vítima</h2></div>
+      <button class="icon-close" type="button" data-close-modal="victimDestinationModal" aria-label="Fechar">×</button>
+    </div>
+    <p class="victim-destination-intro">Informe onde a vítima ficou após a chegada no QTH. Você poderá corrigir o destino enquanto a viatura estiver em ocorrência ou retornando.</p>
+    <div id="victimDestinationCurrent" class="victim-destination-current"></div>
+    <label class="victim-destination-label" for="victimDestinationChoice">DESTINO / RESULTADO DO ATENDIMENTO</label>
+    <select id="victimDestinationChoice" class="victim-destination-select">
+      <option value="">SELECIONE O DESTINO</option>
+      <option value="UPA">UPA</option>
+      <option value="UPA PED">UPA PEDIÁTRICA (UPA PED)</option>
+      <option value="HOSPITAL MUNICIPAL">HOSPITAL MUNICIPAL</option>
+      <option value="SANTA CASA">SANTA CASA</option>
+      <option value="ALFREDO ABRAAO">ALFREDO ABRAÃO</option>
+      <option value="HEANA">HEANA</option>
+      <option value="HEG">HEG</option>
+      <option value="TRANSPORTADO POR TERCEIROS">TRANSPORTADO POR TERCEIROS</option>
+      <option value="RECUSA">RECUSA DE TRANSPORTE</option>
+      <option value="NÃO ENCONTRADO">NÃO ENCONTRADO</option>
+      <option value="QTA">QTA — ENCERRAR SEM CRÉDITO DE REVEZAMENTO</option>
+      <option value="OUTROS">✎ OUTROS — INFORMAR MANUALMENTE</option>
+    </select>
+    <label id="victimDestinationOtherWrap" class="victim-destination-custom hidden" for="victimDestinationOther">Digite onde a vítima ficou
+      <input id="victimDestinationOther" maxlength="180" placeholder="Digite o hospital, unidade ou outro resultado">
+    </label>
+    <p id="victimDestinationQtaHint" class="victim-destination-qta-hint hidden">A escolha QTA segue a mesma confirmação do botão QTA existente: a viatura voltará à BASE, a ocorrência será encerrada e não será contabilizada no revezamento.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn" data-close-modal="victimDestinationModal">CANCELAR</button>
+      <button type="button" class="btn primary" id="saveVictimDestinationBtn">SALVAR DESTINO</button>
+    </div>
+  </div>
+</div>
+
 <div id="occEditModal" class="modal">
   <div class="dialog edit-dialog">
     <div class="dialog-head"><div><div class="dialog-kicker">CORREÇÃO DE ATENDIMENTO</div><h2>Editar ocorrência</h2></div><button class="icon-close" data-close-modal="occEditModal">×</button></div>
@@ -640,6 +675,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261029-42-revezamento-lateral"></script>
+<script type="module" src="./app.js?v=20261030-43-destino-vitima-qth"></script>
 </body>
 </html>
