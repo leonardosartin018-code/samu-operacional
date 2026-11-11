@@ -2195,3 +2195,24 @@ nav.tabs .tab.book-tab.active{
   line-height:1.45;
   font-weight:750;
 }
+
+/* QTH não informado: opção secundária logo abaixo da chegada ao local. */
+.qth-not-informed-btn{
+  display:block;width:100%;min-height:34px;
+  padding:7px 10px;border:1px solid rgba(255,255,255,.55);
+  border-radius:7px;background:rgba(255,255,255,.14);color:#fff;
+  font-size:.68rem;font-weight:900;line-height:1.2;cursor:pointer;
+}
+.qth-not-informed-btn:hover:not(:disabled){background:rgba(255,255,255,.25)}
+.qth-not-informed-btn.selected{
+  background:#dbeafe;border-color:#93c5fd;color:#1e3a8a;
+  opacity:1;cursor:default;
+}
+.status-returning .qth-not-informed-btn{
+  color:#422006;background:#fff7ed;border-color:#facc15;
+}
+#vehicles .vehicle-operational-group.occurrence .qth-not-informed-btn{
+  min-height:36px;font-size:.73rem;
+}
+#regionalGrid .qth-not-informed-btn{min-height:33px}
+.occ-time-chip.qth-duration b{font-variant-numeric:tabular-nums}
