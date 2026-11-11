@@ -2819,11 +2819,10 @@ function expressCard(r){
     '<div class="express-driver-top"><div class="express-vtr">'+esc(v?.nome||r.codigo_viatura)+'</div><span class="express-row-badge '+st.state+'">'+st.label+'</span></div>'+
     '<div class="express-person-line"><span class="express-fixed-label">Titular</span><strong class="express-fixed-name">'+esc(titular||'SEM TITULAR')+'</strong></div>'+
     '<div class="express-person-line"><span class="express-current-label">Em serviço</span><strong class="express-current-name">'+esc(currentName)+'</strong></div>'+
-    '<div class="express-driver-actions express-driver-movement">'+
+    '<div class="express-driver-actions">'+
       '<button title="'+(isFixed?'Clique novamente para desescalar':'Escalar o titular fixo nesta viatura')+'" class="fixed '+(isFixed?'active':'')+'" data-exp-fixed="'+r.id+'">'+(isFixed?'✓ FIXO':'✓ FIXO')+'</button>'+
       '<button class="rotation '+(st.state==='rotation'?'active':'')+'" data-exp-rotation="'+r.id+'">↻ REVEZAR</button>'+
       '<button class="swap '+(st.state==='permuta'?'active':'')+'" data-exp-swap="'+r.id+'">⇄ PERMUTA</button>'+
-      '<button type="button" class="move-driver" data-exp-move="'+r.id+'">⇄ MOVER</button>'+
       '<button class="absent '+(st.state==='absent'?'active':'')+'" data-exp-absent="'+r.id+'">✕ AUSENTE</button>'+
     '</div>'+
   '</article>';
@@ -2839,7 +2838,6 @@ function renderExpressDrivers(){
   $('#expressDriverGrid').querySelectorAll('[data-exp-fixed]').forEach(b=>b.onclick=()=>expressUseFixed(b.dataset.expFixed));
   $('#expressDriverGrid').querySelectorAll('[data-exp-rotation]').forEach(b=>b.onclick=()=>expressToggleRotation(b.dataset.expRotation));
   $('#expressDriverGrid').querySelectorAll('[data-exp-swap]').forEach(b=>b.onclick=()=>expressSwap(b.dataset.expSwap));
-  $('#expressDriverGrid').querySelectorAll('[data-exp-move]').forEach(b=>b.onclick=()=>expressSwap(b.dataset.expMove,true));
   $('#expressDriverGrid').querySelectorAll('[data-exp-absent]').forEach(b=>b.onclick=()=>expressAbsent(b.dataset.expAbsent));
 }
 async function expressUseFixed(rowId){
@@ -2880,18 +2878,12 @@ async function expressUseFixed(rowId){
     await loadAll(selectedDate());await loadExpressScale();
   }catch(e){alert(e.message||e)}
 }
-function expressSwap(rowId,moving=false){
+function expressSwap(rowId){
   if(!canEditOpenShift())return;
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
   if(!r||!v)return alert('Viatura não encontrada.');
   selectedExpressPermutaRow=r;
-  $('#expressPermutaModal').dataset.moving=moving?'1':'0';
-  $('#expressPermutaTitle').textContent=(moving?'Movimentar condutor — ':'Permuta — ')+(v.nome||r.codigo_viatura);
-  $('#expressPermutaSearchLabel').textContent=moving?'Condutor já escalado':'Condutor substituto';
-  $('#expressPermutaNote').textContent=moving
-    ?'Escolha FIXO para ocupar esta viatura ou REVEZAMENTO para entrar na fila da categoria dela.'
-    :'Use a permuta para registrar quem substitui o titular neste plantão.';
-  $('#saveExpressPermutaBtn').textContent=moving?'SALVAR MOVIMENTAÇÃO':'SALVAR PERMUTA';
+  $('#expressPermutaTitle').textContent='Permuta — '+(v.nome||r.codigo_viatura);
   $('#expressPermutaTitular').innerHTML='<b>Titular:</b> '+esc(r.nome_referencia||displayName(r.profissionais)||'—');
   $('#expressPermutaSearch').value='';
   $('#expressPermutaProId').value='';
@@ -2907,13 +2899,10 @@ function expressPermutaAutocomplete(){
   $('#expressPermutaProId').value='';
   if(q.length<3){box.classList.remove('show');box.innerHTML='';return}
   const titularId=selectedExpressPermutaRow?.profissional_id;
-  const moving=$('#expressPermutaModal').dataset.moving==='1';
-  const eligible=moving?new Set(activeTeamRows().filter(m=>teamRoleKey(m)==='driver').map(m=>m.profissional_id)):null;
-  const list=professionals.filter(p=>(moving?eligible.has(p.id):p.id!==titularId)&&allowedForField(p,'driver')&&teamSearchText(p).includes(q)).slice(0,15);
+  const list=professionals.filter(p=>p.id!==titularId&&allowedForField(p,'driver')&&teamSearchText(p).includes(q)).slice(0,15);
   box.innerHTML=list.length
     ? list.map(p=>'<button type="button" class="autocomplete-result" data-express-perm-pro="'+p.id+'"><b>'+esc(professionalLabel(p,'driver'))+'</b><small>'+esc(p.funcao_sistema||'')+' • '+esc(p.nome_completo)+'</small></button>').join('')
-    : moving?'<div class="autocomplete-empty">Nenhum condutor em serviço encontrado.</div>'
-      : '<div class="autocomplete-empty">Nenhum profissional compatível encontrado.</div><button type="button" class="autocomplete-register" data-register-new="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
+    : '<div class="autocomplete-empty">Nenhum profissional compatível encontrado.</div><button type="button" class="autocomplete-register" data-register-new="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
   box.classList.add('show');
   box.querySelectorAll('[data-express-perm-pro]').forEach(b=>b.onclick=()=>{
     const p=professionals.find(x=>x.id===b.dataset.expressPermPro);
@@ -2939,52 +2928,6 @@ async function saveExpressPermuta(){
     const now=new Date().toISOString();
     const old=expressRowState(r).current;
     const elsewhere=activeTeamRows().find(m=>m.profissional_id===proId);
-    if($('#expressPermutaModal').dataset.moving==='1'){
-      if(!elsewhere||teamRoleKey(elsewhere)!=='driver')throw new Error('Selecione um condutor em serviço.');
-      const rotation=mode==='REVEZAMENTO';
-      const scope=vehicleType(v).includes('USA')?'USA':'USB';
-      const origin=vehicleById(elsewhere.viatura_id);
-      if(memberIsBusy(elsewhere)||(origin&&activeOccurrence(origin))||(!rotation&&activeOccurrence(v))){
-        throw new Error('Aguarde o encerramento da ocorrência antes de movimentar o condutor.');
-      }
-      if(!rotation&&elsewhere.viatura_id===v.id&&!isRotationMember(elsewhere)){
-        throw new Error('O condutor já está fixo nesta viatura.');
-      }
-      const plantaoId=currentPlantao.id;
-      const destination=rotation?'o revezamento '+scope:'a '+v.nome;
-      if(!confirm('Mover '+displayName(pro)+' para '+destination+'?'))return;
-      if(!rotation){
-        const {data:ocupantes,error:readError}=await supabase.from('equipe_plantao')
-          .select('id,funcao').eq('plantao_id',plantaoId).eq('viatura_id',v.id).eq('status','ATIVO');
-        if(readError)throw readError;
-        if((ocupantes||[]).some(m=>m.id!==elsewhere.id&&teamRoleKey(m)==='driver')){
-          throw new Error('A viatura já tem condutor. Libere a posição antes de fixar outro profissional.');
-        }
-      }
-      if(currentPlantao?.id!==plantaoId||!canEditOpenShift())return;
-      const isSubstitute=norm(elsewhere.tipo_alteracao_escala)==='PERMUTA'&&elsewhere.titular_profissional_id&&
-        elsewhere.titular_profissional_id!==proId;
-      const update=supabase.from('equipe_plantao').update({
-        viatura_id:rotation?null:v.id,
-        viatura_snapshot:rotation?null:v.nome,
-        tipo_escala:rotation?'REVEZAMENTO':'FIXO EM VIATURA',
-        grupo_revezamento:rotation?scope+'_CONDUTOR':null,
-        revezamento_tipo_viatura:rotation?scope:null,
-        tipo_alteracao_escala:isSubstitute?'PERMUTA':rotation?'REVEZAMENTO':'TROCA_VIATURA',
-        titular_profissional_id:isSubstitute?elsewhere.titular_profissional_id:null,
-        nome_titular_escala:isSubstitute?elsewhere.nome_titular_escala:null
-      }).eq('id',elsewhere.id).eq('plantao_id',plantaoId).eq('status','ATIVO');
-      if(elsewhere.viatura_id)update.eq('viatura_id',elsewhere.viatura_id);
-      else update.is('viatura_id',null);
-      const {data,error}=await update.select('id').maybeSingle();
-      if(error)throw error;
-      if(!data)throw new Error('A escala mudou. Atualize o painel e tente novamente.');
-      closeModal('expressPermutaModal');
-      selectedExpressPermutaRow=null;
-      markOperationalDirty();
-      await loadAll(selectedDate());await loadExpressScale();
-      return;
-    }
     if(elsewhere&&elsewhere.id!==old?.id){
       const oldV=vehicleById(elsewhere.viatura_id);
       if(!confirm(pro.nome_completo+' já está em '+(oldV?.nome||elsewhere.viatura_snapshot||'outra escala')+'.\\n\\nDeseja transferir para esta permuta?'))return;
@@ -4121,7 +4064,8 @@ function collectPermutas(){
     registrados.add(titularId);
     out.push({funcao:'CONDUTOR',substituto,substituido:titular});
   });
-  internalScaleRows.filter(r=>norm(r.tipo_alteracao)==='PERMUTA').forEach(r=>out.push({
+  internalScaleRows.filter(r=>norm(r.tipo_alteracao)==='PERMUTA'&&
+    r.profissional_id!==r.titular_profissional_id&&!isServingInShift(r.titular_profissional_id)).forEach(r=>out.push({
     funcao:r.funcao==='SANITARIA'?'SANITARIA':r.funcao,
     substituto:r.nome_snapshot||professionalNameById(r.profissional_id)||'—',
     substituido:r.titular_nome_snapshot||professionalNameById(r.titular_profissional_id)||'—'

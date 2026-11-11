@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261111-59-mover-condutor">
+  <link rel="stylesheet" href="./styles.css?v=20261111-60-permuta-livro">
 </head>
 <body>
 
@@ -691,7 +691,7 @@
     </div>
     <div id="expressPermutaTitular" class="assign-person"></div>
     <div class="form-grid">
-      <label class="full"><span id="expressPermutaSearchLabel">Quem está substituindo</span>
+      <label class="full">Quem está substituindo
         <div class="autocomplete-shell">
           <input id="expressPermutaSearch" autocomplete="off" placeholder="Digite 3 letras do nome do condutor">
           <input id="expressPermutaProId" type="hidden">
@@ -705,10 +705,10 @@
         </select>
       </label>
     </div>
-    <div id="expressPermutaNote" class="team-modal-note"></div>
+    <div class="team-modal-note">O Livro só registra a permuta quando o titular está fora de serviço no plantão.</div>
     <div class="modal-actions">
       <button class="btn" data-close-modal="expressPermutaModal">Cancelar</button>
-      <button id="saveExpressPermutaBtn" class="btn primary">SALVAR ALTERAÇÃO</button>
+      <button id="saveExpressPermutaBtn" class="btn primary">SALVAR PERMUTA</button>
     </div>
   </div>
 </div>
@@ -770,6 +770,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261111-59-mover-condutor"></script>
+<script type="module" src="./app.js?v=20261111-60-permuta-livro"></script>
 </body>
 </html>

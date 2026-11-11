@@ -2093,6 +2093,3 @@ nav.tabs .tab.book-tab.active{
 .auth-recover-link:disabled{opacity:.5;cursor:wait}
 .auth-recovery-help{margin:4px 0 8px;color:#334155;font-size:.88rem;line-height:1.4}
 
-.section-scale .express-driver-movement{grid-template-columns:repeat(5,minmax(0,1fr))}
-.section-scale .move-driver{background:#e0f2fe;border:1px solid #7dd3fc;color:#075985}
-@media(max-width:850px){.section-scale .express-driver-movement{grid-template-columns:repeat(3,minmax(0,1fr))}}
