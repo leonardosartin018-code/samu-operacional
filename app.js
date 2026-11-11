@@ -1565,21 +1565,28 @@ function dispatchCandidateForVehicleRole(v,role,used=new Set()){
   if(role==='doctor')return doctorCandidateForVehicle(v,used);
   return priorityPeopleForRole(role,type,{rotationOnly:true}).find(m=>!used.has(m.profissional_id))||null;
 }
+/* Fila de VIATURAS: somente unidades com guarnição fixa completa.
+   Profissionais compartilhados são ordenados na fila de PESSOAS e
+   a viatura é escolhida pelo operador no acionamento. */
+function fixedCrewForVehicleRotation(v){
+  if(!vehicleAvailableForRotation(v))return null;
+  const fixed=vehicleMembers(v).filter(m=>!isRotationMember(m)&&!memberIsBusy(m));
+  const required=requiredDispatchRoles(v);
+  if(!required.length||!required.every(role=>crewHasRole(fixed,role)))return null;
+  const driver=fixed.find(m=>teamRoleKey(m)==='driver')||null;
+  const nurse=fixed.find(m=>teamRoleKey(m)==='nurse')||null;
+  const tech=fixed.find(m=>teamRoleKey(m)==='tech'||(
+    teamRoleKey(m)==='nurse'&&norm(m.funcao).includes('TECN')))||null;
+  const doctor=fixed.find(m=>teamRoleKey(m)==='doctor')||null;
+  return {v,driver,nurse,tech,doctor,complete:true,
+    base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)};
+}
 function availableUsaTeams(){
   const crit=currentRotationCriterion();
   const eligible=vehicles.filter(v=>
-    isAnapolisVehicle(v)&&vehicleType(v).includes('USA')&&!vehicleType(v).includes('USB')&&
+    isAnapolisVehicle(v)&&vehicleType(v)==='USA'&&
     v.participa_revezamento!==false&&vehicleAvailableForRotation(v)
-  ).map(v=>{
-    const used=new Set();
-    const driver=dispatchCandidateForVehicleRole(v,'driver',used);if(driver)used.add(driver.profissional_id);
-    const nurse=dispatchCandidateForVehicleRole(v,'nurse',used);if(nurse)used.add(nurse.profissional_id);
-    const doctor=dispatchCandidateForVehicleRole(v,'doctor',used);
-    return {
-      v,driver,nurse,doctor,complete:!!driver&&!!nurse,
-      base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)
-    };
-  }).filter(x=>x.complete);
+  ).map(fixedCrewForVehicleRotation).filter(Boolean);
   // Antes da primeira ocorrência da frota deste tipo, USA 01 / 02 / 06
   // e USB 01 / 02 / 03 ... ficam na sequência dos prefixos.
   const firstRound=eligible.length>0&&eligible.every(x=>x.occ===0&&!latestReturnForVehicle(x.v));
@@ -1631,18 +1638,9 @@ function automaticDispatchCrew(v){
 function availableUsbTeams(){
   const crit=currentRotationCriterion();
   const eligible=vehicles.filter(v=>
-    isAnapolisVehicle(v)&&vehicleType(v).includes('USB')&&
+    isAnapolisVehicle(v)&&vehicleType(v)==='USB'&&
     v.participa_revezamento!==false&&vehicleAvailableForRotation(v)
-  ).map(v=>{
-    const used=new Set();
-    const driver=dispatchCandidateForVehicleRole(v,'driver',used);
-    if(driver)used.add(driver.profissional_id);
-    const tech=dispatchCandidateForVehicleRole(v,'tech',used);
-    return {
-      v,driver,tech,complete:!!driver&&!!tech,
-      base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)
-    };
-  }).filter(x=>x.complete);
+  ).map(fixedCrewForVehicleRotation).filter(Boolean);
   // Antes da primeira ocorrência da frota deste tipo, USA 01 / 02 / 06
   // e USB 01 / 02 / 03 ... ficam na sequência dos prefixos.
   const firstRound=eligible.length>0&&eligible.every(x=>x.occ===0&&!latestReturnForVehicle(x.v));
@@ -1768,11 +1766,18 @@ function rotationPanelGroup(type){
       });
       return fixed.length?esc(title)+': '+fixed.length+' fixo(s) — não entram no revezamento':'';
     }).filter(Boolean):[];
+  const fixedTeams=type==='USA'?availableUsaTeams():availableUsbTeams();
+  const hasPeopleQueues=queues.some(Boolean);
+  // Sem guarnição fixa completa, não existe viatura "da vez".
+  // Apenas condutores e técnicos/enfermeiros disputam as próximas saídas.
   return '<section class="rotation-panel-group rotation-panel-'+type.toLowerCase()+'">'+
     '<div class="rotation-panel-heading"><b>'+type+'</b>'+
     '<span>'+(hasRotation?'ESCALA COM REVEZAMENTO':'EQUIPE FIXA')+'</span></div>'+
     (fixedRoleNotes.length?'<p class="rotation-mode-clarity">'+fixedRoleNotes.join(' • ')+'</p>':'')+
-    nextVehicleRotationCard(type,hasRotation)+
+    (fixedTeams.length?nextVehicleRotationCard(type,hasRotation):'')+
+    (hasPeopleQueues&&!fixedTeams.length?
+      '<p class="rotation-person-only-note">FILA POR PROFISSIONAL • Sem viatura fixa da vez. '+
+      'Selecione a viatura disponível no acionamento e confira os nomes sugeridos abaixo.</p>':'')+
     queues.join('')+
   '</section>';
 }
@@ -1800,7 +1805,7 @@ function renderRotation(){
     try{exitSummary=earlyExitSummaryHtml()}
     catch(e){console.error('Falha no resumo de saída antecipada',e)}
     root.innerHTML=exitSummary+
-      (!hasAnyRotation?'<p class="rotation-no-revezamento">Sem revezamento de profissionais neste plantão. Exibindo somente as próximas viaturas.</p>':'')+
+      (!hasAnyRotation?'<p class="rotation-no-revezamento">Sem revezamento de profissionais neste plantão. Viaturas só aparecem na fila quando têm equipe fixa completa.</p>':'')+
       sections.join('');
     bindEarlyExitButtons(root);
     bindManualQueueButtons(root);
