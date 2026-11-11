@@ -365,19 +365,23 @@ function operationalShiftKey(ctx=operationalShiftContext()){
   return ctx.date+'|'+ctx.turno+'|'+alaForDate(ctx.date);
 }
 function nextShiftContext(ctx){
-  const date=normalizeTurno(ctx.turno)==='NOTURNO'?addDaysIso(ctx.date,1):ctx.date;
-  const turno=normalizeTurno(ctx.turno)==='NOTURNO'?'DIURNO':'NOTURNO';
-  return {date,turno,ala:alaForDate(date)};
+  const night=normalizeTurno(ctx.turno)==='NOTURNO';
+  const currentDate=ctx.date||ctx.data_plantao;
+  const date=night?addDaysIso(currentDate,1):currentDate;
+  return {date,turno:night?'DIURNO':'NOTURNO',ala:alaForDate(date)};
 }
 function shiftExpectedStart(ctx){
-  return new Date(ctx.date+'T'+(normalizeTurno(ctx.turno)==='DIURNO'?'07:00:00':'19:00:00')+'-03:00');
+  const date=ctx.date||ctx.data_plantao;
+  return new Date(date+'T'+(normalizeTurno(ctx.turno)==='DIURNO'?'07:00:00':'19:00:00')+'-03:00');
 }
 function shiftExpectedEnd(ctx){
+  const date=ctx.date||ctx.data_plantao;
   const night=normalizeTurno(ctx.turno)==='NOTURNO';
-  return new Date((night?addDaysIso(ctx.date,1):ctx.date)+'T'+(night?'07:00:00':'19:00:00')+'-03:00');
+  return new Date((night?addDaysIso(date,1):date)+'T'+(night?'07:00:00':'19:00:00')+'-03:00');
 }
 function shiftTitle(ctx){
-  return 'ALA '+(ctx.ala||alaForDate(ctx.date))+' • '+normalizeTurno(ctx.turno)+' • '+fmtDate(ctx.date);
+  const date=ctx.date||ctx.data_plantao;
+  return 'ALA '+(ctx.ala||alaForDate(date))+' • '+normalizeTurno(ctx.turno)+' • '+fmtDate(date);
 }
 async function resolveOperationalShiftContext(){
   const clock=operationalShiftContext();
@@ -4193,10 +4197,12 @@ async function executeShiftTransition(mode){
       const nextShift=await choosePlantao(next.date,next.turno,next.ala);
       if(norm(nextShift?.status)==='ABERTO')throw new Error('O próximo plantão já está aberto. Atualize o painel.');
       if(!canReopenCurrentShift(old)||currentPlantao?.id!==old.id)throw new Error('O turno mudou. Atualize o painel.');
-      const {data,error}=await supabase.from('plantoes')
+      const reopening=supabase.from('plantoes')
         .update({status:'ABERTO',encerrado_em:null,operador_encerramento:null})
-        .eq('id',old.id).eq('status','ENCERRADO').eq('encerrado_em',old.encerrado_em)
-        .select('id').maybeSingle();
+        .eq('id',old.id).eq('status','ENCERRADO');
+      if(old.encerrado_em)reopening.eq('encerrado_em',old.encerrado_em);
+      else reopening.is('encerrado_em',null);
+      const {data,error}=await reopening.select('id').maybeSingle();
       if(error)throw error;
       if(!data)throw new Error('O plantão já foi modificado por outro operador. Atualize o painel.');
       autoFollowCurrentShift=true;
