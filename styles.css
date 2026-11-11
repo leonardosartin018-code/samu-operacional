@@ -1010,36 +1010,47 @@ nav.tabs .tab.book-tab.active{
 .section-scale .express-vehicle-section-head h3{font-size:.87rem}
 .section-scale .express-vehicle-section-head span{font-size:.75rem}
 .section-scale .express-driver-grid{gap:8px;padding:9px}
-.section-scale .express-driver-card,
-.section-scale .express-driver-card.fixed,
-.section-scale .express-driver-card.permuta,
-.section-scale .express-driver-card.rotation,
-.section-scale .express-driver-card.absent,
-.section-scale .express-driver-card.vacant,
-.section-scale .express-driver-card.unresolved{
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card,
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card.fixed,
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card.permuta,
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card.rotation,
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card.absent,
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card.vacant,
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card.unresolved{
   border:1px solid #dce7ee;border-left:4px solid #94a3b8;border-radius:9px;
   padding:10px;background:#fff;color:#152f42;box-shadow:0 2px 6px rgba(15,63,88,.045)
 }
-.section-scale .express-driver-card.fixed{border-left-color:#16a34a;background:#f6fef8}
-.section-scale .express-driver-card.rotation{border-left-color:#ea580c;background:#fffaf5}
-.section-scale .express-driver-card.permuta{border-left-color:#d97706;background:#fffdf4}
-.section-scale .express-driver-card.absent{border-left-color:#64748b}
-.section-scale .express-driver-card.unresolved{border-left-color:#dc2626}
-.section-scale .express-driver-top{align-items:center;margin-bottom:8px}
-.section-scale .express-vtr{font-size:1rem;color:#0f3550}
-.section-scale .express-row-badge{font-size:.67rem;padding:4px 7px;white-space:nowrap}
-.section-scale .express-person-line{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:3px 0;line-height:1.25}
-.section-scale .express-person-line .express-fixed-label,
-.section-scale .express-person-line .express-current-label{
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card.fixed{border-left-color:#16a34a;background:#f6fef8}
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card.rotation{border-left-color:#ea580c;background:#fffaf5}
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card.permuta{border-left-color:#d97706;background:#fffdf4}
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card.absent{border-left-color:#64748b}
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-card.unresolved{border-left-color:#dc2626}
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-top{align-items:center;margin-bottom:8px}
+:is(.section-scale,:where(#internalScaleEditor)) .express-vtr{font-size:1rem;color:#0f3550}
+:is(.section-scale,:where(#internalScaleEditor)) .express-row-badge{font-size:.67rem;padding:4px 7px;white-space:nowrap}
+:is(.section-scale,:where(#internalScaleEditor)) .express-person-line{display:flex;gap:8px;align-items:baseline;flex-wrap:wrap;margin:3px 0;line-height:1.25}
+:is(.section-scale,:where(#internalScaleEditor)) .express-person-line .express-fixed-label,
+:is(.section-scale,:where(#internalScaleEditor)) .express-person-line .express-current-label{
   flex:0 0 77px;margin:0;font-size:.75rem;font-weight:750;letter-spacing:0;
   text-transform:none;color:#64748b;opacity:1
 }
-.section-scale .express-person-line .express-fixed-name,
-.section-scale .express-person-line .express-current-name{
+:is(.section-scale,:where(#internalScaleEditor)) .express-person-line .express-fixed-name,
+:is(.section-scale,:where(#internalScaleEditor)) .express-person-line .express-current-name{
   margin:0;font-size:.92rem;font-weight:950;color:#132e40
 }
-.section-scale .express-driver-actions{margin-top:10px;gap:5px}
-.section-scale .express-driver-actions button{min-height:36px;padding:6px 3px;font-size:.67rem;font-weight:900}
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-actions{margin-top:10px;gap:5px}
+:is(.section-scale,:where(#internalScaleEditor)) .express-driver-actions button{min-height:36px;padding:6px 3px;font-size:.67rem;font-weight:900}
+#internalScaleEditor .internal-section-group{background:#fff;border-left-width:1px;border-left-color:#dce7eb;overflow:visible}
+#internalScaleEditor .internal-section-head{background:#f3f8fa}
+#internalScaleEditor .internal-section-head h3{font-size:.87rem}
+#internalScaleEditor .internal-section-count{font-size:.75rem}
+#internalScaleEditor .internal-section-body{gap:8px;padding:9px;align-items:start}
+#internalScaleEditor .express-driver-card{min-width:0}
+#internalScaleEditor .express-driver-top{flex-wrap:wrap}
+#internalScaleEditor .express-person-line strong{min-width:0;overflow-wrap:anywhere}
+#internalScaleEditor .internal-status-actions button{white-space:normal}
+#internalScaleEditor .internal-status-actions .ausente{background:#e2e8f0;border-color:#94a3b8;color:#334155}
+#internalScaleEditor .internal-slot .autocomplete-results{left:0;right:0;top:100%}
 @media(max-width:650px){
   .simple-scale-head{align-items:stretch}
   .simple-scale-head .team-head-actions{width:100%}

@@ -3786,19 +3786,38 @@ function bookDriverName(code,index=0){
 function monthNamePt(dateIso){
   return new Intl.DateTimeFormat('pt-BR',{month:'long',timeZone:'UTC'}).format(new Date(dateIso+'T12:00:00Z')).toUpperCase();
 }
-function internalSlotHtml(slot){
+const INTERNAL_BOOK_STATUS={
+  VAGO:{style:'vacant',label:'NÃO ESCALADO'},
+  ESCALADO:{style:'fixed',label:'ESCALADO'},
+  AUSENTE:{style:'absent',label:'AUSENTE'},
+  PERMUTA:{style:'permuta',label:'PERMUTA'}
+};
+function internalSlotHtml(slot,bookLayout=false){
   const row=internalRow(slot.code),fixed=fixedInternalRow(slot.code);
   const titular=fixed?.nome_referencia||professionalNameById(fixed?.profissional_id)||'SEM TITULAR PREVISTO';
   const status=internalStatusValue(row,fixed);
   const substitute=status==='PERMUTA'?(row?.nome_snapshot||professionalNameById(row?.profissional_id)||''):'';
   const statusClass=status.toLowerCase();
-  return '<div class="internal-slot '+slot.funcao.toLowerCase()+' status-'+statusClass+'" data-internal-slot="'+slot.code+'">'+
-    '<div class="internal-slot-head"><b>'+esc(slot.label)+'</b><span>'+esc(slot.funcao)+'</span></div>'+
-    '<div class="internal-fixed-label">ESCALADO NA ESCALA FIXA</div>'+
-    '<div class="internal-fixed-name '+(!fixed?'internal-empty-fixed':'')+'">'+esc(titular)+'</div>'+
+  const badge=INTERNAL_BOOK_STATUS[status];
+  const onDuty=['ESCALADO','PERMUTA'].includes(status)
+    ? professionalNameById(row?.profissional_id)||row?.nome_snapshot||(status==='ESCALADO'?titular:'—')
+    : '—';
+  const header=bookLayout
+    ? '<div class="express-driver-top"><div class="express-vtr">'+esc(slot.label)+'</div>'+
+      '<span class="express-row-badge '+badge.style+'" data-int-badge>'+badge.label+'</span></div>'+
+      '<div class="express-person-line"><span class="express-fixed-label">Titular</span><strong class="express-fixed-name">'+
+        esc(professionalNameById(fixed?.profissional_id)||titular)+'</strong></div>'+
+      '<div class="express-person-line"><span class="express-current-label">Em serviço</span><strong class="express-current-name">'+
+        esc(onDuty)+'</strong></div>'
+    : '<div class="internal-slot-head"><b>'+esc(slot.label)+'</b><span>'+esc(slot.funcao)+'</span></div>'+
+      '<div class="internal-fixed-label">ESCALADO NA ESCALA FIXA</div>'+
+      '<div class="internal-fixed-name '+(!fixed?'internal-empty-fixed':'')+'">'+esc(titular)+'</div>';
+  return '<div class="internal-slot '+slot.funcao.toLowerCase()+' status-'+statusClass+
+    (bookLayout?' express-driver-card '+badge.style:'')+'" data-internal-slot="'+slot.code+'">'+
+    header+
     '<input type="hidden" data-int-type="'+slot.code+'" value="'+status+'">'+
     '<input type="hidden" data-int-id="'+slot.code+'" value="'+esc(row?.profissional_id||'')+'">'+
-    '<div class="internal-status-actions">'+
+    '<div class="internal-status-actions'+(bookLayout?' express-driver-actions':'')+'">'+
       '<button title="'+(status==='ESCALADO'?'Clique novamente para desescalar':'Clique para escalar')+'" type="button" class="escalado '+(status==='ESCALADO'?'active':'')+'" data-int-status="'+slot.code+'" data-value="ESCALADO">'+(status==='ESCALADO'?'✓ ESCALADO':'✓ ESCALAR')+'</button>'+
       '<button type="button" class="ausente '+(status==='AUSENTE'?'active':'')+'" data-int-status="'+slot.code+'" data-value="AUSENTE">✕ AUSENTE</button>'+
       '<button type="button" class="permuta '+(status==='PERMUTA'?'active':'')+'" data-int-status="'+slot.code+'" data-value="PERMUTA">⇄ PERMUTA</button>'+
@@ -3808,11 +3827,12 @@ function internalSlotHtml(slot){
       '<div class="autocomplete-shell"><input data-int-search="'+slot.code+'" autocomplete="off" placeholder="Digite 3 letras do substituto..." value="'+esc(substitute)+'"><div class="autocomplete-results" data-int-results="'+slot.code+'"></div></div>'+
       '<div class="internal-permuta-selected">'+(substitute?'Substituto: '+esc(substitute):'Selecione o substituto para registrar a permuta.')+'</div>'+
     '</div>'+
-    '<div class="internal-card-footer"><small>Situação selecionada: <b>'+status+'</b> • confirme a equipe para gravar</small></div>'+
+    (bookLayout?'':'<div class="internal-card-footer"><small>Situação selecionada: <b>'+status+'</b> • confirme a equipe para gravar</small></div>')+
   '</div>';
 }
 function renderInternalEditorTo(selector){
   const el=$(selector);if(!el)return;
+  const bookLayout=selector==='#internalScaleEditor';
   const groups=[
     {key:'sanitarias',title:'AMBULÂNCIAS SANITÁRIAS',sub:'S 01, S 02 e posições extras',filter:s=>s.funcao==='SANITARIA'},
     {key:'radio',title:'RÁDIO-OPERADORES',sub:'1º e 2º horários do rádio',filter:s=>s.funcao==='RADIO'},
@@ -3827,7 +3847,7 @@ function renderInternalEditorTo(selector){
     }).length;
     return '<section class="internal-section-group '+g.key+'">'+
       '<div class="internal-section-head"><div><h3>'+g.title+'</h3><p>'+g.sub+'</p></div><span class="internal-section-count">'+defined+'/'+slots.length+' definidos</span></div>'+
-      '<div class="internal-section-body">'+slots.map(internalSlotHtml).join('')+'</div>'+
+      '<div class="internal-section-body">'+slots.map(slot=>internalSlotHtml(slot,bookLayout)).join('')+'</div>'+
     '</section>';
   }).join('');
   el.querySelectorAll('[data-int-status]').forEach(b=>b.onclick=()=>{
@@ -3840,6 +3860,17 @@ function renderInternalEditorTo(selector){
     card.querySelector('[data-int-permuta="'+code+'"]').classList.toggle('show',value==='PERMUTA');
     card.classList.remove('status-escalado','status-ausente','status-permuta','status-vago');
     card.classList.add('status-'+value.toLowerCase());
+    const badge=card.querySelector('[data-int-badge]');
+    if(badge){
+      const styles=Object.values(INTERNAL_BOOK_STATUS).map(status=>status.style);
+      const selected=INTERNAL_BOOK_STATUS[value];
+      card.classList.remove(...styles);
+      card.classList.add(selected.style);
+      badge.classList.remove(...styles);
+      badge.classList.add(selected.style);
+      badge.textContent='A CONFIRMAR';
+      badge.title=selected.label;
+    }
     const footer=card.querySelector('.internal-card-footer small');
     if(footer)footer.innerHTML='Situação atual: <b>'+value+'</b>';
     if(value!=='PERMUTA'){
