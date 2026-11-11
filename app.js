@@ -1034,26 +1034,24 @@ function operationalGroup(title,subtitle,cls,list,extra=''){
 }
 function renderFleet(){
   const all=vehicles.filter(isAnapolisVehicle);
-  const detached=['occurrence','asepsis','mechanical','noCrew','noStretcher'];
+  const detached=['asepsis','mechanical','noCrew','noStretcher'];
+  const priority={occurrence:0,returning:1,base:2};
+  const byStatus=list=>list.sort((a,b)=>(priority[statusInfo(a).key]??3)-(priority[statusInfo(b).key]??3));
   const stays=v=>vehicleType(v).includes('MOTO') || !detached.includes(statusInfo(v).key);
-  const moto=all.filter(v=>vehicleType(v).includes('MOTO'));
-  const usa=all.filter(v=>vehicleType(v).includes('USA')&&!vehicleType(v).includes('USB')&&stays(v));
-  const usb=all.filter(v=>vehicleType(v).includes('USB')&&stays(v));
+  const moto=byStatus(all.filter(v=>vehicleType(v).includes('MOTO')));
+  const usa=byStatus(all.filter(v=>vehicleType(v).includes('USA')&&!vehicleType(v).includes('USB')&&stays(v)));
+  const usb=byStatus(all.filter(v=>vehicleType(v).includes('USB')&&stays(v)));
   const lane=(key,title,subtitle,cls,predicate=null)=>{
     const list=all.filter(v=>!vehicleType(v).includes('MOTO')&&statusInfo(v).key===key&&(!predicate||predicate(v)))
       .sort((a,b)=>(vehicleType(a).includes('USA')?1:2)-(vehicleType(b).includes('USA')?1:2)||String(a.nome).localeCompare(String(b.nome),'pt-BR',{numeric:true}));
     return list.length?operationalGroup(title,subtitle,cls,list,'dynamic-status-lane'):'';
   };
-  // Não misturar USA e USB empenhadas na mesma linha: cada grupo ganha
-  // cartões largos e seus próprios totais, sem ocultar outros tipos.
   const isUSA=v=>vehicleType(v).includes('USA')&&!vehicleType(v).includes('USB');
   const isUSB=v=>vehicleType(v).includes('USB');
   $('#vehicles').innerHTML=
     operationalGroup('MOTOLÂNCIA','Resposta rápida • Anápolis','moto',moto)+
-    operationalGroup('USA','Unidades de Suporte Avançado • QRV e retorno','usa',usa)+
-    operationalGroup('USB','Unidades de Suporte Básico • QRV e retorno','usb',usb)+
-    lane('occurrence','USA EM OCORRÊNCIA','Suporte Avançado • viaturas empenhadas','occurrence occurrence-usa',isUSA)+
-    lane('occurrence','USB EM OCORRÊNCIA','Suporte Básico • viaturas empenhadas','occurrence occurrence-usb',isUSB)+
+    operationalGroup('USA','Unidades de Suporte Avançado • Ocorrência, retorno e QRV','usa',usa)+
+    operationalGroup('USB','Unidades de Suporte Básico • Ocorrência, retorno e QRV','usb',usb)+
     lane('occurrence','OUTRAS VIATURAS EM OCORRÊNCIA','Outras unidades empenhadas','occurrence occurrence-other',v=>!isUSA(v)&&!isUSB(v))+
     lane('asepsis','ASSEPSIA','Viaturas temporariamente retiradas da linha','asepsis')+
     lane('mechanical','BAIXADAS — PANE','Viaturas indisponíveis por pane / manutenção','mechanical')+
