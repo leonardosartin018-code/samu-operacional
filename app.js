@@ -2727,12 +2727,18 @@ async function setOccurrenceQth(id){
   if(o.chegada_qth_em &&
     !confirm('A chegada ao QTH já foi registrada às '+fmtTime(o.chegada_qth_em)+'. Substituir pela hora atual?'))return;
   if(!o.chegada_qth_em&&o.qth_nao_informado &&
-    !confirm('QTH marcado como NÃO INFORMADO.\\n\\nDeseja registrar a hora ATUAL como chegada?\\n\\nSó confirme se a equipe comunicou a chegada agora. Não substitua o horário real antigo pela hora atual.'))return;
+    !confirm('QTH marcado como NÃO INFORMADO.\n\nDeseja registrar a hora ATUAL como chegada?\n\nSó confirme se a equipe comunicou a chegada agora. Não substitua o horário real antigo pela hora atual.'))return;
 
   const now=new Date().toISOString();
-  const {data,error}=await supabase.from('ocorrencias')
+  // Não sobrescreve atualização feita por outro operador.
+  let request=supabase.from('ocorrencias')
     .update({chegada_qth_em:now,qth_nao_informado:false})
-    .eq('id',id).eq('status','EM OCORRENCIA').select('id').maybeSingle();
+    .eq('id',id).eq('status','EM OCORRENCIA')
+    .eq('qth_nao_informado',Boolean(o.qth_nao_informado));
+  request=o.chegada_qth_em
+    ?request.eq('chegada_qth_em',o.chegada_qth_em)
+    :request.is('chegada_qth_em',null);
+  const {data,error}=await request.select('id').maybeSingle();
   if(error)return alert('Não foi possível registrar a chegada ao QTH: '+error.message);
   if(!data)return alert('A ocorrência mudou. Atualize o painel.');
   await loadAll(selectedDate());
@@ -2744,12 +2750,13 @@ async function setOccurrenceQthNotInformed(id){
   if(norm(o.status)!=='EM OCORRENCIA')return alert('A ocorrência não está mais em atendimento. Atualize o painel.');
   if(o.chegada_qth_em)return alert('O horário de chegada ao QTH já foi registrado. Esta opção não pode apagar um horário informado.');
   if(o.qth_nao_informado)return;
-  if(!confirm('CONFIRMAR QTH NÃO INFORMADO?\\n\\nA equipe não informou a chegada ao QTH. O horário e o tempo até o QTH permanecerão em aberto, sem duração presumida.\\n\\nO retorno poderá ser registrado normalmente.'))return;
+  if(!confirm('CONFIRMAR QTH NÃO INFORMADO?\n\nA equipe não informou a chegada ao QTH. O horário e o tempo até o QTH permanecerão em aberto, sem duração presumida.\n\nO retorno poderá ser registrado normalmente.'))return;
 
   const {data,error}=await supabase.from('ocorrencias')
     .update({chegada_qth_em:null,qth_nao_informado:true})
     .eq('id',id).eq('status','EM OCORRENCIA')
-    .is('chegada_qth_em',null).select('id').maybeSingle();
+    .eq('qth_nao_informado',false).is('chegada_qth_em',null)
+    .select('id').maybeSingle();
   if(error)return alert('Não foi possível registrar QTH não informado: '+error.message);
   if(!data)return alert('A ocorrência mudou ou outro operador registrou o QTH. Atualize o painel.');
   await loadAll(selectedDate());
