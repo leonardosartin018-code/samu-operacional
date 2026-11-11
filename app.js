@@ -2996,7 +2996,8 @@ async function saveOccurrenceCrewCorrection(){
   if(JSON.stringify(newIds)===JSON.stringify(draft.oldIds)){
     // A correção de função sem trocar profissional também pode ser válida.
     const previousRoles=draft.oldRows.map(x=>norm(x.funcao)).sort();
-    const selectedRoles=selected.map(x=>norm(dispatchRoleName(x.role)==='TÉCNICO / ENFERMEIRO'?'Técnico de Enfermagem':dispatchRoleName(x.role))).sort();
+    const selectedRoles=selected.map(x=>norm(activeTeamRows().find(m=>m.id===x.id)?.funcao||
+      (x.role==='tech'?'Técnico de Enfermagem':dispatchRoleName(x.role)))).sort();
     if(JSON.stringify(previousRoles)===JSON.stringify(selectedRoles)){
       closeModal('occCrewCorrectModal');
       selectedCrewCorrection=null;
