@@ -1972,11 +1972,31 @@ function renderTeamSearch(q){
   if(add)add.onclick=()=>openQuickRegistration(q,'other',null,null);
 }
 
-function rosterPersonHtml(m){
+function individualOccurrencesByProfessional(plantaoId){
+  const byProfessional=new Map();
+  if(!plantaoId)return byProfessional;
+
+  const individual=new Map(occurrences.filter(o=>o.plantao_id===plantaoId&&
+    !o.viatura_id&&o.creditou_revezamento===true&&norm(o.status)==='FINALIZADA').map(o=>[o.id,o]));
+  for(const link of occurrenceTeam){
+    const occurrence=individual.get(link.ocorrencia_id);
+    if(!occurrence||!link.profissional_id)continue;
+    if(!byProfessional.has(link.profissional_id))byProfessional.set(link.profissional_id,new Map());
+    byProfessional.get(link.profissional_id).set(occurrence.id,occurrence);
+  }
+  return byProfessional;
+}
+function rosterPersonHtml(m,individualOccurrences){
   const v=vehicleById(m.viatura_id);
   const assign=v?.nome||m.viatura_snapshot||m.grupo_revezamento||m.tipo_escala||'SEM VIATURA';
+  const individual=[...(individualOccurrences?.values()||[])].sort((a,b)=>
+    String(b.criado_em||b.acionada_em||'').localeCompare(String(a.criado_em||a.acionada_em||'')));
+  const occurrenceLine=individual.length
+    ? '<div class="roster-person-meta"><strong>Ocorrências individuais:</strong> '+
+      individual.map(o=>esc(o.numero?'Nº '+o.numero:'Sem número')).join(' · ')+'</div>'
+    : '';
   return '<div class="roster-person"><div><div class="roster-person-name">'+esc(displayName(m.profissionais))+'</div><div class="roster-person-meta">'+esc(m.funcao)+' • '+esc(assign)+'</div>'+
-    (earlyExitStatus(m)?'<div class="early-exit-roster-label">'+esc(earlyExitStatusLabel(m))+'</div>':'')+'</div>'+
+    occurrenceLine+(earlyExitStatus(m)?'<div class="early-exit-roster-label">'+esc(earlyExitStatusLabel(m))+'</div>':'')+'</div>'+
     '<div class="roster-person-actions">'+
       '<button class="person-occ" data-individual-occ="'+m.id+'">LANÇAR Nº OCORRÊNCIA</button>'+
       (isOperator()&&isRotationMember(m)&&['driver','tech','nurse'].includes(teamRoleKey(m))
@@ -1987,6 +2007,7 @@ function rosterPersonHtml(m){
 }
 function renderTeamPreview(){
   const active=activeTeamRows();
+  const individualByProfessional=individualOccurrencesByProfessional(currentPlantao?.id);
   $('#teamShiftRosterCount').textContent=active.length+' escalado(s)';
   const an=active.filter(m=>!m.viatura_id || isAnapolisVehicle(vehicleById(m.viatura_id)));
   const rg=active.filter(m=>m.viatura_id && !isAnapolisVehicle(vehicleById(m.viatura_id)));
@@ -1996,7 +2017,7 @@ function renderTeamPreview(){
       groups.map(([key,label])=>{
         const arr=list.filter(m=>teamRoleKey(m)===key);
         if(!arr.length)return '';
-        return '<div class="roster-role-group role-'+key+'"><div class="roster-role-head"><b>'+label+'</b><span>'+arr.length+'</span></div><div class="roster-list">'+arr.map(rosterPersonHtml).join('')+'</div></div>';
+        return '<div class="roster-role-group role-'+key+'"><div class="roster-role-head"><b>'+label+'</b><span>'+arr.length+'</span></div><div class="roster-list">'+arr.map(m=>rosterPersonHtml(m,individualByProfessional.get(m.profissional_id))).join('')+'</div></div>';
       }).join('')+
       (!list.length?'<div class="priority-empty">Nenhum profissional escalado nesta região.</div>':'')+
     '</section>';
