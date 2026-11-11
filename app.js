@@ -19,6 +19,7 @@ let occurrenceTeam = [];
 let rotation = [];
 let manualRotation = [];
 let manualRotationDraft = null;
+let bulkRotationDraft = null;
 let professionals = [];
 let scaleRows = [];
 let bookMeta = null;
@@ -2030,7 +2031,11 @@ function renderTeamPreview(){
       groups.map(([key,label])=>{
         const arr=list.filter(m=>teamRoleKey(m)===key);
         if(!arr.length)return '';
-        return '<div class="roster-role-group role-'+key+'"><div class="roster-role-head"><b>'+label+'</b><span>'+arr.length+'</span></div><div class="roster-list">'+arr.map(m=>rosterPersonHtml(m,individualByProfessional.get(m.profissional_id))).join('')+'</div></div>';
+        const scope={driver:'CONDUTORES',tech:'TECNICOS',nurse:'ENFERMEIROS'}[key];
+        const hasFixed=title==='ANÁPOLIS'&&scope&&arr.some(m=>bulkRotationCandidates(scope).some(x=>x.id===m.id));
+        return '<div class="roster-role-group role-'+key+'"><div class="roster-role-head"><b>'+label+'</b><div class="roster-role-tools"><span>'+arr.length+'</span>'+
+          (isOperator()&&hasFixed?'<button type="button" class="roster-bulk-rotation-btn" data-bulk-rotation="'+scope+'">⇄ FIXOS → REVEZAMENTO</button>':'')+
+          '</div></div><div class="roster-list">'+arr.map(m=>rosterPersonHtml(m,individualByProfessional.get(m.profissional_id))).join('')+'</div></div>';
       }).join('')+
       (!list.length?'<div class="priority-empty">Nenhum profissional escalado nesta região.</div>':'')+
     '</section>';
@@ -2042,6 +2047,8 @@ function renderTeamPreview(){
   $('#teamPreview').querySelectorAll('[data-edit-member]').forEach(b=>b.onclick=()=>openEditTeamMember(b.dataset.editMember));
   $('#teamPreview').querySelectorAll('[data-remove-member]').forEach(b=>b.onclick=()=>removeTeamMember(b.dataset.removeMember));
   bindEarlyExitButtons($('#teamPreview'));
+  $('#teamPreview').querySelectorAll('[data-bulk-rotation]').forEach(b=>
+    b.onclick=()=>openBulkRotationModal(b.dataset.bulkRotation));
 }
 
 function renderHistory(){
@@ -3104,21 +3111,10 @@ async function expressAbsent(rowId){
     await loadAll(selectedDate());await loadExpressScale();
   }catch(e){alert(e.message||e)}
 }
-async function setAllDriversRotation(){
-  if(!canEditOpenShift())return;
-  if(!currentPlantao)await ensurePlantaoForBook();
-  const rows=activeTeamRows().filter(m=>teamRoleKey(m)==='driver'&&m.viatura_id&&isAnapolisVehicle(vehicleById(m.viatura_id))&&['USA','USB'].some(t=>vehicleType(vehicleById(m.viatura_id)).includes(t)));
-  if(!rows.length)return alert('Não há condutores fixos ativos para colocar em revezamento.');
-  for(const m of rows){
-    const v=vehicleById(m.viatura_id),type=vehicleType(v).includes('USA')?'USA':'USB';
-    await supabase.from('equipe_plantao').update({
-      tipo_escala:'REVEZAMENTO',grupo_revezamento:type+'_CONDUTOR',revezamento_tipo_viatura:type,
-      viatura_id:null,viatura_snapshot:null
-    }).eq('id',m.id);
-  }
-  markOperationalDirty();
-  await loadAll(selectedDate());await loadExpressScale();
+function setAllDriversRotation(){
+  openBulkRotationModal('CONDUTORES');
 }
+
 async function restoreFixedDrivers(){
   if(!canEditOpenShift()||!scaleRows.length)return;
   if(!currentPlantao)await ensurePlantaoForBook();
@@ -3337,6 +3333,132 @@ async function confirmExpress(){
     alert('Erro ao confirmar escala: '+(e.message||e)+(assignmentsApplied?'\n\nAlgumas alterações podem ter sido gravadas. Verifique a equipe antes de tentar novamente.':''));
   }
   finally{confirmButtons.forEach(b=>{b.disabled=false;b.textContent='CONFIRMAR ESCALA'})}
+}
+
+/* ---------- Conversão coletiva de fixos para revezamento ---------- */
+const BULK_ROTATION_SCOPES={
+  TODOS:'TODAS AS EQUIPES — USA + USB',
+  USA:'TODOS OS FIXOS DAS USA',
+  USB:'TODOS OS FIXOS DAS USB',
+  CONDUTORES:'CONDUTORES DAS USA + USB',
+  TECNICOS:'TÉCNICOS / ENFERMEIROS DAS USB',
+  ENFERMEIROS:'ENFERMEIROS DAS USA'
+};
+function bulkRotationGroup(m){
+  if(!m||norm(m.status||'ATIVO')!=='ATIVO'||!m.viatura_id||isRotationMember(m))return null;
+  const v=vehicleById(m.viatura_id);
+  if(!v||!isAnapolisVehicle(v)||v.ativo===false)return null;
+  const type=vehicleType(v),role=teamRoleKey(m);
+  if(!['USA','USB'].includes(type))return null;
+  if(role==='driver')return type+'_CONDUTOR';
+  if(type==='USA'&&role==='nurse')return 'USA_ENFERMEIRO';
+  if(type==='USB'&&(role==='tech'||role==='nurse'))return 'USB_TECNICO';
+  return null;
+}
+function bulkRotationCandidates(scope='TODOS'){
+  return activeTeamRows().filter(m=>{
+    const group=bulkRotationGroup(m);
+    return group&&(
+      scope==='TODOS'||(scope==='USA'&&group.startsWith('USA_'))||
+      (scope==='USB'&&group.startsWith('USB_'))||
+      (scope==='CONDUTORES'&&group.endsWith('_CONDUTOR'))||
+      (scope==='TECNICOS'&&group==='USB_TECNICO')||
+      (scope==='ENFERMEIROS'&&group==='USA_ENFERMEIRO')
+    );
+  }).sort((a,b)=>{
+    const va=vehicleById(a.viatura_id),vb=vehicleById(b.viatura_id);
+    return vehicleType(va).localeCompare(vehicleType(vb),'pt-BR')||
+      Number(va?.ordem_exibicao||999)-Number(vb?.ordem_exibicao||999)||
+      String(va?.codigo||'').localeCompare(String(vb?.codigo||''),'pt-BR',{numeric:true})||
+      String(a.funcao).localeCompare(String(b.funcao),'pt-BR');
+  });
+}
+function isCurrentOperationalPlantao(){
+  if(!currentPlantao||norm(currentPlantao.status)!=='ABERTO')return false;
+  const ctx=operationalShiftContext();
+  return currentPlantao.data_plantao===ctx.date &&
+    normalizeTurno(currentPlantao.turno)===normalizeTurno(ctx.turno);
+}
+function openBulkRotationModal(scope='TODOS'){
+  if(!isOperator())return;
+  if(!isCurrentOperationalPlantao()){
+    alert('A conversão coletiva só está disponível no plantão atual e aberto.');
+    return;
+  }
+  if(unsavedOperationalScale||expressTechSelected.size||expressNurseSelected.size){
+    alert('Existem mudanças da escala ainda aguardando confirmação. Confirme a escala primeiro, para não perder as seleções preparadas.');
+    return;
+  }
+  $('#bulkRotationScope').value=BULK_ROTATION_SCOPES[scope]?scope:'TODOS';
+  renderBulkRotationPreview();
+  openModal('bulkRotationModal');
+}
+function renderBulkRotationPreview(){
+  const scope=$('#bulkRotationScope').value;
+  const list=bulkRotationCandidates(scope);
+  bulkRotationDraft={
+    plantaoId:currentPlantao?.id||null,scope,
+    ids:list.map(m=>m.id)
+  };
+  const total=list.length;
+  const usa=list.filter(m=>bulkRotationGroup(m)?.startsWith('USA_')).length;
+  const usb=total-usa;
+  const busy=list.filter(memberIsBusy).length;
+  $('#bulkRotationSummary').innerHTML=
+    '<div class="bulk-rotation-stats"><strong>'+total+' profissional(is)</strong>'+
+    '<span>'+usa+' USA</span><span>'+usb+' USB</span>'+
+    (busy?'<span>'+busy+' em atendimento (só entram na fila após retorno)</span>':'')+
+    '</div>';
+  $('#bulkRotationList').innerHTML=total?list.map(m=>{
+    const v=vehicleById(m.viatura_id);
+    return '<div class="bulk-rotation-person"><span class="bulk-rotation-vehicle">'+
+      esc(v?.nome||v?.codigo||'—')+'</span><div><strong>'+esc(priorityPersonName(m))+
+      '</strong><small>'+esc(m.funcao||'')+' → '+esc(bulkRotationGroup(m).replace('_',' • '))+
+      (memberIsBusy(m)?' • EM ATENDIMENTO':'')+'</small></div></div>';
+  }).join(''):'<p class="bulk-rotation-empty">Não há profissionais fixos elegíveis nesta seleção.</p>';
+  const usaNext=availableUsaTeams()[0]?.v;
+  const usbNext=availableUsbTeams()[0]?.v;
+  $('#bulkRotationQueueNote').textContent=
+    'A fila das viaturas continuará independente: USA da vez '+
+    (usaNext?.nome||usaNext?.codigo||'—')+' • USB da vez '+
+    (usbNext?.nome||usbNext?.codigo||'—')+
+    '. Critério de revezamento, prioridades manuais, ocorrências e relógios de base serão mantidos.';
+  $('#bulkRotationAcknowledge').checked=false;
+  $('#bulkRotationApplyBtn').disabled=true;
+  $('#bulkRotationApplyBtn').textContent='CONFIRMAR '+total+' ALTERAÇÃO(ÕES)';
+}
+async function applyBulkRotation(){
+  const draft=bulkRotationDraft;
+  if(!draft||!draft.ids.length||!$('#bulkRotationAcknowledge').checked)return;
+  if(!isOperator()||!isCurrentOperationalPlantao()||currentPlantao.id!==draft.plantaoId){
+    alert('O plantão mudou. Abra novamente a conversão coletiva.');
+    return;
+  }
+  const btn=$('#bulkRotationApplyBtn');
+  btn.disabled=true;btn.textContent='SALVANDO REVEZAMENTO...';
+  try{
+    const {data,error}=await supabase.rpc('converter_fixos_para_revezamento',{
+      p_plantao_id:draft.plantaoId,
+      p_escopo:draft.scope,
+      p_ids:draft.ids
+    });
+    if(error)throw error;
+    bulkRotationDraft=null;
+    closeModal('bulkRotationModal');
+    await loadAll(selectedDate(),currentPlantao?.turno);
+    await loadExpressScale();
+    await refreshBookProjection();
+    clearOperationalDirty();
+    setSync(data+' profissional(is) passaram ao revezamento. Fila das viaturas preservada • escala confirmada.','ok');
+  }catch(e){
+    alert('Não foi possível concluir a conversão coletiva: '+(e.message||e)+
+      '\n\nNenhuma alteração parcial foi aplicada por esta operação. Atualize a escala e confira antes de tentar novamente.');
+    await loadAll(selectedDate(),currentPlantao?.turno);
+    renderBulkRotationPreview();
+  }finally{
+    btn.disabled=false;
+    if(bulkRotationDraft)btn.textContent='CONFIRMAR '+bulkRotationDraft.ids.length+' ALTERAÇÃO(ÕES)';
+  }
 }
 
 /* ---------- generic assignment ---------- */
@@ -4565,6 +4687,12 @@ $('#applyScaleReferenceBtn').onclick=()=>applyManualScaleReference().catch(e=>al
   });
 });
 $('#allDriversRotationBtn').onclick=setAllDriversRotation;$('#restoreFixedDriversBtn').onclick=restoreFixedDrivers;
+$('#openBulkRotationBtn').onclick=()=>openBulkRotationModal('TODOS');
+$('#bulkRotationScope').onchange=renderBulkRotationPreview;
+$('#bulkRotationAcknowledge').onchange=()=>{
+  $('#bulkRotationApplyBtn').disabled=!$('#bulkRotationAcknowledge').checked||!bulkRotationDraft?.ids.length;
+};
+$('#bulkRotationApplyBtn').onclick=applyBulkRotation;
 $('#expressTechSearch').oninput=e=>expressSearch('tech',e.target.value);$('#expressNurseSearch').oninput=e=>expressSearch('nurse',e.target.value);
 $('#expressTechAddBtn').onclick=()=>openExpressRegistration('tech');
 $('#expressNurseAddBtn').onclick=()=>openExpressRegistration('nurse');
