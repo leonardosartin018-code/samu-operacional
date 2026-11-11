@@ -3685,23 +3685,27 @@ async function ensurePlantaoForBook(){
   syncDateAndAla(ctx.date,currentPlantao.turno||ctx.turno);
   return currentPlantao;
 }
+const BOOK_SERVICE_CHIEF='MAJ BAZÍLIO';
+
 async function loadBookData(){
   await ensureProfessionals();
   if(!currentPlantao)await ensurePlantaoForBook();
-  const ala=currentPlantao.ala||alaForDate(currentPlantao.data_plantao);
-  const turno=normalizeTurno(currentPlantao.turno||operationalShiftContext().turno);
+  const plantao=currentPlantao;
+  const ala=plantao.ala||alaForDate(plantao.data_plantao);
+  const turno=normalizeTurno(plantao.turno||operationalShiftContext().turno);
   const fixedReference=activeScaleReference();
   const [bm,di,fi,fd]=await Promise.all([
-    supabase.from('livro_plantao').select('*').eq('plantao_id',currentPlantao.id).maybeSingle(),
-    supabase.from('escala_interna_plantao').select('*').eq('plantao_id',currentPlantao.id).eq('status','ATIVO').order('ordem'),
+    supabase.from('livro_plantao').select('*').eq('plantao_id',plantao.id).maybeSingle(),
+    supabase.from('escala_interna_plantao').select('*').eq('plantao_id',plantao.id).eq('status','ATIVO').order('ordem'),
     supabase.from('escala_fixa_interna_anapolis').select('*').eq('ala',ala).eq('turno',turno).eq('ativo',true).order('ordem'),
     supabase.from('escala_fixa_anapolis').select('*').eq('ala',fixedReference.ala).eq('turno',fixedReference.turno).eq('ativo',true).order('ordem')
   ]);
   if(bm.error)throw bm.error;if(di.error)throw di.error;if(fi.error)throw fi.error;if(fd.error)throw fd.error;
+  if(currentPlantao?.id!==plantao.id)return;
   bookMeta=bm.data||null;internalScaleRows=di.data||[];fixedInternalRows=fi.data||[];bookDriverFixedRows=fd.data||[];
 
   // A escala fixa é apenas referência visual. A equipe ativa nasce somente após clique/confirmacão do operador.
-  if(norm(currentPlantao.status)==='ABERTO')await ensureAutomaticBookNumber();
+  if(isOperator()&&norm(plantao.status)==='ABERTO')await ensureAutomaticBookNumber(plantao.id);
 }
 async function ensureInternalScaleFromFixed(){
   if(!currentPlantao||!fixedInternalRows.length)return;
@@ -3736,34 +3740,13 @@ async function ensureInternalScaleFromFixed(){
   if(reloadError)throw reloadError;
   internalScaleRows=data||[];
 }
-async function ensureAutomaticBookNumber(){
-  if(!currentPlantao)return;
-  if(bookMeta?.parte_diaria)return;
+async function ensureAutomaticBookNumber(plantaoId){
+  if(!plantaoId||currentPlantao?.id!==plantaoId)return;
+  if(bookMeta?.plantao_id===plantaoId&&bookMeta.parte_diaria)return;
 
-  const {data:allBooks,error:listError}=await supabase.from('livro_plantao').select('parte_diaria');
-  if(listError)throw listError;
-  const nums=(allBooks||[]).map(x=>Number.parseInt(x.parte_diaria,10)).filter(Number.isFinite);
-  let next=Math.max(531,...nums)+1;
-
-  const payload={
-    plantao_id:currentPlantao.id,
-    parte_diaria:String(next),
-    ano:Number(currentPlantao.data_plantao.slice(0,4)),
-    status:'RASCUNHO',
-    atualizado_por:profile?.nome||null,
-    atualizado_em:new Date().toISOString()
-  };
-  let {data,error}=await supabase.from('livro_plantao').insert(payload).select().single();
-
-  if(error&&String(error.code)==='23505'){
-    const retry=await supabase.from('livro_plantao').select('parte_diaria');
-    const retryNums=(retry.data||[]).map(x=>Number.parseInt(x.parte_diaria,10)).filter(Number.isFinite);
-    next=Math.max(531,...retryNums)+1;
-    const again=await supabase.from('livro_plantao').insert({...payload,parte_diaria:String(next)}).select().single();
-    data=again.data;error=again.error;
-  }
+  const {data,error}=await supabase.rpc('garantir_livro_parte_diaria',{p_plantao_id:plantaoId});
   if(error)throw error;
-  bookMeta=data;
+  if(currentPlantao?.id===plantaoId&&data)bookMeta=data;
 }
 function internalRow(code){return internalScaleRows.find(x=>x.codigo_posicao===code)||null}
 function fixedInternalRow(code){return fixedInternalRows.find(x=>x.codigo_posicao===code)||null}
@@ -3969,29 +3952,25 @@ function confirmedInternalRow(code){
   return ['ESCALADO','PERMUTA'].includes(status)?row:null;
 }
 async function syncBookScaleMetadata(){
-  if(!currentPlantao)return;
-  if(!bookMeta)await loadBookData();
+  const plantao=currentPlantao;
+  if(!plantao)return;
+  if(bookMeta?.plantao_id!==plantao.id)await loadBookData();
+  if(currentPlantao?.id!==plantao.id||bookMeta?.plantao_id!==plantao.id)return;
   const r1=confirmedInternalRow('RADIO-01');
   const r2=confirmedInternalRow('RADIO-02');
   const payload={
-    plantao_id:currentPlantao.id,
-    parte_diaria:bookMeta?.parte_diaria||null,
-    ano:bookMeta?.ano||Number(currentPlantao.data_plantao.slice(0,4)),
-    chefe_servico:bookMeta?.chefe_servico||null,
+    chefe_servico:BOOK_SERVICE_CHIEF,
     radio_1_profissional_id:r1?.profissional_id||null,
     radio_1_nome_snapshot:r1?internalDisplayNameByCode('RADIO-01'):null,
     radio_2_profissional_id:r2?.profissional_id||null,
     radio_2_nome_snapshot:r2?internalDisplayNameByCode('RADIO-02'):null,
-    observacoes:bookMeta?.observacoes||null,
-    texto_responsabilidade:bookMeta?.texto_responsabilidade||null,
-    texto_transmissao:bookMeta?.texto_transmissao||null,
-    status:bookMeta?.status||'RASCUNHO',
     atualizado_por:profile?.nome||session?.user?.email||null,
     atualizado_em:new Date().toISOString()
   };
-  const {data,error}=await supabase.from('livro_plantao').upsert(payload,{onConflict:'plantao_id'}).select().single();
+  const {data,error}=await supabase.from('livro_plantao').update(payload)
+    .eq('plantao_id',plantao.id).select().single();
   if(error)throw error;
-  bookMeta=data;
+  if(currentPlantao?.id===plantao.id)bookMeta=data;
 }
 async function refreshBookProjection(){
   if(!currentPlantao)return;
@@ -4048,15 +4027,19 @@ function collectPermutas(){
 function renderBook(){
   if(!$('#bookDocument'))return;
   const date=currentPlantao?.data_plantao||selectedDate(),ala=currentPlantao?.ala||alaForDate(date),turno=normalizeTurno(currentPlantao?.turno||operationalShiftContext().turno);
-  if($('#bookParte'))$('#bookParte').value=bookMeta?.parte_diaria||'';
-  if($('#bookChefe'))$('#bookChefe').value=bookMeta?.chefe_servico||'';
-  if($('#bookObs'))$('#bookObs').value=bookMeta?.observacoes||'';
+  const observations=$('#bookObs');
+  const plantaoId=currentPlantao?.id||'';
+  if(observations){
+    if(observations.dataset.plantaoId!==plantaoId)unsavedBook=false;
+    observations.dataset.plantaoId=plantaoId;
+    if(!unsavedBook)observations.value=bookMeta?.plantao_id===plantaoId?bookMeta.observacoes||'':'';
+  }
   $('#bookAlaTurno').textContent='ALA '+ala+' '+turno;
   $('#bookPartePreview').textContent=bookMeta?.parte_diaria||'—';
   $('#bookAnoPreview').textContent=bookMeta?.ano||date.slice(0,4);
   $('#bookDayPreview').textContent=String(Number(date.slice(8,10)));
   $('#bookMonthPreview').textContent=monthNamePt(date);
-  $('#bookChefePreview').textContent='Sr. '+(bookMeta?.chefe_servico||'—');
+  $('#bookChefePreview').textContent=BOOK_SERVICE_CHIEF;
 
   $('#bookRadio1').textContent=internalDisplayNameByCode('RADIO-01');
   $('#bookRadio2').textContent=internalDisplayNameByCode('RADIO-02');
@@ -4087,20 +4070,34 @@ function renderBook(){
 }
 async function saveBook(){
   if(!canEditOpenShift())return;
-  await ensurePlantaoForBook();
-  const r1=confirmedInternalRow('RADIO-01'),r2=confirmedInternalRow('RADIO-02');
-  const p1=r1?.profissional_id||null;
-  const p2=r2?.profissional_id||null;
-  const payload={
-    plantao_id:currentPlantao.id,parte_diaria:$('#bookParte').value.trim()||null,ano:Number(currentPlantao.data_plantao.slice(0,4)),
-    chefe_servico:$('#bookChefe').value.trim()||null,radio_1_profissional_id:p1,radio_1_nome_snapshot:p1?internalDisplayNameByCode('RADIO-01'):null,
-    radio_2_profissional_id:p2,radio_2_nome_snapshot:p2?internalDisplayNameByCode('RADIO-02'):null,observacoes:$('#bookObs').value.trim()||null,
-    atualizado_por:profile?.nome||null,atualizado_em:new Date().toISOString()
-  };
-  const {error}=await supabase.from('livro_plantao').upsert(payload,{onConflict:'plantao_id'});
-  if(error)return alert(error.message);
-  unsavedBook=false;
-  await loadBookData();renderBook();alert('Livro salvo.');
+  const button=$('#saveBookBtn');
+  if(button.disabled)return;
+  const observations=$('#bookObs');
+  const draft=observations.value;
+  button.disabled=true;
+  try{
+    const plantao=await ensurePlantaoForBook();
+    if(bookMeta?.plantao_id!==plantao.id)await loadBookData();
+    if(currentPlantao?.id!==plantao.id)throw new Error('O plantão mudou. Confira o Livro antes de salvar.');
+    if(bookMeta?.plantao_id!==plantao.id)throw new Error('O Livro deste plantão não está disponível para edição.');
+
+    const {data,error}=await supabase.from('livro_plantao').update({
+      observacoes:draft.trim()||null,
+      chefe_servico:BOOK_SERVICE_CHIEF,
+      atualizado_por:profile?.nome||null,
+      atualizado_em:new Date().toISOString()
+    }).eq('plantao_id',plantao.id).select().single();
+    if(error)throw error;
+    if(currentPlantao?.id!==plantao.id)return;
+    bookMeta=data;
+    unsavedBook=observations.value!==draft;
+    renderBook();
+    alert('Livro salvo.');
+  }catch(error){
+    alert('Não foi possível salvar o Livro: '+(error.message||error));
+  }finally{
+    button.disabled=false;
+  }
 }
 
 /* ---------- Troca e encerramento manual de plantão ---------- */
@@ -4454,7 +4451,7 @@ $('#internalReloadBtn').onclick=()=>{
 $('#confirmInternalBtn').onclick=()=>confirmInternalTeam('#teamInternalEditor');
 $('#confirmInternalBookBtn').onclick=()=>confirmInternalTeam('#internalScaleEditor');
 $('#saveBookBtn').onclick=saveBook;$('#printBookBtn').onclick=()=>window.print();
-['#bookChefe','#bookObs'].forEach(sel=>{if($(sel))$(sel).addEventListener('input',()=>{unsavedBook=true})});
+$('#bookObs').addEventListener('input',()=>{unsavedBook=true});
 $('#expressPermutaSearch').oninput=expressPermutaAutocomplete;
 $('#saveExpressPermutaBtn').onclick=saveExpressPermuta;
 $('#saveQuickRegisterBtn').onclick=saveQuickRegistration;
