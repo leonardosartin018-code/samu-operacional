@@ -113,10 +113,14 @@ function localDateTimeIso(date,time){
 function isOperator(){
   return ['ADMIN','RADIO_OPERADOR'].includes(profile?.papel);
 }
+function canReopenCurrentShift(plantao=currentPlantao){
+  return norm(plantao?.status)==='ENCERRADO'&&plantaoShiftKey(plantao)===operationalShiftKey();
+}
 function canEditOpenShift(){
   if(!isOperator())return false;
   if(currentPlantao&&norm(currentPlantao.status)!=='ABERTO'){
-    alert('Este plantão está encerrado. Clique em INICIAR PRÓXIMA ESCALA para fazer novos registros.');
+    if(canReopenCurrentShift())openShiftTransition();
+    else alert('Este plantão está encerrado. Volte ao plantão vigente para fazer novos registros.');
     return false;
   }
   return true;
@@ -506,7 +510,7 @@ async function synchronizeCurrentOperationalShift(force=false){
     lastClockShiftKey=clockKey;
     pendingShiftWarningKey='';
     setSync(currentPlantao&&norm(currentPlantao.status)==='ENCERRADO'
-      ?'Plantão encerrado • use INICIAR PRÓXIMA ESCALA'
+      ?(canReopenCurrentShift()?'Turno vigente encerrado • use REABRIR PLANTÃO':'Plantão encerrado • use INICIAR PRÓXIMA ESCALA')
       :'Plantão sincronizado • '+shiftTitle(ctx),currentPlantao&&norm(currentPlantao.status)==='ENCERRADO'?'warn':'ok');
   }catch(error){
     console.error('Falha ao sincronizar plantão',error);
@@ -821,7 +825,7 @@ function renderSummary(){
   if($('#endShiftBtn')){
     const open=norm(currentPlantao?.status)==='ABERTO';
     $('#endShiftBtn').disabled=!isOperator()||!currentPlantao;
-    $('#endShiftBtn').textContent=open?'TROCAR / ENCERRAR':'INICIAR PRÓXIMA ESCALA';
+    $('#endShiftBtn').textContent=open?'TROCAR / ENCERRAR':canReopenCurrentShift()?'REABRIR PLANTÃO':'INICIAR PRÓXIMA ESCALA';
     $('#endShiftBtn').classList.toggle('danger',open);
     $('#endShiftBtn').classList.toggle('primary',!open);
   }
@@ -2196,7 +2200,7 @@ function bindQuickInputs(){
   });
 }
 async function openTeamModal(vId){
-  if(!isOperator())return;
+  if(!canEditOpenShift())return;
   if(!currentPlantao)await ensurePlantaoForBook();
   await ensureProfessionals();
   selectedTeamVehicle=vId;
@@ -2263,7 +2267,7 @@ async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPID
   return true;
 }
 async function saveQuickTeam(){
-  if(!isOperator()||!currentPlantao||!selectedTeamVehicle)return;
+  if(!canEditOpenShift()||!currentPlantao||!selectedTeamVehicle)return;
   const v=vehicleById(selectedTeamVehicle);
   const mode=quickModalMode(v);
   const rows=mode==='moto'
@@ -3213,8 +3217,7 @@ async function putProfessionalInRotation(pro,group,funcao){
   markOperationalDirty();
 }
 async function confirmExpress(){
-  if(!isOperator())return;
-  if(currentPlantao&&norm(currentPlantao.status)!=='ABERTO')return alert('Plantão encerrado. Inicie a próxima escala.');
+  if(!canEditOpenShift())return;
   const prepared=preparedExpressSelections();
   try{
     if(!validateExpressSelections(prepared))return;
@@ -4137,33 +4140,36 @@ function openShiftTransition(){
   if(!currentPlantao)return alert('Nenhum plantão carregado.');
   const p=currentPlantao;
   const open=norm(p.status)==='ABERTO';
+  const reopen=canReopenCurrentShift(p);
   const next=nextShiftContext(p);
   const earlyEnd=open&&Date.now()<shiftExpectedEnd(p).getTime();
   const earlyStart=Date.now()<shiftExpectedStart(next).getTime();
   const active=occurrences.filter(o=>!['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status))).length;
   const points=[
     '<b>Plantão atual:</b> '+esc(shiftTitle(p))+' — '+(open?'ABERTO':'ENCERRADO'),
-    '<b>Próximo plantão:</b> '+esc(shiftTitle(next)),
+    reopen?'O turno ainda está vigente. Reabra este plantão para continuar com a equipe e a Parte Diária já registradas.':
+      '<b>Próximo plantão:</b> '+esc(shiftTitle(next)),
     earlyEnd?'<strong>O turno atual ainda não chegou ao horário previsto de encerramento.</strong>':'',
-    earlyStart?'<strong>O próximo turno será iniciado antes do horário previsto.</strong>':'',
+    earlyStart&&!reopen?'<strong>O próximo turno será iniciado antes do horário previsto.</strong>':'',
     open&&active?'<strong>'+active+' ocorrência(s) em andamento.</strong> Serão mantidas no registro do plantão anterior; confira o repasse.':'',
     open&&(operationalNeedsConfirmation()||internalNeedsConfirmation()||unsavedBook||anyDraftModalOpen())
       ?'<strong>Há informações não confirmadas ou não salvas.</strong> Elas podem ser perdidas ao trocar de escala.':'',
     'A escala anterior fica no histórico. O sistema não encerra ocorrências nem altera automaticamente a situação das viaturas.'
   ].filter(Boolean);
-  $('#shiftTransitionTitle').textContent=open?'Trocar ou encerrar plantão':'Iniciar próxima escala';
+  $('#shiftTransitionTitle').textContent=open?'Trocar ou encerrar plantão':reopen?'Reabrir plantão vigente':'Iniciar próxima escala';
   $('#shiftTransitionDetails').innerHTML=points.map(p=>'<p>'+p+'</p>').join('');
   $('#shiftTransitionAcknowledge').checked=false;
   $('#shiftEndOnlyBtn').classList.toggle('hidden',!open);
   $('#shiftEndStartBtn').classList.toggle('hidden',!open);
-  $('#shiftStartOnlyBtn').classList.toggle('hidden',open);
-  ['#shiftEndOnlyBtn','#shiftEndStartBtn','#shiftStartOnlyBtn'].forEach(id=>$(id).disabled=true);
+  $('#shiftStartOnlyBtn').classList.toggle('hidden',open||reopen);
+  $('#shiftReopenBtn').classList.toggle('hidden',!reopen);
+  ['#shiftEndOnlyBtn','#shiftEndStartBtn','#shiftStartOnlyBtn','#shiftReopenBtn'].forEach(id=>$(id).disabled=true);
   shiftTransitionPlantaoId=p.id;
   openModal('shiftTransitionModal');
 }
 function updateShiftTransitionButtons(){
   const allowed=$('#shiftTransitionAcknowledge').checked&&!shiftTransitionBusy;
-  ['#shiftEndOnlyBtn','#shiftEndStartBtn','#shiftStartOnlyBtn'].forEach(id=>$(id).disabled=!allowed);
+  ['#shiftEndOnlyBtn','#shiftEndStartBtn','#shiftStartOnlyBtn','#shiftReopenBtn'].forEach(id=>$(id).disabled=!allowed);
 }
 async function executeShiftTransition(mode){
   if(!isOperator()||shiftTransitionBusy||!$('#shiftTransitionAcknowledge').checked)return;
@@ -4174,12 +4180,30 @@ async function executeShiftTransition(mode){
   }
   const old={...currentPlantao};
   const open=norm(old.status)==='ABERTO';
-  if(mode!=='start'&&!open)return alert('O plantão já foi encerrado.');
+  if(mode==='reopen'&&!canReopenCurrentShift(old))return alert('Só é possível reabrir o turno vigente.');
+  if(mode==='start'&&canReopenCurrentShift(old))return alert('O turno ainda está vigente. Reabra o plantão para continuar.');
   if(mode==='start'&&open)return alert('Encerre o plantão atual antes de iniciar o próximo.');
+  if(mode!=='start'&&mode!=='reopen'&&!open)return alert('O plantão já foi encerrado.');
   shiftTransitionBusy=true;
   updateShiftTransitionButtons();
   let closed=false;
   try{
+    if(mode==='reopen'){
+      const next=nextShiftContext(old);
+      const nextShift=await choosePlantao(next.date,next.turno,next.ala);
+      if(norm(nextShift?.status)==='ABERTO')throw new Error('O próximo plantão já está aberto. Atualize o painel.');
+      if(!canReopenCurrentShift(old)||currentPlantao?.id!==old.id)throw new Error('O turno mudou. Atualize o painel.');
+      const {data,error}=await supabase.from('plantoes')
+        .update({status:'ABERTO',encerrado_em:null,operador_encerramento:null})
+        .eq('id',old.id).eq('status','ENCERRADO').eq('encerrado_em',old.encerrado_em)
+        .select('id').maybeSingle();
+      if(error)throw error;
+      if(!data)throw new Error('O plantão já foi modificado por outro operador. Atualize o painel.');
+      autoFollowCurrentShift=true;
+      closeModal('shiftTransitionModal');
+      await synchronizeCurrentOperationalShift(true);
+      return;
+    }
     if(open){
       const {data,error}=await supabase.from('plantoes')
         .update({status:'ENCERRADO',encerrado_em:new Date().toISOString(),operador_encerramento:profile?.nome||session?.user?.email||'OPERADOR'})
@@ -4438,6 +4462,7 @@ $('#shiftTransitionAcknowledge').onchange=updateShiftTransitionButtons;
 $('#shiftEndOnlyBtn').onclick=()=>executeShiftTransition('end');
 $('#shiftEndStartBtn').onclick=()=>executeShiftTransition('end_start');
 $('#shiftStartOnlyBtn').onclick=()=>executeShiftTransition('start');
+$('#shiftReopenBtn').onclick=()=>executeShiftTransition('reopen');
 $('#regionalBtn')?.addEventListener('click',()=>$('#regionalIntegrated').scrollIntoView({behavior:'smooth',block:'start'}));
 $('#rotationCriterion').onchange=e=>persistRotationCriterion(e.target.value);
 $('#earlyExitTime').oninput=updateEarlyExitPreview;
