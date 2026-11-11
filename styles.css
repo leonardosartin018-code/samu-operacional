@@ -2114,3 +2114,35 @@ nav.tabs .tab.book-tab.active{
   line-height:1.35;
 }
 .cockpit-rotation .rotation-next-vehicle>.rotation-wait-metrics{margin-top:5px}
+
+/* Alteração coletiva de fixos para revezamento — plantão atual */
+.bulk-rotation-main-btn{background:#e4f2ff;border:1px solid #2383c5;color:#075985;font-weight:900}
+.bulk-rotation-main-btn:hover{background:#cce8fa}
+.roster-role-tools{display:flex;align-items:center;justify-content:flex-end;gap:10px;flex-wrap:wrap}
+.team-preview-wrap .roster-role-head .roster-role-tools>span{display:inline-flex;align-items:center;justify-content:center;min-width:24px}
+.roster-bulk-rotation-btn{border:1px solid #1685c2;border-radius:8px;background:#f5fbff;color:#075985;padding:6px 10px;font-size:.72rem;font-weight:900;cursor:pointer}
+.roster-bulk-rotation-btn:hover{background:#d9efff}
+.bulk-rotation-dialog{width:min(720px,100%);padding:20px}
+.bulk-rotation-intro{font-size:.9rem;color:#475569;line-height:1.5;margin:10px 0 16px}
+.bulk-rotation-scope{display:grid;gap:7px;color:#0d476b;font-size:.78rem;font-weight:900}
+.bulk-rotation-scope select{border:1px solid #b5d1e5;background:#f5faff;border-radius:9px;padding:12px;font-size:.9rem;color:#153247;max-width:100%;width:100%}
+.bulk-rotation-stats{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:13px 0;font-size:.82rem}
+.bulk-rotation-stats strong,.bulk-rotation-stats span{border-radius:20px;padding:7px 11px;background:#e7f3fd;color:#164c73}
+.bulk-rotation-stats strong{background:#075985;color:white}
+.bulk-rotation-list{max-height:250px;overflow-y:auto;border:1px solid #ccdce7;border-radius:10px;background:white}
+.bulk-rotation-person{display:grid;grid-template-columns:minmax(78px,100px) 1fr;gap:12px;align-items:center;padding:9px 12px;border-bottom:1px solid #e8eff4}
+.bulk-rotation-person:last-child{border-bottom:0}
+.bulk-rotation-person strong{font-size:.87rem;color:#0f2940}
+.bulk-rotation-person small{display:block;font-size:.74rem;color:#64748b;margin-top:3px}
+.bulk-rotation-vehicle{background:#edf5fa;color:#075985;font-weight:900;border-radius:7px;text-align:center;padding:7px 3px;font-size:.79rem}
+.bulk-rotation-empty{padding:16px;color:#64748b;font-size:.9rem}
+.bulk-rotation-queue{border-left:3px solid #0c72ad;background:#eef8ff;border-radius:6px;padding:10px 12px;font-size:.83rem;color:#164c73;line-height:1.5}
+.bulk-rotation-warning{padding:10px 12px;border:1px solid #f4d2a2;background:#fff9ed;border-radius:7px;color:#83541b;font-size:.78rem;line-height:1.5}
+.bulk-rotation-check{display:flex;align-items:flex-start;gap:9px;margin:12px 0;color:#193f57;font-size:.87rem;font-weight:800;cursor:pointer}
+.bulk-rotation-check input{width:19px;height:19px;flex:0 0 auto;margin-top:1px}
+@media(max-width:650px){
+ .bulk-rotation-dialog{padding:14px}
+ .roster-role-tools{gap:5px}
+ .roster-bulk-rotation-btn{font-size:.68rem;padding:5px 7px}
+ .bulk-rotation-person{grid-template-columns:74px 1fr;gap:8px}
+}
