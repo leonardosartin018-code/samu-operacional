@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261111-63-ordem-frota">
+  <link rel="stylesheet" href="./styles.css?v=20261111-66-fila-e-acionamento">
 </head>
 <body>
 
@@ -535,10 +535,11 @@
     </div>
     <div class="dispatch-sections">
       <section class="dispatch-section dispatch-basics">
-        <div class="dispatch-section-heading"><b>DADOS DO ACIONAMENTO</b><span>Identificação e horário</span></div>
+        <div class="dispatch-section-heading"><b>DADOS DO ACIONAMENTO</b><span>Identificação, natureza e horário</span></div>
         <div class="form-grid dispatch-basic-grid">
-          <label>Viatura<select id="occVehicleSelect"></select></label>
           <label>Nº ocorrência<input id="occNumber" inputmode="numeric" placeholder="Número da ocorrência"></label>
+          <label>Natureza<input id="occNature" placeholder="Ex.: clínico, colisão, transferência"></label>
+          <label>Viatura<select id="occVehicleSelect"></select></label>
           <label>Hora início / saída<input id="occStart" type="time"></label>
         </div>
       </section>
@@ -551,7 +552,6 @@
       <section class="dispatch-section dispatch-location">
         <div class="dispatch-section-heading"><b>LOCAL E DETALHES</b><span>Preencha o que estiver disponível</span></div>
         <div class="form-grid">
-          <label>Natureza<input id="occNature" placeholder="Ex.: clínico, colisão, transferência"></label>
           <label>Bairro<input id="occBairro" placeholder="Ex.: Jundiaí, Jaiara, Centro"></label>
           <label class="full">Endereço / referência<input id="occEndereco" placeholder="Rua, número, ponto de referência"></label>
           <label class="full">Destino informado na abertura (opcional)<input id="occDestino" placeholder="Se já for conhecido; poderá atualizar após o QTH"></label>
@@ -770,6 +770,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261111-65-metricas-usb"></script>
+<script type="module" src="./app.js?v=20261111-66-fila-e-acionamento"></script>
 </body>
 </html>

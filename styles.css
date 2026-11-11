@@ -2009,7 +2009,7 @@ nav.tabs .tab.book-tab.active{
 .dispatch-section-heading b{color:#0b4d73;font-size:.81rem;font-weight:1000;letter-spacing:.035em}
 .dispatch-section-heading span{color:#678295;font-size:.71rem}
 .dispatch-dialog .form-grid{margin-top:0;gap:10px;grid-template-columns:repeat(2,minmax(0,1fr))}
-.dispatch-dialog .dispatch-basic-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+.dispatch-dialog .dispatch-basic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
 .dispatch-dialog .form-grid label{color:#304f63;font-size:.77rem;font-weight:900}
 .dispatch-dialog .form-grid input,
 .dispatch-dialog .form-grid select,
@@ -2076,14 +2076,12 @@ nav.tabs .tab.book-tab.active{
   .dispatch-dialog{padding:12px}
   .dispatch-section{padding:11px}
   .dispatch-dialog .dispatch-basic-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
-  .dispatch-dialog .dispatch-basic-grid label:first-child{grid-column:1/-1}
   .dispatch-actions{bottom:-12px;margin:12px -12px -12px;padding:11px 12px}
 }
 @media(max-width:560px){
   .dispatch-dialog .form-grid,
   .dispatch-dialog .dispatch-basic-grid,
   .dispatch-crew-grid{grid-template-columns:minmax(0,1fr)}
-  .dispatch-dialog .dispatch-basic-grid label:first-child{grid-column:auto}
   .dispatch-actions .primary{flex:1 1 100%}
 }
 
@@ -2105,3 +2103,14 @@ nav.tabs .tab.book-tab.active{
   overflow-wrap:anywhere;
 }
 #vehicles :is(.usa-row,.usb-row,.moto-row) .occurrence-action-row .return-btn{grid-column:1/-1}
+
+.cockpit-rotation .rotation-wait-person{min-width:0}
+.cockpit-rotation .rotation-wait-metrics{
+  display:block;
+  margin-top:3px;
+  color:#435e6e;
+  font-size:.72rem;
+  font-weight:650;
+  line-height:1.35;
+}
+.cockpit-rotation .rotation-next-vehicle>.rotation-wait-metrics{margin-top:5px}

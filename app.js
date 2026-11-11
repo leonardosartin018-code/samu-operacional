@@ -1635,6 +1635,11 @@ function rotationMembersForDisplay(role,type){
 function priorityPersonName(m){
   return m?.profissionais?displayName(m.profissionais):(m?.nome_snapshot||'—');
 }
+function rotationWaitMetrics(base,count){
+  const time=base>=0?fmtMinutes(base)+' na base':'Tempo de base indisponível';
+  return '<small class="rotation-wait-metrics">'+esc(time)+' · '+esc(count)+' '+
+    (count===1?'ocorrência':'ocorrências')+'</small>';
+}
 function compactRotationQueue(role,type,label){
   const members=rotationMembersForDisplay(role,type);
   if(!members.length)return '';
@@ -1654,12 +1659,13 @@ function compactRotationQueue(role,type,label){
     html+='<div class="rotation-person-next">'+
       '<span class="rotation-next-tag">PRÓXIMO DA VEZ</span>'+
       '<strong>'+esc(priorityPersonName(available[0]))+'</strong>'+
+      rotationWaitMetrics(personBaseMinutes(available[0],type),personOccurrenceCount(available[0]))+
       (earlyExitStatus(available[0])?'<small class="early-exit-queue-note">'+esc(earlyExitStatusLabel(available[0]))+'</small>':'')+
       (isOperator()?'<button type="button" class="early-exit-mini" data-schedule-exit="'+esc(available[0].id)+'">SAÍDA</button>':'')+'</div>';
     if(available.length>1){
       html+='<div class="rotation-person-order">'+available.slice(1,6).map((m,i)=>
-        '<div class="rotation-person-row"><span>'+(i+2)+'.</span><b>'+
-        esc(priorityPersonName(m))+'</b>'+
+        '<div class="rotation-person-row"><span>'+(i+2)+'.</span><div class="rotation-wait-person"><b>'+
+        esc(priorityPersonName(m))+'</b>'+rotationWaitMetrics(personBaseMinutes(m,type),personOccurrenceCount(m))+'</div>'+
         (earlyExitStatus(m)?'<small class="early-exit-queue-note">'+esc(earlyExitStatusLabel(m))+'</small>':'')+
         (isOperator()?'<button type="button" class="early-exit-mini" data-schedule-exit="'+esc(m.id)+'">SAÍDA</button>':'')+
         '</div>').join('')+'</div>';
@@ -1684,12 +1690,7 @@ function nextVehicleRotationCard(type,hasRotation){
     '</div><strong class="rotation-vehicle-prefix">'+esc(prefix)+'</strong>'+
     (manualRankVehicle(first.v)!==null?'<span class="manual-order-active">ORDEM MANUAL TEMPORÁRIA</span>':
       (initial?'<span class="rotation-default-order">SEQUÊNCIA INICIAL POR PREFIXO</span>':''));
-  if(type==='USB'){
-    html+='<div class="priority-next-meta">'+
-      '<span class="priority-pill">'+first.occ+' '+(first.occ===1?'ocorrência':'ocorrências')+' no plantão</span>'+
-      '<span class="priority-pill">'+esc(fmtMinutes(first.base))+' na base</span>'+
-    '</div>';
-  }
+  html+=rotationWaitMetrics(first.base,first.occ);
   if(hasRotation){
     const roles=type==='USA'
       ? [['Condutor',first.driver],['Enfermeiro',first.nurse]]
@@ -1700,7 +1701,8 @@ function nextVehicleRotationCard(type,hasRotation){
     if(fixed.length){
       html+='<div class="rotation-fixed-crew">'+fixed.map(([role,m])=>
         '<div class="rotation-fixed-person"><b>'+esc(priorityPersonName(m))+'</b>'+
-        '<small>'+esc(role)+' • FIXO NA '+esc(prefix)+'</small></div>'
+        '<small>'+esc(role)+' • FIXO NA '+esc(prefix)+'</small>'+
+        rotationWaitMetrics(personBaseMinutes(m,type),personOccurrenceCount(m))+'</div>'
       ).join('')+'</div>';
     }
   }
@@ -1708,7 +1710,8 @@ function nextVehicleRotationCard(type,hasRotation){
     html+='<div class="rotation-vehicle-order">'+
       '<div class="rotation-vehicle-order-title">PRÓXIMAS NA SEQUÊNCIA</div>'+
       list.slice(1,9).map((x,i)=>
-        '<div class="rotation-vehicle-order-row"><b>'+(i+2)+'º</b><strong>'+esc(x.v.nome||x.v.codigo)+'</strong>'+
+        '<div class="rotation-vehicle-order-row"><b>'+(i+2)+'º</b><strong>'+esc(x.v.nome||x.v.codigo)+
+        rotationWaitMetrics(x.base,x.occ)+'</strong>'+
         (manualRankVehicle(x.v)!==null?'<small>ORDEM MANUAL</small>':'')+'</div>'
       ).join('')+'</div>';
   }
