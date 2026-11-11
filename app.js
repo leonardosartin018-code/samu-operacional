@@ -29,6 +29,7 @@ let bookDriverFixedRows = [];
 let selectedVehicle = null;
 let selectedTeamVehicle = null;
 let selectedEditOccurrence = null;
+let selectedNumberCorrection = null;
 let selectedVictimOccurrenceId = null;
 let selectedEarlyExitMemberId = null;
 let selectedAssignProfessional = null;
@@ -56,7 +57,7 @@ let unsavedBook = false;
 let pendingShiftWarningKey = '';
 const modalDraftSnapshots = new Map();
 const TRACKED_DRAFT_MODALS = new Set([
-  'teamModal','occModal','occEditModal','victimDestinationModal','earlyExitModal','manualRotationModal','expressPermutaModal',
+  'teamModal','occModal','occEditModal','occNumberCorrectModal','victimDestinationModal','earlyExitModal','manualRotationModal','expressPermutaModal',
   'quickRegisterModal','assignModal','individualOccModal'
 ]);
 
@@ -1020,7 +1021,12 @@ function occurrenceInfoHtml(v,o){
   const qthNotReported=o.qth_nao_informado===true&&!qthRecorded;
   const inicio=o.saida_em||o.acionada_em;
   const tempoQth=qthElapsedMinutes(o);
-  return '<div class="occ-detail">OC. '+esc(o.numero||'—')+' • '+esc(o.natureza||'SEM NATUREZA')+'</div>'+
+  const canCorrectNumber=isOperator()&&norm(currentPlantao?.status)==='ABERTO'&&
+    ['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status));
+  return '<div class="occ-identity-line"><div class="occ-detail">OC. '+esc(o.numero||'—')+
+    ' • '+esc(o.natureza||'SEM NATUREZA')+'</div>'+
+    (canCorrectNumber?'<button type="button" class="occ-number-correct-btn" data-act="correct-occ-number" data-o="'+esc(o.id)+'" title="Corrigir apenas o número desta ocorrência">✎ EDITAR Nº</button>':'')+
+    '</div>'+
     '<div class="occ-address">'+esc([o.bairro,o.endereco,o.destino].filter(Boolean).join(' • '))+'</div>'+
     '<div class="occ-timeline">'+
       '<div class="occ-time-chip"><span>INÍCIO / SAÍDA</span><b>'+fmtTime(inicio)+'</b></div>'+
@@ -2129,6 +2135,7 @@ function bindVehicleActions(root){
     };
   });
   root.querySelectorAll('[data-act="dispatch"]').forEach(b=>b.onclick=()=>openOccurrenceModal(b.dataset.v));
+  root.querySelectorAll('[data-act="correct-occ-number"]').forEach(b=>b.onclick=()=>openNumberCorrection(b.dataset.o));
   root.querySelectorAll('[data-act="qth"]').forEach(b=>b.onclick=()=>setOccurrenceQth(b.dataset.o));
   root.querySelectorAll('[data-act="qth-not-informed"]').forEach(b=>b.onclick=()=>setOccurrenceQthNotInformed(b.dataset.o));
   root.querySelectorAll('[data-act="victim-destination"]').forEach(b=>b.onclick=()=>openVictimDestination(b.dataset.o));
@@ -2862,6 +2869,86 @@ async function setVehicleStatus(vId,key){
 
   await loadAll(selectedDate());
   setSync((v.nome||v.codigo)+' atualizada para '+statusInfo(vehicleById(vId)||v).label);
+}
+/* Corrigir apenas o número de uma ocorrência já empenhada, sem alterar os demais dados. */
+function openNumberCorrection(id){
+  if(!canEditOpenShift()||!currentPlantao)return;
+  const o=occurrences.find(x=>x.id===id&&x.plantao_id===currentPlantao.id);
+  if(!o||!['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status))){
+    alert('Esta ocorrência não está mais em andamento. Atualize o painel antes de corrigir.');
+    return;
+  }
+  const v=vehicleById(o.viatura_id);
+  selectedNumberCorrection={
+    id:o.id,plantaoId:o.plantao_id,vehicleId:o.viatura_id,
+    oldNumber:o.numero==null?null:String(o.numero)
+  };
+  $('#occNumberCorrectVehicle').textContent=v?.nome||v?.codigo||o.viatura_snapshot||'Viatura não identificada';
+  $('#occNumberCorrectPrevious').textContent=o.numero||'NÃO INFORMADO';
+  $('#occNumberCorrectInput').value=o.numero||'';
+  $('#occNumberCorrectStatus').textContent='Altera somente o número da ocorrência.';
+  openModal('occNumberCorrectModal');
+  $('#occNumberCorrectInput').focus();
+  $('#occNumberCorrectInput').select();
+}
+async function saveNumberCorrection(){
+  const draft=selectedNumberCorrection;
+  if(!draft||!canEditOpenShift()||!currentPlantao||currentPlantao.id!==draft.plantaoId){
+    alert('O plantão mudou. Reabra a correção e confira os dados.');
+    return;
+  }
+  const corrected=$('#occNumberCorrectInput').value.trim();
+  if(!corrected){
+    $('#occNumberCorrectStatus').textContent='Informe o número correto para salvar.';
+    $('#occNumberCorrectInput').focus();
+    return;
+  }
+  if(corrected.length>60){
+    $('#occNumberCorrectStatus').textContent='O número deve ter no máximo 60 caracteres.';
+    return;
+  }
+  if(corrected===draft.oldNumber){
+    closeModal('occNumberCorrectModal');
+    selectedNumberCorrection=null;
+    return;
+  }
+  const vehicleName=$('#occNumberCorrectVehicle').textContent;
+  if(!confirm('CONFIRMAR CORREÇÃO DO NÚMERO?\n\n'+vehicleName+
+    '\nNúmero anterior: '+(draft.oldNumber||'NÃO INFORMADO')+
+    '\nNúmero correto: '+corrected+
+    '\n\nA ocorrência, a viatura, a equipe e os horários serão preservados.'))return;
+  const button=$('#saveOccNumberCorrectBtn');
+  button.disabled=true;
+  button.textContent='SALVANDO...';
+  let saved=false;
+  try{
+    // Confere o plantão, a viatura, o status e o número anterior.
+    // Se outro operador alterou o número, não sobrescreve silenciosamente.
+    let query=supabase.from('ocorrencias')
+      .update({numero:corrected})
+      .eq('id',draft.id).eq('plantao_id',draft.plantaoId)
+      .eq('viatura_id',draft.vehicleId)
+      .in('status',['EM OCORRENCIA','RETORNANDO']);
+    query=draft.oldNumber===null?query.is('numero',null):query.eq('numero',draft.oldNumber);
+    const {data,error}=await query.select('id,numero').maybeSingle();
+    if(error)throw error;
+    if(!data)throw new Error('O número, o status ou a ocorrência mudaram. Atualize o painel antes de tentar novamente.');
+    saved=true;
+    selectedNumberCorrection=null;
+    closeModal('occNumberCorrectModal');
+    await loadAll(selectedDate(),currentPlantao?.turno);
+    setSync('Número da ocorrência corrigido para '+corrected+' • equipe e horários preservados.','ok');
+  }catch(error){
+    if(saved){
+      setSync('Número salvo no banco. Não foi possível atualizar o painel; recarregue a página.','warn');
+      alert('O número foi corrigido no banco, mas a atualização da tela falhou: '+(error.message||error));
+    }else{
+      $('#occNumberCorrectStatus').textContent='Não foi possível salvar: '+(error.message||error);
+    }
+  }finally{
+    button.disabled=false;
+    button.textContent='SALVAR NÚMERO CORRETO';
+  }
 }
 function openOccurrenceEdit(id){
   if(!isOperator())return;
@@ -4756,6 +4843,7 @@ $('#teamReloadBtn').onclick=()=>{
   autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadAll(selectedDate());
 };
 $('#saveOcc').onclick=saveOccurrence;$('#occVehicleSelect').onchange=renderDispatchCrewPanel;$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
+$('#occNumberCorrectForm').onsubmit=async e=>{e.preventDefault();await saveNumberCorrection()};
 $('#victimDestinationChoice').onchange=refreshVictimDestinationChoice;
 $('#saveVictimDestinationBtn').onclick=saveVictimDestination;
 $('#loadScaleBtn').onclick=askToApplyScaleReference;
