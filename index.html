@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261111-71-qth-nao-informado">
+  <link rel="stylesheet" href="./styles.css?v=20261111-73-editar-numero-ocorrencia-empenhada">
 </head>
 <body>
 
@@ -713,6 +713,29 @@
   </div>
 </div>
 
+<div id="occNumberCorrectModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="occNumberCorrectTitle">
+  <div class="dialog occ-number-correct-dialog">
+    <div class="dialog-head">
+      <div><div class="dialog-kicker">CORREÇÃO DE OCORRÊNCIA EMPENHADA</div><h2 id="occNumberCorrectTitle">Editar número da ocorrência</h2></div>
+      <button type="button" class="icon-close" data-close-modal="occNumberCorrectModal" aria-label="Fechar">×</button>
+    </div>
+    <p class="occ-number-correct-intro">Corrija somente o número. A viatura continuará empenhada, sem alterar a equipe, a situação ou os horários.</p>
+    <div class="occ-number-correct-context">
+      <div><span>VIATURA</span><strong id="occNumberCorrectVehicle">—</strong></div>
+      <div><span>NÚMERO ATUAL</span><strong id="occNumberCorrectPrevious">—</strong></div>
+    </div>
+    <form id="occNumberCorrectForm" class="occ-number-correct-form">
+      <label for="occNumberCorrectInput">NÚMERO CORRETO DA OCORRÊNCIA</label>
+      <input id="occNumberCorrectInput" type="text" autocomplete="off" maxlength="60" required placeholder="Digite o número correto">
+      <p id="occNumberCorrectStatus" class="occ-number-correct-status" role="status">Altera somente o número da ocorrência.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-close-modal="occNumberCorrectModal">CANCELAR</button>
+        <button type="submit" class="btn primary" id="saveOccNumberCorrectBtn">SALVAR NÚMERO CORRETO</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="expressPermutaModal" class="modal">
   <div class="dialog assign-dialog">
     <div class="dialog-head">
@@ -800,6 +823,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261111-72-qth-nao-informado-seguro"></script>
+<script type="module" src="./app.js?v=20261111-73-editar-numero-ocorrencia-empenhada"></script>
 </body>
 </html>
