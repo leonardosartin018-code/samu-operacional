@@ -9,6 +9,7 @@ const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
 let session = null;
+let passwordRecoveryMode = new URLSearchParams(window.location.hash.slice(1)).get('type')==='recovery' || new URLSearchParams(window.location.search).get('type')==='recovery';
 let profile = null;
 let currentPlantao = null;
 let vehicles = [];
@@ -4246,8 +4247,22 @@ function subscribeRealtime(){
 }
 
 /* ---------- session ---------- */
+function showPasswordRecovery(){
+  $('#auth').classList.remove('hidden');
+  $('#app').classList.add('hidden');
+  $('.auth-tabs').classList.add('hidden');
+  $('#loginForm').classList.add('hidden');
+  $('#signupForm').classList.add('hidden');
+  $('#passwordRecoveryForm').classList.remove('hidden');
+  $('#authMsg').textContent='Digite uma nova senha de pelo menos 8 caracteres.';
+}
 async function applySession(s){
   session=s;
+  if(passwordRecoveryMode){
+    stopOperationalShiftMonitor();
+    showPasswordRecovery();
+    return;
+  }
   if(!s){
     stopOperationalShiftMonitor();
     lastOperationalShiftKey='';
@@ -4292,10 +4307,65 @@ $('#loginForm').onsubmit=async e=>{
     msg.textContent='';
   }catch(error){
     console.error('Falha no login',error);
-    msg.textContent=error?.message||'Não foi possível entrar. Tente novamente.';
+    msg.textContent=/invalid login credentials/i.test(error?.message||'')
+      ? 'E-mail ou senha incorretos. Use Esqueci minha senha para recuperar o acesso.'
+      : error?.message||'Não foi possível entrar. Tente novamente.';
   }finally{
     if(btn)btn.disabled=false;
   }
+};
+$('#forgotPasswordBtn').onclick=async()=>{
+  const email=$('#loginEmail').value.trim();
+  const msg=$('#authMsg');
+  if(!email||!$('#loginEmail').checkValidity()){
+    msg.textContent='Informe primeiro um e-mail válido no campo acima.';
+    $('#loginEmail').focus();
+    return;
+  }
+  const btn=$('#forgotPasswordBtn');
+  btn.disabled=true;
+  msg.textContent='Solicitando recuperação de senha...';
+  try{
+    const redirectTo=window.location.origin+window.location.pathname;
+    const {error}=await supabase.auth.resetPasswordForEmail(email,{redirectTo});
+    if(error)throw error;
+    msg.textContent='Se o e-mail estiver cadastrado, você receberá um link para criar uma nova senha. Verifique também a pasta Spam.';
+  }catch(error){
+    msg.textContent='Não foi possível enviar o e-mail: '+(error.message||error);
+  }finally{btn.disabled=false}
+};
+$('#passwordRecoveryForm').onsubmit=async e=>{
+  e.preventDefault();
+  const msg=$('#authMsg');
+  const password=$('#recoveryPassword').value;
+  const confirmPassword=$('#recoveryPasswordConfirm').value;
+  if(password!==confirmPassword){msg.textContent='As duas senhas digitadas são diferentes.';return}
+  if(password.length<8){msg.textContent='A nova senha precisa ter pelo menos 8 caracteres.';return}
+  const btn=$('#passwordRecoveryForm button[type="submit"]');
+  btn.disabled=true;
+  msg.textContent='Atualizando senha...';
+  try{
+    const {error}=await supabase.auth.updateUser({password});
+    if(error)throw error;
+    passwordRecoveryMode=false;
+    await supabase.auth.signOut();
+    session=null;
+    profile=null;
+    $('#recoveryPassword').value='';
+    $('#recoveryPasswordConfirm').value='';
+    $('#passwordRecoveryForm').classList.add('hidden');
+    $('.auth-tabs').classList.remove('hidden');
+    $('.auth-tab').forEach(b=>b.classList.toggle('on',b.dataset.auth==='login'));
+    $('#signupForm').classList.add('hidden');
+    $('#loginForm').classList.remove('hidden');
+    $('#loginPass').value='';
+    $('#auth').classList.remove('hidden');
+    $('#app').classList.add('hidden');
+    window.history.replaceState(null,'',window.location.pathname);
+    msg.textContent='Senha atualizada com sucesso. Entre usando sua nova senha.';
+  }catch(error){
+    msg.textContent='Não foi possível redefinir a senha: '+(error.message||error);
+  }finally{btn.disabled=false}
 };
 $('#signupForm').onsubmit=async e=>{
   e.preventDefault();
@@ -4409,9 +4479,15 @@ document.addEventListener('visibilitychange',()=>{
   }
 });
 
-supabase.auth.onAuthStateChange((_,s)=>{
+supabase.auth.onAuthStateChange((event,s)=>{
   // Consultas ao Supabase precisam ocorrer fora do callback de autenticação.
   setTimeout(()=>{
+    if(event==='PASSWORD_RECOVERY'){
+      passwordRecoveryMode=true;
+      showPasswordRecovery();
+      return;
+    }
+    if(passwordRecoveryMode)return;
     if(session?.access_token===s?.access_token)return;
     applySession(s).catch(error=>{
       console.error('Falha ao carregar sessão',error);
