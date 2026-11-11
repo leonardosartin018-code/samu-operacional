@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261030-51-equipe-escolhida-no-acionamento">
+  <link rel="stylesheet" href="./styles.css?v=20261111-53-recuperacao-senha">
 </head>
 <body>
 
@@ -26,12 +26,19 @@
       <label>E-mail<input id="loginEmail" type="email" autocomplete="username" required></label>
       <label>Senha<input id="loginPass" type="password" autocomplete="current-password" required></label>
       <button class="btn primary" type="submit">Entrar</button>
+      <button id="forgotPasswordBtn" class="auth-recover-link" type="button">Esqueci minha senha</button>
     </form>
     <form id="signupForm" class="auth-form hidden">
       <label>Nome<input id="signupName" required></label>
       <label>E-mail<input id="signupEmail" type="email" required></label>
       <label>Senha<input id="signupPass" type="password" minlength="8" required></label>
       <button class="btn primary" type="submit">Criar conta</button>
+    </form>
+    <form id="passwordRecoveryForm" class="auth-form hidden">
+      <p class="auth-recovery-help">Recuperação de acesso: escolha uma nova senha.</p>
+      <label>Nova senha<input id="recoveryPassword" type="password" minlength="8" autocomplete="new-password" required></label>
+      <label>Confirmar nova senha<input id="recoveryPasswordConfirm" type="password" minlength="8" autocomplete="new-password" required></label>
+      <button class="btn primary" type="submit">Salvar nova senha</button>
     </form>
     <div id="authMsg" class="auth-msg"></div>
   </div>
@@ -766,6 +773,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261030-52-corrige-ocorrencia-antiga"></script>
+<script type="module" src="./app.js?v=20261111-53-recuperacao-senha"></script>
 </body>
 </html>
