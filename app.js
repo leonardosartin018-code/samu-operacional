@@ -2778,20 +2778,26 @@ function expressLatestDecision(r){
     .filter(m=>m.titular_profissional_id===r.profissional_id || (m.profissional_id===r.profissional_id && norm(m.ala_escala)===norm(activeScaleReference().ala) && norm(m.turno_escala)===norm(activeScaleReference().turno)))
     .sort((a,b)=>expressDecisionTime(b)-expressDecisionTime(a))[0]||null;
 }
+function isServingInShift(id){
+  return !!id&&(activeTeamRows().some(m=>m.profissional_id===id)||
+    internalScaleRows.some(row=>row.plantao_id===currentPlantao?.id&&row.profissional_id===id&&
+      norm(row.status)==='ATIVO'&&['FIXO','ESCALADO','PERMUTA'].includes(norm(row.tipo_alteracao))));
+}
 function expressRowState(r){
   const v=vehicleByCode(r.codigo_viatura);
   const active=activeTeamRows();
-  let current=active.find(m=>
-    teamRoleKey(m)==='driver' &&
-    (m.titular_profissional_id===r.profissional_id ||
-     (m.profissional_id===r.profissional_id && (m.viatura_id===v?.id || isRotationMember(m))))
-  ) || null;
-  if(!current && v) current=currentByRole(v.id,'driver');
+  const current=(v?currentByRole(v.id,'driver'):null)||active.find(m=>
+    teamRoleKey(m)==='driver'&&isRotationMember(m)&&
+    (m.titular_profissional_id===r.profissional_id||m.profissional_id===r.profissional_id)
+  )||null;
 
   if(!r.profissional_id)return {state:'unresolved',label:'NÃO CADASTRADO',v,current};
 
   if(current){
-    const isPermuta=norm(current.tipo_alteracao_escala)==='PERMUTA' || current.profissional_id!==r.profissional_id;
+    const moved=norm(current.tipo_alteracao_escala)==='TROCA_VIATURA'||
+      (current.profissional_id!==r.profissional_id&&isServingInShift(r.profissional_id));
+    if(moved&&!isRotationMember(current))return {state:'fixed',label:'TROCA DE VIATURA',v,current};
+    const isPermuta=!moved&&current.profissional_id!==r.profissional_id&&norm(current.tipo_alteracao_escala)==='PERMUTA';
     if(isPermuta){
       const mode=isRotationMember(current)?'REVEZ.':'FIXO';
       return {state:'permuta',label:'PERMUTA • '+mode,v,current};
@@ -2877,7 +2883,7 @@ function expressSwap(rowId){
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
   if(!r||!v)return alert('Viatura não encontrada.');
   selectedExpressPermutaRow=r;
-  $('#expressPermutaTitle').textContent='Permuta — '+(v.nome||r.codigo_viatura);
+  $('#expressPermutaTitle').textContent='Permuta ou troca de viatura — '+(v.nome||r.codigo_viatura);
   $('#expressPermutaTitular').innerHTML='<b>Titular:</b> '+esc(r.nome_referencia||displayName(r.profissionais)||'—');
   $('#expressPermutaSearch').value='';
   $('#expressPermutaProId').value='';
@@ -2908,7 +2914,7 @@ function expressPermutaAutocomplete(){
   if(add)add.onclick=()=>openQuickRegistration($('#expressPermutaSearch').value,'driver',$('#expressPermutaSearch'),$('#expressPermutaProId'));
 }
 async function saveExpressPermuta(){
-  if(!isOperator()||!selectedExpressPermutaRow)return;
+  if(!canEditOpenShift()||!selectedExpressPermutaRow)return;
   if(!currentPlantao)await ensurePlantaoForBook();
   const r=selectedExpressPermutaRow,v=vehicleByCode(r.codigo_viatura);
   const proId=$('#expressPermutaProId').value;
@@ -2917,17 +2923,49 @@ async function saveExpressPermuta(){
   if(!pro)return alert('Selecione o condutor substituto.');
   if(!allowedForField(pro,'driver'))return alert('Para este campo, selecione Condutor, Motolância, TARM, Rádio-operador, Lavador ou Sanitária.');
 
+  if(!v)return alert('Viatura não encontrada.');
   try{
     const now=new Date().toISOString();
     const old=expressRowState(r).current;
-    if(old)await deactivateTeamRow(old,now);
-
     const elsewhere=activeTeamRows().find(m=>m.profissional_id===proId);
-    if(elsewhere){
-      const oldV=vehicleById(elsewhere.viatura_id);
-      if(!confirm(pro.nome_completo+' já está em '+(oldV?.nome||elsewhere.viatura_snapshot||'outra escala')+'.\n\nDeseja transferir para esta permuta?'))return;
-      await deactivateTeamRow(elsewhere,now);
+    if(mode==='TROCA_VIATURA'){
+      if(!elsewhere?.viatura_id||elsewhere.viatura_id===v.id||teamRoleKey(elsewhere)!=='driver'||isRotationMember(elsewhere)){
+        throw new Error('Selecione um condutor em serviço fixo em outra viatura.');
+      }
+      const origin=vehicleById(elsewhere.viatura_id);
+      if(activeOccurrence(v)||(origin&&activeOccurrence(origin))||memberIsBusy(elsewhere)){
+        throw new Error('Aguarde o encerramento da ocorrência antes de trocar de viatura.');
+      }
+      if(!confirm('Mover '+displayName(pro)+' de '+(origin?.nome||elsewhere.viatura_snapshot||'outra viatura')+' para '+v.nome+'?'))return;
+      const plantaoId=currentPlantao.id;
+      const {data:ocupantes,error:readError}=await supabase.from('equipe_plantao')
+        .select('id,funcao').eq('plantao_id',plantaoId).eq('viatura_id',v.id).eq('status','ATIVO');
+      if(readError)throw readError;
+      if((ocupantes||[]).some(m=>teamRoleKey(m)==='driver')){
+        throw new Error('A viatura de destino já tem condutor. Libere a posição antes de transferir.');
+      }
+      if(currentPlantao?.id!==plantaoId||!canEditOpenShift())return;
+      const isSubstitute=norm(elsewhere.tipo_alteracao_escala)==='PERMUTA'&&elsewhere.titular_profissional_id&&
+        elsewhere.titular_profissional_id!==proId&&!isServingInShift(elsewhere.titular_profissional_id);
+      const {data,error}=await supabase.from('equipe_plantao').update({
+        viatura_id:v.id,viatura_snapshot:v.nome,
+        tipo_alteracao_escala:isSubstitute?'PERMUTA':'TROCA_VIATURA'
+      }).eq('id',elsewhere.id).eq('plantao_id',plantaoId).eq('status','ATIVO')
+        .eq('viatura_id',elsewhere.viatura_id).select('id').maybeSingle();
+      if(error)throw error;
+      if(!data)throw new Error('A escala mudou. Atualize o painel e tente novamente.');
+      closeModal('expressPermutaModal');
+      selectedExpressPermutaRow=null;
+      markOperationalDirty();
+      await loadAll(selectedDate());await loadExpressScale();
+      return;
     }
+    if(elsewhere&&elsewhere.id!==old?.id){
+      const oldV=vehicleById(elsewhere.viatura_id);
+      if(!confirm(pro.nome_completo+' já está em '+(oldV?.nome||elsewhere.viatura_snapshot||'outra escala')+'.\\n\\nDeseja transferir para esta permuta?'))return;
+    }
+    if(old)await deactivateTeamRow(old,now);
+    if(elsewhere&&elsewhere.id!==old?.id)await deactivateTeamRow(elsewhere,now);
 
     const type=vehicleType(v).includes('USA')?'USA':'USB';
     const isRotation=mode==='REVEZAMENTO';
@@ -4047,13 +4085,16 @@ async function saveInternalSlot(code,root=document){
 }
 function collectPermutas(){
   const out=[];
-  bookDriverFixedRows.forEach(fr=>{
-    const v=vehicleByCode(fr.codigo_viatura);if(!v)return;
-    const cur=vehicleMembers(v).find(m=>teamRoleKey(m)==='driver');
-    const titular=fr.nome_referencia||professionalNameById(fr.profissional_id);
-    if(cur&&titular&&norm(displayName(cur.profissionais))!==norm(titular)&&norm(cur.profissionais?.nome_completo)!==norm(titular)){
-      out.push({funcao:'CONDUTOR',substituto:cur.profissionais?.nome_completo||displayName(cur.profissionais),substituido:titular});
-    }
+  const registrados=new Set();
+  activeTeamRows().forEach(m=>{
+    const titularId=m.titular_profissional_id;
+    if(teamRoleKey(m)!=='driver'||norm(m.tipo_alteracao_escala)!=='PERMUTA'||
+      !titularId||titularId===m.profissional_id||isServingInShift(titularId)||registrados.has(titularId))return;
+    const titular=professionalNameById(titularId)||m.nome_titular_escala;
+    const substituto=professionalNameById(m.profissional_id)||m.nome_snapshot;
+    if(!titular||!substituto)return;
+    registrados.add(titularId);
+    out.push({funcao:'CONDUTOR',substituto,substituido:titular});
   });
   internalScaleRows.filter(r=>norm(r.tipo_alteracao)==='PERMUTA').forEach(r=>out.push({
     funcao:r.funcao==='SANITARIA'?'SANITARIA':r.funcao,
