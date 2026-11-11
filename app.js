@@ -30,6 +30,7 @@ let selectedVehicle = null;
 let selectedTeamVehicle = null;
 let selectedEditOccurrence = null;
 let selectedNumberCorrection = null;
+let selectedCrewCorrection = null;
 let selectedVictimOccurrenceId = null;
 let selectedEarlyExitMemberId = null;
 let selectedAssignProfessional = null;
@@ -57,7 +58,7 @@ let unsavedBook = false;
 let pendingShiftWarningKey = '';
 const modalDraftSnapshots = new Map();
 const TRACKED_DRAFT_MODALS = new Set([
-  'teamModal','occModal','occEditModal','occNumberCorrectModal','victimDestinationModal','earlyExitModal','manualRotationModal','expressPermutaModal',
+  'teamModal','occModal','occEditModal','occNumberCorrectModal','occCrewCorrectModal','victimDestinationModal','earlyExitModal','manualRotationModal','expressPermutaModal',
   'quickRegisterModal','assignModal','individualOccModal'
 ]);
 
@@ -1069,6 +1070,7 @@ function vehicleCardHtml(v){
   if(st.key==='returning'){
     primary='<div class="occurrence-main-actions">'+
       '<button class="arrive-btn" data-act="arrive" data-o="'+(o?.id||'')+'" data-v="'+v.id+'">CHEGADA À BASE</button>'+
+      (isOperator()&&o?'<button type="button" class="edit-team-btn occ-crew-correct-btn" data-act="edit-team" data-v="'+esc(v.id)+'" data-o="'+esc(o.id)+'">✎ CORRIGIR EQUIPE EMPENHADA</button>':'')+
       (isOperator()&&norm(o?.status)==='RETORNANDO'
         ?'<button type="button" class="edit-team-btn" data-act="undo-return" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">CORRIGIR RETORNO</button>':'')+
       '</div>';
@@ -2143,7 +2145,7 @@ function bindVehicleActions(root){
   root.querySelectorAll('[data-act="return"]').forEach(b=>b.onclick=()=>setReturning(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="undo-return"]').forEach(b=>b.onclick=()=>undoReturning(b));
   root.querySelectorAll('[data-act="arrive"]').forEach(b=>b.onclick=()=>setArrived(b.dataset.o,b.dataset.v));
-  root.querySelectorAll('[data-act="edit-team"]').forEach(b=>b.onclick=()=>openTeamModal(b.dataset.v));
+  root.querySelectorAll('[data-act="edit-team"]').forEach(b=>b.onclick=()=>openOccurrenceCrewCorrection(b.dataset.o||activeOccurrence(vehicleById(b.dataset.v))?.id));
   root.querySelectorAll('[data-status]').forEach(b=>b.onclick=()=>setVehicleStatus(b.dataset.v,b.dataset.status));
   root.querySelectorAll('[data-status-select]').forEach(s=>s.onchange=()=>{if(s.value)setVehicleStatus(s.dataset.v,s.value)});
 }
@@ -2870,6 +2872,170 @@ async function setVehicleStatus(vId,key){
   await loadAll(selectedDate());
   setSync((v.nome||v.codigo)+' atualizada para '+statusInfo(vehicleById(vId)||v).label);
 }
+/* Corrigir guarnição efetivamente empenhada, sem modificar a escala do plantão. */
+function correctionRoleMatchesRecorded(row,role){
+  const f=norm(row?.funcao);
+  if(role==='driver')return f.includes('CONDUTOR');
+  if(role==='nurse')return f.includes('ENFERM');
+  if(role==='tech')return f.includes('TECN')||f.includes('ENFERM');
+  if(role==='doctor')return f.includes('MEDIC');
+  return false;
+}
+function correctionCrewOptions(v,role,o){
+  const original=new Set(occurrenceMembers(o.id).map(x=>x.profissional_id));
+  const candidates=[...activeTeamRows().filter(m=>original.has(m.profissional_id)),...dispatchCrewOptions(v,role)];
+  const unique=new Set();
+  return candidates.filter(m=>{
+    if(unique.has(m.profissional_id)||norm(m.status||'ATIVO')!=='ATIVO')return false;
+    if(!dispatchRoleMatch(m,role,v))return false;
+    if(!isAnapolisVehicle(v)&&m.viatura_id!==v.id)return false;
+    if(m.viatura_id&&m.viatura_id!==v.id&&vehicleById(m.viatura_id)?.base_id!==v.base_id)return false;
+    if(isRotationMember(m)){
+      const type=vehicleType(v).includes('USA')?'USA':'USB';
+      if(role==='driver'&&!driverRotationAllowsMember(m,type))return false;
+      if(role!=='driver'&&role!=='doctor'&&!norm(m.grupo_revezamento).includes(type))return false;
+      if(earlyExitStatus(m)?.cutoff&&!original.has(m.profissional_id))return false;
+    }
+    if(!original.has(m.profissional_id)&&memberIsBusy(m))return false;
+    unique.add(m.profissional_id);
+    return true;
+  }).sort((a,b)=>{
+    const ai=original.has(a.profissional_id)?0:1;
+    const bi=original.has(b.profissional_id)?0:1;
+    return ai-bi||priorityPersonName(a).localeCompare(priorityPersonName(b),'pt-BR');
+  });
+}
+async function openOccurrenceCrewCorrection(occurrenceId){
+  if(!canEditOpenShift()||!currentPlantao)return;
+  const o=occurrences.find(x=>x.id===occurrenceId);
+  if(!o||o.plantao_id!==currentPlantao.id||!['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status))){
+    alert('Esta ocorrência não está mais em atendimento. Atualize o painel.');
+    return;
+  }
+  const v=vehicleById(o.viatura_id);
+  if(!v||!['USA','USB'].includes(vehicleType(v))){
+    alert('A correção de guarnição está disponível para USA e USB.');
+    return;
+  }
+  if(o.creditou_revezamento){
+    alert('O crédito de revezamento já foi lançado. Esta ocorrência não pode ter a equipe alterada por este atalho.');
+    return;
+  }
+  await ensureProfessionals();
+  const original=occurrenceMembers(o.id);
+  selectedCrewCorrection={
+    occurrenceId:o.id,plantaoId:o.plantao_id,vehicleId:v.id,
+    oldIds:original.map(row=>row.profissional_id).sort(),
+    oldRows:original
+  };
+  $('#occCrewCorrectContext').textContent=(v.nome||v.codigo)+' • OC. '+(o.numero||'—');
+  $('#occCrewCorrectPrevious').textContent=original.map(m=>
+    (m.nome_snapshot||professionalNameById(m.profissional_id)||'—')+' ('+(m.funcao||'—')+')'
+  ).join(' • ')||'Nenhum profissional gravado';
+  const required=requiredDispatchRoles(v);
+  const roles=dispatchSlotRoles(v);
+  $('#occCrewCorrectFields').innerHTML=roles.map(role=>{
+    const options=correctionCrewOptions(v,role,o);
+    const current=original.find(row=>correctionRoleMatchesRecorded(row,role));
+    const match=options.find(m=>m.profissional_id===current?.profissional_id);
+    const needed=required.includes(role);
+    const html=options.map(m=>{
+      const fixed=!isRotationMember(m)&&m.viatura_id===v.id;
+      const elsewhere=!isRotationMember(m)&&m.viatura_id&&m.viatura_id!==v.id;
+      const status=fixed?' • FIXO NESTA VIATURA':elsewhere
+        ?' • FIXO '+(vehicleById(m.viatura_id)?.nome||'EM OUTRA VIATURA'):' • REVEZAMENTO';
+      return '<option value="'+esc(m.id)+'"'+(match?.id===m.id?' selected':'')+'>'+
+        esc(priorityPersonName(m))+status+'</option>';
+    }).join('');
+    return '<label class="occ-crew-correct-field"><span>'+esc(dispatchRoleName(role))+
+      (needed?' • OBRIGATÓRIO':' • OPCIONAL')+'</span><select data-crew-correction-role="'+esc(role)+'">'+
+      '<option value="">'+(needed?'SELECIONE UM PROFISSIONAL':'NÃO ESCALADO')+'</option>'+
+      html+'</select></label>';
+  }).join('');
+  $('#occCrewCorrectStatus').textContent='Confira os nomes e salve apenas a equipe desta ocorrência.';
+  openModal('occCrewCorrectModal');
+}
+async function saveOccurrenceCrewCorrection(){
+  const draft=selectedCrewCorrection;
+  if(!draft||!canEditOpenShift()||!currentPlantao||currentPlantao.id!==draft.plantaoId){
+    alert('O plantão mudou. Reabra a correção e confira os dados.');
+    return;
+  }
+  const o=occurrences.find(x=>x.id===draft.occurrenceId);
+  const v=vehicleById(draft.vehicleId);
+  if(!o||!v||o.viatura_id!==v.id||!['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status))){
+    $('#occCrewCorrectStatus').textContent='A ocorrência mudou. Atualize o painel.';
+    return;
+  }
+  const options=[...$('#occCrewCorrectFields').querySelectorAll('[data-crew-correction-role]')];
+  const selected=[],names=[],ids=new Set();
+  for(const el of options){
+    const role=el.dataset.crewCorrectionRole;
+    if(!el.value){
+      if(requiredDispatchRoles(v).includes(role)){
+        $('#occCrewCorrectStatus').textContent='Selecione '+dispatchRoleName(role)+' para continuar.';
+        el.focus();
+        return;
+      }
+      continue;
+    }
+    const m=correctionCrewOptions(v,role,o).find(m=>m.id===el.value);
+    if(!m){
+      $('#occCrewCorrectStatus').textContent='Profissional indisponível. Atualize o painel e reabra a correção.';
+      return;
+    }
+    if(ids.has(m.profissional_id)){
+      $('#occCrewCorrectStatus').textContent='Um profissional não pode ocupar duas funções.';
+      return;
+    }
+    ids.add(m.profissional_id);
+    selected.push({id:m.id,role});
+    names.push(dispatchRoleName(role)+': '+priorityPersonName(m));
+  }
+  const newIds=selected.map(x=>activeTeamRows().find(m=>m.id===x.id)?.profissional_id).sort();
+  if(JSON.stringify(newIds)===JSON.stringify(draft.oldIds)){
+    // A correção de função sem trocar profissional também pode ser válida.
+    const previousRoles=draft.oldRows.map(x=>norm(x.funcao)).sort();
+    const selectedRoles=selected.map(x=>norm(dispatchRoleName(x.role)==='TÉCNICO / ENFERMEIRO'?'Técnico de Enfermagem':dispatchRoleName(x.role))).sort();
+    if(JSON.stringify(previousRoles)===JSON.stringify(selectedRoles)){
+      closeModal('occCrewCorrectModal');
+      selectedCrewCorrection=null;
+      return;
+    }
+  }
+  const message='CONFIRMAR CORREÇÃO DA GUARNIÇÃO?\n\n'+
+    $('#occCrewCorrectContext').textContent+'\n\n'+names.join('\n')+
+    '\n\nEssa correção altera apenas a equipe registrada nesta ocorrência. A escala, os horários, a viatura e a sequência do revezamento permanecem intactos.';
+  if(!confirm(message))return;
+  const btn=$('#saveOccCrewCorrectBtn');
+  btn.disabled=true;btn.textContent='SALVANDO EQUIPE...';
+  let committed=false;
+  try{
+    const {data,error}=await supabase.rpc('corrigir_equipe_ocorrencia',{
+      p_ocorrencia_id:draft.occurrenceId,
+      p_viatura_id:draft.vehicleId,
+      p_escolhas:selected,
+      p_anteriores:draft.oldIds
+    });
+    if(error)throw error;
+    committed=true;
+    closeModal('occCrewCorrectModal');
+    selectedCrewCorrection=null;
+    await loadAll(selectedDate(),currentPlantao?.turno);
+    setSync(data+' profissional(is) na equipe corrigida • ocorrência e escala preservadas.','ok');
+  }catch(error){
+    const message=error.message||String(error);
+    if(committed){
+      alert('A equipe foi salva no banco, mas houve falha ao atualizar a tela: '+message+
+        '\n\nRecarregue o painel; não salve novamente.');
+    }else{
+      $('#occCrewCorrectStatus').textContent='Não foi possível corrigir: '+message;
+    }
+  }finally{
+    btn.disabled=false;btn.textContent='SALVAR EQUIPE CORRIGIDA';
+  }
+}
+
 /* Corrigir apenas o número de uma ocorrência já empenhada, sem alterar os demais dados. */
 function openNumberCorrection(id){
   if(!canEditOpenShift()||!currentPlantao)return;
@@ -4844,6 +5010,7 @@ $('#teamReloadBtn').onclick=()=>{
 };
 $('#saveOcc').onclick=saveOccurrence;$('#occVehicleSelect').onchange=renderDispatchCrewPanel;$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
 $('#occNumberCorrectForm').onsubmit=async e=>{e.preventDefault();await saveNumberCorrection()};
+$('#occCrewCorrectForm').onsubmit=async e=>{e.preventDefault();await saveOccurrenceCrewCorrection()};
 $('#victimDestinationChoice').onchange=refreshVictimDestinationChoice;
 $('#saveVictimDestinationBtn').onclick=saveVictimDestination;
 $('#loadScaleBtn').onclick=askToApplyScaleReference;
