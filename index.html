@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261111-66-fila-e-acionamento">
+  <link rel="stylesheet" href="./styles.css?v=20261111-67-conversao-coletiva">
 </head>
 <body>
 
@@ -176,6 +176,7 @@
           </div>
           <div class="team-head-actions">
             <button class="btn" id="teamReloadBtn">ATUALIZAR</button>
+            <button class="btn bulk-rotation-main-btn" id="openBulkRotationBtn" type="button">⇄ FIXOS → REVEZAMENTO</button>
             <button class="btn confirm-scale-top" id="confirmExpressTopBtn">CONFIRMAR ESCALA</button>
           </div>
         </div>
@@ -567,6 +568,35 @@
   </div>
 </div>
 
+<div id="bulkRotationModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="bulkRotationTitle">
+  <div class="dialog bulk-rotation-dialog">
+    <div class="dialog-head">
+      <div><div class="dialog-kicker">ALTERAÇÃO COLETIVA • PLANTÃO ATUAL</div><h2 id="bulkRotationTitle">Colocar fixos em revezamento</h2></div>
+      <button class="icon-close" type="button" data-close-modal="bulkRotationModal" aria-label="Fechar">×</button>
+    </div>
+    <p class="bulk-rotation-intro">Escolha quem deixará a viatura fixa e passará para a fila compartilhada. Não altera a sequência das viaturas, o histórico, os atendimentos ou a pontuação dos profissionais.</p>
+    <label class="bulk-rotation-scope" for="bulkRotationScope">QUAIS PROFISSIONAIS?
+      <select id="bulkRotationScope">
+        <option value="TODOS">TODAS AS EQUIPES — USA + USB</option>
+        <option value="USA">TODOS OS FIXOS DAS USA</option>
+        <option value="USB">TODOS OS FIXOS DAS USB</option>
+        <option value="CONDUTORES">CONDUTORES DAS USA + USB</option>
+        <option value="TECNICOS">TÉCNICOS / ENFERMEIROS DAS USB</option>
+        <option value="ENFERMEIROS">ENFERMEIROS DAS USA</option>
+      </select>
+    </label>
+    <div id="bulkRotationSummary"></div>
+    <div id="bulkRotationList" class="bulk-rotation-list" aria-live="polite"></div>
+    <p id="bulkRotationQueueNote" class="bulk-rotation-queue"></p>
+    <p class="bulk-rotation-warning">Profissionais que já estão em ocorrência continuarão empenhados até o retorno, sem serem sugeridos em outro acionamento. Médicos, motolâncias e bases descentralizadas não são alterados.</p>
+    <label class="bulk-rotation-check"><input id="bulkRotationAcknowledge" type="checkbox"> <span>Conferi os profissionais e autorizo a mudança coletiva no plantão atual.</span></label>
+    <div class="modal-actions">
+      <button class="btn" type="button" data-close-modal="bulkRotationModal">CANCELAR</button>
+      <button class="btn primary" type="button" id="bulkRotationApplyBtn" disabled>CONFIRMAR REVEZAMENTO</button>
+    </div>
+  </div>
+</div>
+
 <div id="teamModal" class="modal">
   <div class="dialog team-dialog">
     <div class="dialog-head"><div><div class="dialog-kicker">EQUIPE DIRETA / PARCIAL</div><h2 id="teamModalTitle">Equipe rápida</h2></div><button class="icon-close" data-close-modal="teamModal">×</button></div>
@@ -770,6 +800,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261111-66-fila-e-acionamento"></script>
+<script type="module" src="./app.js?v=20261111-67-conversao-coletiva"></script>
 </body>
 </html>
