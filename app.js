@@ -1684,6 +1684,12 @@ function nextVehicleRotationCard(type,hasRotation){
     '</div><strong class="rotation-vehicle-prefix">'+esc(prefix)+'</strong>'+
     (manualRankVehicle(first.v)!==null?'<span class="manual-order-active">ORDEM MANUAL TEMPORÁRIA</span>':
       (initial?'<span class="rotation-default-order">SEQUÊNCIA INICIAL POR PREFIXO</span>':''));
+  if(type==='USB'){
+    html+='<div class="priority-next-meta">'+
+      '<span class="priority-pill">'+first.occ+' '+(first.occ===1?'ocorrência':'ocorrências')+' no plantão</span>'+
+      '<span class="priority-pill">'+esc(fmtMinutes(first.base))+' na base</span>'+
+    '</div>';
+  }
   if(hasRotation){
     const roles=type==='USA'
       ? [['Condutor',first.driver],['Enfermeiro',first.nurse]]
