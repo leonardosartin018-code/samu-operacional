@@ -2133,7 +2133,13 @@ function bindVehicleActions(root){
   root.querySelectorAll('[data-team-card]').forEach(card=>{
     card.onclick=e=>{
       if(e.target.closest('button,select,input,textarea,a'))return;
-      openTeamModal(card.dataset.v);
+      const v=vehicleById(card.dataset.v);
+      const o=v?activeOccurrence(v):null;
+      if(o&&['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status))){
+        openOccurrenceCrewCorrection(o.id);
+      }else{
+        openTeamModal(card.dataset.v);
+      }
     };
   });
   root.querySelectorAll('[data-act="dispatch"]').forEach(b=>b.onclick=()=>openOccurrenceModal(b.dataset.v));
@@ -3004,9 +3010,14 @@ async function saveOccurrenceCrewCorrection(){
       return;
     }
   }
+  const shiftedFixed=selected.map(x=>activeTeamRows().find(m=>m.id===x.id))
+    .filter(m=>m&&!isRotationMember(m)&&m.viatura_id&&m.viatura_id!==v.id);
+  const fixedWarning=shiftedFixed.length?'\n\nATENÇÃO: '+
+    shiftedFixed.map(m=>priorityPersonName(m)+' está FIXO na '+(vehicleById(m.viatura_id)?.nome||'outra viatura')).join('; ')+
+    '. Confirme que essa pessoa realmente foi empenhada aqui. A escala de origem não será alterada.':'';
   const message='CONFIRMAR CORREÇÃO DA GUARNIÇÃO?\n\n'+
     $('#occCrewCorrectContext').textContent+'\n\n'+names.join('\n')+
-    '\n\nEssa correção altera apenas a equipe registrada nesta ocorrência. A escala, os horários, a viatura e a sequência do revezamento permanecem intactos.';
+    fixedWarning+'\n\nEssa correção altera apenas a equipe registrada nesta ocorrência. A escala, os horários, a viatura e a sequência do revezamento permanecem intactos.';
   if(!confirm(message))return;
   const btn=$('#saveOccCrewCorrectBtn');
   btn.disabled=true;btn.textContent='SALVANDO EQUIPE...';
