@@ -1006,23 +1006,34 @@ async function saveVictimDestination(){
   }finally{button.disabled=false}
 }
 
+function qthDisplayTime(o){
+  if(o?.chegada_qth_em)return fmtTime(o.chegada_qth_em);
+  return o?.qth_nao_informado?'NÃO INFORMADO':'—';
+}
+function qthElapsedMinutes(o){
+  return !o||o.qth_nao_informado?null:
+    minutesBetween(o.saida_em||o.acionada_em,o.chegada_qth_em);
+}
 function occurrenceInfoHtml(v,o){
   if(!o) return '';
   const qthRecorded=!!o.chegada_qth_em;
+  const qthNotReported=o.qth_nao_informado===true&&!qthRecorded;
   const inicio=o.saida_em||o.acionada_em;
-  const tempoQth=minutesBetween(inicio,o.chegada_qth_em);
+  const tempoQth=qthElapsedMinutes(o);
   return '<div class="occ-detail">OC. '+esc(o.numero||'—')+' • '+esc(o.natureza||'SEM NATUREZA')+'</div>'+
     '<div class="occ-address">'+esc([o.bairro,o.endereco,o.destino].filter(Boolean).join(' • '))+'</div>'+
     '<div class="occ-timeline">'+
       '<div class="occ-time-chip"><span>INÍCIO / SAÍDA</span><b>'+fmtTime(inicio)+'</b></div>'+
-      '<div class="occ-time-chip"><span>CHEGADA QTH</span><b>'+fmtTime(o.chegada_qth_em)+'</b></div>'+
+      '<div class="occ-time-chip"><span>CHEGADA QTH</span><b>'+esc(qthDisplayTime(o))+'</b></div>'+
       '<div class="occ-time-chip qth-duration"><span>TEMPO ATÉ QTH</span><b>'+fmtMinutes(tempoQth)+'</b></div>'+
       '<div class="occ-time-chip"><span>INÍCIO RETORNO</span><b>'+fmtTime(o.inicio_retorno_em)+'</b></div>'+
     '</div>'+
     victimDestinationControlsHtml(o,v)+
     (statusInfo(v).key==='occurrence'
       ? '<div class="occurrence-main-actions">'+
-          '<button class="qth-btn '+(qthRecorded?'recorded':'')+'" data-act="qth" data-o="'+o.id+'">'+(qthRecorded?'QTH REGISTRADO • '+fmtTime(o.chegada_qth_em)+' • '+fmtMinutes(tempoQth):'CHEGADA NO QTH')+'</button>'+
+          '<button class="qth-btn '+(qthRecorded?'recorded':'')+'" data-act="qth" data-o="'+o.id+'">'+(qthRecorded?'QTH REGISTRADO • '+fmtTime(o.chegada_qth_em)+' • '+fmtMinutes(tempoQth):qthNotReported?'REGISTRAR CHEGADA NO QTH (CORREÇÃO)':'CHEGADA NO QTH')+'</button>'+
+          (!qthRecorded?'<button type="button" class="qth-not-informed-btn '+(qthNotReported?'selected':'')+'" data-act="qth-not-informed" data-o="'+o.id+'" '+(qthNotReported?'disabled':'')+'>'+
+            (qthNotReported?'✓ QTH NÃO INFORMADO':'NÃO INFORMADO • CHEGADA NO QTH')+'</button>':'')+
           '<div class="occurrence-action-row">'+
             '<button class="qta-btn" data-act="qta" data-o="'+o.id+'" data-v="'+v.id+'">QTA</button>'+
             '<button class="edit-team-btn" data-act="edit-team" data-v="'+v.id+'">EDITAR EQUIPE</button>'+
@@ -2098,12 +2109,12 @@ function renderHistory(){
   }
   tbody.innerHTML=occurrences.map(o=>{
     const v=vehicleById(o.viatura_id);
-    const tq=minutesBetween(o.saida_em||o.acionada_em,o.chegada_qth_em);
+    const tq=qthElapsedMinutes(o);
     const tr=minutesBetween(o.inicio_retorno_em,o.retorno_base_em);
     const tt=minutesBetween(o.saida_em||o.acionada_em,o.retorno_base_em||o.finalizado_em);
     return '<tr>'+
       '<td>'+esc(o.numero||'—')+'</td><td>'+esc(v?.nome||o.viatura_snapshot||'—')+'</td><td>'+esc(o.natureza||'—')+'</td><td>'+esc(o.bairro||'—')+'</td><td>'+esc(victimDestinationDisplay(o.destino))+'</td><td>'+esc(o.endereco||'—')+'</td><td>'+esc(occurrenceCrewText(o))+'</td>'+
-      '<td>'+fmtTime(o.saida_em||o.acionada_em)+'</td><td>'+fmtTime(o.chegada_qth_em)+'</td><td>'+fmtMinutes(tq)+'</td><td>'+fmtTime(o.inicio_retorno_em)+'</td><td>'+fmtTime(o.retorno_base_em)+'</td><td>'+fmtMinutes(tr)+'</td><td>'+fmtMinutes(tt)+'</td><td>'+esc(o.observacao||'—')+'</td>'+
+      '<td>'+fmtTime(o.saida_em||o.acionada_em)+'</td><td>'+esc(qthDisplayTime(o))+'</td><td>'+fmtMinutes(tq)+'</td><td>'+fmtTime(o.inicio_retorno_em)+'</td><td>'+fmtTime(o.retorno_base_em)+'</td><td>'+fmtMinutes(tr)+'</td><td>'+fmtMinutes(tt)+'</td><td>'+esc(o.observacao||'—')+'</td>'+
       '<td>'+(isOperator()?'<div class="history-actions"><button class="history-edit" data-edit-occ="'+o.id+'">EDITAR</button><button class="history-delete" data-delete-occ="'+o.id+'">EXCLUIR</button></div>':'—')+'</td>'+
     '</tr>';
   }).join('');
@@ -2119,6 +2130,7 @@ function bindVehicleActions(root){
   });
   root.querySelectorAll('[data-act="dispatch"]').forEach(b=>b.onclick=()=>openOccurrenceModal(b.dataset.v));
   root.querySelectorAll('[data-act="qth"]').forEach(b=>b.onclick=()=>setOccurrenceQth(b.dataset.o));
+  root.querySelectorAll('[data-act="qth-not-informed"]').forEach(b=>b.onclick=()=>setOccurrenceQthNotInformed(b.dataset.o));
   root.querySelectorAll('[data-act="victim-destination"]').forEach(b=>b.onclick=()=>openVictimDestination(b.dataset.o));
   root.querySelectorAll('[data-act="qta"]').forEach(b=>b.onclick=()=>setOccurrenceQta(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="return"]').forEach(b=>b.onclick=()=>setReturning(b.dataset.o,b.dataset.v));
@@ -2711,19 +2723,35 @@ async function setOccurrenceQth(id){
   if(!isOperator())return;
   const o=occurrences.find(x=>x.id===id);
   if(!o)return alert('Ocorrência não encontrada.');
-  if(o.chegada_qth_em && !confirm('O QTH já foi registrado às '+fmtTime(o.chegada_qth_em)+'. Deseja atualizar o horário?'))return;
+  if(norm(o.status)!=='EM OCORRENCIA')return alert('A ocorrência não está mais em atendimento. Atualize o painel.');
+  if(o.chegada_qth_em &&
+    !confirm('A chegada ao QTH já foi registrada às '+fmtTime(o.chegada_qth_em)+'. Substituir pela hora atual?'))return;
+  if(!o.chegada_qth_em&&o.qth_nao_informado &&
+    !confirm('QTH marcado como NÃO INFORMADO.\\n\\nDeseja registrar a hora ATUAL como chegada?\\n\\nSó confirme se a equipe comunicou a chegada agora. Não substitua o horário real antigo pela hora atual.'))return;
 
-  const previous=o.chegada_qth_em||null;
   const now=new Date().toISOString();
-  o.chegada_qth_em=now;
-  renderAll();
+  const {data,error}=await supabase.from('ocorrencias')
+    .update({chegada_qth_em:now,qth_nao_informado:false})
+    .eq('id',id).eq('status','EM OCORRENCIA').select('id').maybeSingle();
+  if(error)return alert('Não foi possível registrar a chegada ao QTH: '+error.message);
+  if(!data)return alert('A ocorrência mudou. Atualize o painel.');
+  await loadAll(selectedDate());
+}
+async function setOccurrenceQthNotInformed(id){
+  if(!isOperator())return;
+  const o=occurrences.find(x=>x.id===id);
+  if(!o)return alert('Ocorrência não encontrada.');
+  if(norm(o.status)!=='EM OCORRENCIA')return alert('A ocorrência não está mais em atendimento. Atualize o painel.');
+  if(o.chegada_qth_em)return alert('O horário de chegada ao QTH já foi registrado. Esta opção não pode apagar um horário informado.');
+  if(o.qth_nao_informado)return;
+  if(!confirm('CONFIRMAR QTH NÃO INFORMADO?\\n\\nA equipe não informou a chegada ao QTH. O horário e o tempo até o QTH permanecerão em aberto, sem duração presumida.\\n\\nO retorno poderá ser registrado normalmente.'))return;
 
-  const {error}=await supabase.from('ocorrencias').update({chegada_qth_em:now}).eq('id',id);
-  if(error){
-    o.chegada_qth_em=previous;
-    renderAll();
-    return alert('Não foi possível registrar a chegada no QTH: '+error.message);
-  }
+  const {data,error}=await supabase.from('ocorrencias')
+    .update({chegada_qth_em:null,qth_nao_informado:true})
+    .eq('id',id).eq('status','EM OCORRENCIA')
+    .is('chegada_qth_em',null).select('id').maybeSingle();
+  if(error)return alert('Não foi possível registrar QTH não informado: '+error.message);
+  if(!data)return alert('A ocorrência mudou ou outro operador registrou o QTH. Atualize o painel.');
   await loadAll(selectedDate());
 }
 async function setOccurrenceQta(oid,vid){
@@ -4506,7 +4534,7 @@ function exportCSV(){
   const rows=[['Ocorrencia','Viatura','Natureza','Bairro','Destino da vitima','Endereco','Equipe','Status','Saida','QTH','Inicio retorno','Chegada base','Observacao'],
     ...occurrences.map(o=>{
       const v=vehicleById(o.viatura_id);
-      return [o.numero||'',v?.nome||o.viatura_snapshot||'',o.natureza||'',o.bairro||'',o.destino||'',o.endereco||'',occurrenceCrewText(o),o.status||'',o.saida_em||'',o.chegada_qth_em||'',o.inicio_retorno_em||'',o.retorno_base_em||'',o.observacao||''];
+      return [o.numero||'',v?.nome||o.viatura_snapshot||'',o.natureza||'',o.bairro||'',o.destino||'',o.endereco||'',occurrenceCrewText(o),o.status||'',o.saida_em||'',o.qth_nao_informado?'NÃO INFORMADO':o.chegada_qth_em||'',o.inicio_retorno_em||'',o.retorno_base_em||'',o.observacao||''];
     })
   ];
   const csv=rows.map(r=>r.map(x=>'"'+String(x).replace(/"/g,'""')+'"').join(';')).join('\n');
