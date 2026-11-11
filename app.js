@@ -3436,6 +3436,7 @@ async function applyBulkRotation(){
   }
   const btn=$('#bulkRotationApplyBtn');
   btn.disabled=true;btn.textContent='SALVANDO REVEZAMENTO...';
+  let recorded=false;
   try{
     const {data,error}=await supabase.rpc('converter_fixos_para_revezamento',{
       p_plantao_id:draft.plantaoId,
@@ -3443,6 +3444,7 @@ async function applyBulkRotation(){
       p_ids:draft.ids
     });
     if(error)throw error;
+    recorded=true;
     bulkRotationDraft=null;
     closeModal('bulkRotationModal');
     await loadAll(selectedDate(),currentPlantao?.turno);
@@ -3451,10 +3453,16 @@ async function applyBulkRotation(){
     clearOperationalDirty();
     setSync(data+' profissional(is) passaram ao revezamento. Fila das viaturas preservada • escala confirmada.','ok');
   }catch(e){
-    alert('Não foi possível concluir a conversão coletiva: '+(e.message||e)+
-      '\n\nNenhuma alteração parcial foi aplicada por esta operação. Atualize a escala e confira antes de tentar novamente.');
-    await loadAll(selectedDate(),currentPlantao?.turno);
-    renderBulkRotationPreview();
+    if(recorded){
+      alert('O revezamento coletivo foi gravado no banco, mas houve uma falha ao atualizar a tela ou o Livro: '+
+        (e.message||e)+'\n\nAtualize o painel. Não confirme a operação novamente.');
+      try{await loadAll(selectedDate(),currentPlantao?.turno)}catch(refreshError){console.error(refreshError)}
+    }else{
+      alert('A conversão foi cancelada sem alterações porque: '+(e.message||e)+
+        '\n\nAtualize a escala e confira os profissionais antes de tentar novamente.');
+      try{await loadAll(selectedDate(),currentPlantao?.turno)}catch(refreshError){console.error(refreshError)}
+      renderBulkRotationPreview();
+    }
   }finally{
     btn.disabled=false;
     if(bulkRotationDraft)btn.textContent='CONFIRMAR '+bulkRotationDraft.ids.length+' ALTERAÇÃO(ÕES)';
