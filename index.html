@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261111-73-editar-numero-ocorrencia-empenhada">
+  <link rel="stylesheet" href="./styles.css?v=20261111-74-corrigir-guarnicao-empenhada">
 </head>
 <body>
 
@@ -713,6 +713,29 @@
   </div>
 </div>
 
+<div id="occCrewCorrectModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="occCrewCorrectTitle">
+  <div class="dialog occ-crew-correct-dialog">
+    <div class="dialog-head">
+      <div>
+        <div class="dialog-kicker">CORREÇÃO DA GUARNIÇÃO EMPENHADA</div>
+        <h2 id="occCrewCorrectTitle">Editar equipe da ocorrência</h2>
+      </div>
+      <button type="button" class="icon-close" data-close-modal="occCrewCorrectModal" aria-label="Fechar">×</button>
+    </div>
+    <p class="occ-crew-correct-intro">Troque os profissionais registrados nesta ocorrência. A escala fixa, a fila do revezamento, a viatura e os horários não serão modificados.</p>
+    <div class="occ-crew-correct-context" id="occCrewCorrectContext"></div>
+    <div class="occ-crew-correct-before"><b>EQUIPE REGISTRADA ATUALMENTE</b><span id="occCrewCorrectPrevious"></span></div>
+    <form id="occCrewCorrectForm">
+      <div class="occ-crew-correct-fields" id="occCrewCorrectFields"></div>
+      <p id="occCrewCorrectStatus" class="occ-crew-correct-status" role="status">Confira os profissionais antes de salvar.</p>
+      <div class="modal-actions">
+        <button type="button" class="btn" data-close-modal="occCrewCorrectModal">CANCELAR</button>
+        <button type="submit" class="btn primary" id="saveOccCrewCorrectBtn">SALVAR EQUIPE CORRIGIDA</button>
+      </div>
+    </form>
+  </div>
+</div>
+
 <div id="occNumberCorrectModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="occNumberCorrectTitle">
   <div class="dialog occ-number-correct-dialog">
     <div class="dialog-head">
@@ -823,6 +846,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261111-73-editar-numero-ocorrencia-empenhada"></script>
+<script type="module" src="./app.js?v=20261111-74-corrigir-guarnicao-empenhada"></script>
 </body>
 </html>
