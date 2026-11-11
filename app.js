@@ -1014,7 +1014,13 @@ function vehicleCardHtml(v){
   const st=statusInfo(v),o=activeOccurrence(v);
   let primary='';
   if(st.key==='base') primary='<button class="dispatch-btn" data-act="dispatch" data-v="'+v.id+'">ACIONAR VIATURA</button>';
-  if(st.key==='returning') primary='<button class="arrive-btn" data-act="arrive" data-o="'+(o?.id||'')+'" data-v="'+v.id+'">CHEGADA À BASE</button>';
+  if(st.key==='returning'){
+    primary='<div class="occurrence-main-actions">'+
+      '<button class="arrive-btn" data-act="arrive" data-o="'+(o?.id||'')+'" data-v="'+v.id+'">CHEGADA À BASE</button>'+
+      (isOperator()&&norm(o?.status)==='RETORNANDO'
+        ?'<button type="button" class="edit-team-btn" data-act="undo-return" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">CORRIGIR RETORNO</button>':'')+
+      '</div>';
+  }
   return '<article class="vehicle-card '+st.cls+'" data-team-card data-v="'+v.id+'">'+
     (st.key==='occurrence'
       ? '<div class="vehicle-giroflex" aria-hidden="true"><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span></div>'
@@ -2061,6 +2067,7 @@ function bindVehicleActions(root){
   root.querySelectorAll('[data-act="victim-destination"]').forEach(b=>b.onclick=()=>openVictimDestination(b.dataset.o));
   root.querySelectorAll('[data-act="qta"]').forEach(b=>b.onclick=()=>setOccurrenceQta(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="return"]').forEach(b=>b.onclick=()=>setReturning(b.dataset.o,b.dataset.v));
+  root.querySelectorAll('[data-act="undo-return"]').forEach(b=>b.onclick=()=>undoReturning(b));
   root.querySelectorAll('[data-act="arrive"]').forEach(b=>b.onclick=()=>setArrived(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="edit-team"]').forEach(b=>b.onclick=()=>openTeamModal(b.dataset.v));
   root.querySelectorAll('[data-status]').forEach(b=>b.onclick=()=>setVehicleStatus(b.dataset.v,b.dataset.status));
@@ -2689,6 +2696,29 @@ async function setReturning(oid,vid){
   if(vid){const r=await supabase.from('viaturas').update({status_atual:'RETORNANDO'}).eq('id',vid);if(r.error)return alert(r.error.message)}
   await loadAll(selectedDate());
 }
+async function undoReturning(button){
+  if(!isOperator()||button.disabled)return;
+  const {o:occurrenceId,v:vehicleId}=button.dataset;
+  const occurrence=occurrences.find(o=>o.id===occurrenceId&&o.viatura_id===vehicleId);
+  if(norm(occurrence?.status)!=='RETORNANDO'){
+    alert('A ocorrência mudou. Atualize o painel e confira a situação.');
+    return;
+  }
+  if(!confirm('Voltar a viatura para EM OCORRÊNCIA e limpar o horário de retorno lançado por engano?'))return;
+  button.disabled=true;
+  try{
+    const {error}=await supabase.rpc('corrigir_retorno_ocorrencia',{
+      p_ocorrencia_id:occurrenceId,p_viatura_id:vehicleId,
+      p_inicio_retorno:occurrence.inicio_retorno_em||null
+    });
+    if(error)throw error;
+    await loadAll(selectedDate());
+  }catch(error){
+    alert('Não foi possível corrigir o retorno: '+(error.message||error));
+  }finally{
+    button.disabled=false;
+  }
+}
 async function creditOccurrence(occ){
   if(!occ||occ.creditou_revezamento)return;
   const members=occurrenceMembers(occ.id);
@@ -2710,8 +2740,10 @@ async function setArrived(oid,vid){
   const now=new Date().toISOString();
   const o=occurrences.find(x=>x.id===oid);
   if(oid){
-    const r=await supabase.from('ocorrencias').update({status:'FINALIZADA',retorno_base_em:now,finalizado_em:now,finalizado_por:profile?.nome||null}).eq('id',oid);
+    const r=await supabase.from('ocorrencias').update({status:'FINALIZADA',retorno_base_em:now,finalizado_em:now,finalizado_por:profile?.nome||null})
+      .eq('id',oid).eq('status','RETORNANDO').select('id').maybeSingle();
     if(r.error)return alert(r.error.message);
+    if(!r.data)return alert('A ocorrência já mudou de situação. Atualize o painel.');
     await creditOccurrence(o);
     await clearManualOnReturn(oid,vid);
   }
