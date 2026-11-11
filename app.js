@@ -855,9 +855,43 @@ function crewRowsForCard(v){
   }
   return vehicleMembers(v);
 }
+function sharedRotationCrewHtml(v,mem,o){
+  // Ao deixar CONDUTOR e TÉCNICO/ENFERMEIRO em revezamento, os nomes
+  // sugeridos não são fixos da viatura. Exibe resumo compacto na BASE.
+  const type=vehicleType(v);
+  if(o||statusInfo(v).key!=='base'||!isAnapolisVehicle(v)||
+     !['USA','USB'].includes(type))return null;
+  const required=requiredDispatchRoles(v);
+  if(required.length!==2)return null;
+  const hasFixed=required.some(role=>mem.some(m=>
+    teamRoleKey(m)===role||(role==='tech'&&teamRoleKey(m)==='nurse')
+  ));
+  if(hasFixed)return null;
+  const pool=activeTeamRows().filter(m=>isRotationMember(m)&&!m.viatura_id);
+  const hasRotation=required.every(role=>pool.some(m=>{
+    if(role==='driver')return teamRoleKey(m)==='driver'&&driverRotationAllowsMember(m,type);
+    if(role==='tech')return norm(m.grupo_revezamento).includes('USB_TECNICO')&&
+      ['tech','nurse'].includes(teamRoleKey(m));
+    if(role==='nurse')return norm(m.grupo_revezamento).includes('USA_ENFERMEIRO')&&
+      teamRoleKey(m)==='nurse';
+    return false;
+  }));
+  if(!hasRotation)return null;
+  const comp=crewCompleteness(v,mem);
+  const roles=type==='USA'?'CONDUTOR + ENFERMEIRO':'CONDUTOR + TÉCNICO / ENFERMEIRO';
+  const doctors=mem.filter(m=>teamRoleKey(m)==='doctor');
+  return '<div class="crew-shared-rotation '+comp.state+'">'+
+    '<div><strong>EQUIPE EM REVEZAMENTO</strong><span>'+roles+' • definidos no acionamento</span></div>'+
+    '<em>'+esc(comp.label)+'</em></div>'+
+    (doctors.length?'<div class="crew-shared-doctor">MÉDICO FIXO: '+
+      doctors.map(m=>esc(displayName(m.profissionais)||m.nome_snapshot||'—')).join(' • ')+
+      '</div>':'');
+}
 function crewGridHtml(v){
   const o=activeOccurrence(v);
   const mem=crewRowsForCard(v);
+  const summary=sharedRotationCrewHtml(v,mem,o);
+  if(summary!==null)return summary;
   const exp=expectedRoles(v);
   const used=new Set(mem.map(m=>m.profissional_id));
   let slots=[];
