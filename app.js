@@ -2313,6 +2313,23 @@ function bindQuickInputs(){
   });
 }
 let quickDriverReference=null;
+let quickDriverOriginal=null;
+
+function linkedRotationDriver(reference){
+  return reference?activeTeamRows().find(m=>teamRoleKey(m)==='driver'&&isRotationMember(m)&&
+    m.titular_profissional_id===reference.profissional_id&&m.ala_escala===reference.ala&&
+    m.turno_escala===reference.turno):null;
+}
+
+function driverScaleMetadata(reference,type){
+  return {
+    titular_profissional_id:reference.profissional_id,
+    nome_titular_escala:reference.nome_referencia,
+    tipo_alteracao_escala:type,
+    ala_escala:reference.ala,
+    turno_escala:reference.turno
+  };
+}
 
 async function quickDriverSlot(v,plantao){
   if(!v||!isAnapolisVehicle(v)||!['usa','usb'].includes(quickModalMode(v)))return null;
@@ -2331,36 +2348,28 @@ async function openTeamModal(vId){
   await ensureProfessionals();
   const plantao=currentPlantao;
   const v=vehicleById(vId);
+  if(!plantao)return;
   let reference;
   try{reference=await quickDriverSlot(v,plantao)}
   catch(error){return alert('Não foi possível consultar o titular previsto: '+(error.message||error))}
   if(currentPlantao?.id!==plantao?.id||!canEditOpenShift())return;
   selectedTeamVehicle=vId;
   quickDriverReference=reference;
-  const decision=$('#qtDriverDecision');
-  const predicted=$('#qtDriverPredicted');
+  const permuta=$('#qtDriverPermuta');
+  const driverInput=$('#qtDriver');
+  const driverId=$('#qtDriverId');
+  quickDriverOriginal=currentQuickMember(vId,'driver')||linkedRotationDriver(reference);
+  const titular=professionals.find(p=>p.id===reference?.profissional_id);
   $('#qtDriverReference').classList.toggle('hidden',!reference);
-  predicted.textContent=reference?(professionalNameById(reference.profissional_id)||reference.nome_referencia):'';
-  decision.value='';
-  decision.onchange=()=>{
-    const titular=professionals.find(p=>p.id===reference?.profissional_id);
-    $('#qtDriver').value=decision.value==='TITULAR'&&titular?professionalLabel(titular,'driver'):'';
-    $('#qtDriverId').value=decision.value==='TITULAR'&&titular?titular.id:'';
-    $('#qtDriverResults').classList.remove('show');
-    if(decision.value==='PERMUTA')$('#qtDriver').focus();
-  };
+  $('#qtDriverPredicted').textContent=reference?(professionalNameById(reference.profissional_id)||reference.nome_referencia):'';
   $('#teamModalTitle').textContent='Equipe rápida — '+(v?.nome||v?.codigo||'Viatura');
   bindQuickInputs();
   configureQuickTeamFields(v);
   Object.entries(quickCfg()).forEach(([key,cfg])=>{
-    const cur=currentQuickMember(vId,key)||(key==='driver'&&reference
-      ?activeTeamRows().find(m=>teamRoleKey(m)==='driver'&&isRotationMember(m)&&
-        m.titular_profissional_id===reference.profissional_id&&m.ala_escala===reference.ala&&m.turno_escala===reference.turno)
-      :null);
-    if(key==='driver'&&reference){
-      $('#qtDriverMode').value=isRotationMember(cur)?'REVEZAMENTO':'FIXO';
-      decision.dataset.initialDriver=cur?.profissional_id||'';
-      decision.dataset.initialMode=$('#qtDriverMode').value;
+    const cur=key==='driver'?quickDriverOriginal:currentQuickMember(vId,key);
+    if(key==='driver'&&isRotationMember(cur)){
+      $('#qtDriverMode').value='REVEZAMENTO';
+      $('#qtDriverMode').onchange();
     }
     const pro=cur && (
       professionals.find(p=>p.id===cur.profissional_id) ||
@@ -2376,8 +2385,38 @@ async function openTeamModal(vId){
     $(cfg.current).textContent=cur?'Já escalado: '+displayName(pro)+' • mantido ao salvar':'Nenhum profissional nesta função.';
     $(cfg.remove).classList.toggle('show',!!cur);
   });
+  function setDriverPermuta(enabled){
+    permuta.setAttribute('aria-pressed',String(enabled));
+    permuta.textContent=enabled?'USAR TITULAR PREVISTO':'PERMUTA';
+    driverInput.readOnly=!!reference&&!enabled;
+    if(reference)driverInput.placeholder=enabled?'Digite o nome de quem vai substituir o titular':'Digite o nome do condutor';
+    $('#teamModal [data-quick-register="driver"]').disabled=driverInput.readOnly;
+  }
+  const existingPermuta=!!reference&&quickDriverOriginal?.titular_profissional_id===reference.profissional_id&&
+    quickDriverOriginal.profissional_id!==reference.profissional_id&&norm(quickDriverOriginal.tipo_alteracao_escala)==='PERMUTA';
+  const useTitular=()=>{
+    driverInput.value=titular?professionalLabel(titular,'driver'):reference.nome_referencia;
+    driverId.value=reference.profissional_id;
+  };
+  setDriverPermuta(existingPermuta);
+  if(reference&&!quickDriverOriginal){
+    useTitular();
+    $('#qtDriverCurrent').textContent='Titular previsto • será escalado ao salvar.';
+  }
+  permuta.onclick=()=>{
+    const enabled=permuta.getAttribute('aria-pressed')!=='true';
+    setDriverPermuta(enabled);
+    $('#qtDriverResults').classList.remove('show');
+    if(enabled){
+      driverInput.value='';
+      driverId.value='';
+      driverInput.focus();
+    }else{
+      useTitular();
+    }
+  };
   openModal('teamModal');
-  setTimeout(()=>$('#qtDriver').focus(),30);
+  if(!driverInput.readOnly)setTimeout(()=>driverInput.focus(),30);
 }
 async function deactivateTeamRow(m,now){
   const r=await supabase.from('equipe_plantao').update({status:'INATIVO',saiu_em:now}).eq('id',m.id);
@@ -2453,46 +2492,28 @@ async function saveQuickTeam(){
             ['doctor','#qtDoctorId','Médico','doctor']
           ];
   const reference=quickDriverReference;
-  const decision=reference?$('#qtDriverDecision').value:'';
+  const isPermuta=!!reference&&$('#qtDriverPermuta').getAttribute('aria-pressed')==='true';
   if(reference&&(reference.plantaoId!==currentPlantao.id||reference.vehicleId!==selectedTeamVehicle||
     reference.ala!==activeScaleReference().ala||reference.turno!==activeScaleReference().turno)){
     return alert('A escala mudou. Reabra a Equipe rápida.');
   }
   const selectedDriver=$('#qtDriverId').value;
-  const typedDriver=$('#qtDriver').value.trim();
-  const initialDriver=$('#qtDriverDecision').dataset;
-  const driverMode=$('#qtDriverMode').value;
-  if(reference&&selectedDriver!=='__REMOVE__'&&!decision&&
-    ((selectedDriver&&selectedDriver!==initialDriver.initialDriver)||(!selectedDriver&&typedDriver)||driverMode!==initialDriver.initialMode)){
-    return alert('Informe se vai escalar o titular previsto ou registrar uma permuta.');
-  }
-  if(decision==='TITULAR'&&selectedDriver!==reference.profissional_id){
-    return alert('Escolha o titular previsto ou selecione Permuta para indicar outro condutor.');
-  }
-  if(decision==='PERMUTA'&&(!selectedDriver||selectedDriver==='__REMOVE__'||selectedDriver===reference.profissional_id)){
+  if(isPermuta&&selectedDriver!=='__REMOVE__'&&(!selectedDriver||selectedDriver===reference.profissional_id)){
     return alert('Selecione o condutor que vai substituir o titular.');
   }
   $('#saveTeam').disabled=true;$('#saveTeam').textContent='SALVANDO...';
   try{
     for(const [key,idSel,funcao,allowedKey] of rows){
-      if(key==='driver'&&reference&&!decision&&selectedDriver!=='__REMOVE__')continue;
       const value=$(idSel).value;
-      const driverMetadata=key==='driver'&&reference&&decision?{
-        titular_profissional_id:reference.profissional_id,
-        nome_titular_escala:reference.nome_referencia,
-        tipo_alteracao_escala:decision==='PERMUTA'?'PERMUTA':($('#qtDriverMode').value==='REVEZAMENTO'?'REVEZAMENTO':'FIXO'),
-        ala_escala:reference.ala,turno_escala:reference.turno
-      }:null;
       const placement=$('#'+idSel.slice(1).replace(/Id$/,'Mode'));
       const wantsRotation=(mode==='usa'||mode==='usb')&&placement?.value==='REVEZAMENTO';
       if(!value){
         if(wantsRotation)throw new Error('Selecione um profissional para o revezamento de '+roleLabel(allowedKey)+'.');
         continue;
       }
-      const cur=currentQuickMember(selectedTeamVehicle,key)||(key==='driver'&&reference&&initialDriver.initialDriver
-        ?activeTeamRows().find(m=>m.profissional_id===initialDriver.initialDriver&&isRotationMember(m)&&
-          m.titular_profissional_id===reference.profissional_id)
-        :null);
+      const cur=key==='driver'?quickDriverOriginal:currentQuickMember(selectedTeamVehicle,key);
+      const driverMetadata=key==='driver'&&reference?driverScaleMetadata(reference,
+        isPermuta?'PERMUTA':value===reference.profissional_id?(wantsRotation?'REVEZAMENTO':'FIXO'):'TROCA_VIATURA'):null;
       if(value==='__REMOVE__'){
         if(cur)await deactivateTeamRow(cur,new Date().toISOString());
         continue;
@@ -2500,7 +2521,9 @@ async function saveQuickTeam(){
       // O atalho rápido antes salvava TODOS como fixos, mesmo quando o operador
       // pretendia colocá-los na fila. A escolha explícita corrige a divergência.
       // Não altera o registro de ninguém se o operador não confirmar SALVAR.
-      if(!driverMetadata&&!wantsRotation&&cur?.profissional_id===value)continue;
+      if(cur?.profissional_id===value&&wantsRotation===isRotationMember(cur)&&
+        (!driverMetadata||Object.entries(driverMetadata).every(([field,saved])=>cur[field]===saved)||
+          (!isPermuta&&value!==reference.profissional_id)))continue;
       const pro=professionals.find(p=>p.id===value);
       if(!pro||!allowedForField(pro,allowedKey))throw new Error('Profissional inválido para o campo '+(mode==='moto'?funcao:roleLabel(allowedKey))+'.');
       if(driverMetadata&&cur&&cur.profissional_id!==pro.id&&isRotationMember(cur)){
@@ -2533,8 +2556,10 @@ async function saveQuickTeam(){
     closeModal('teamModal');
     selectedTeamVehicle=null;
     quickDriverReference=null;
+    quickDriverOriginal=null;
     await loadAll(selectedDate());
     if(reference)await loadExpressScale();
+    if(currentPlantao&&$('#book')?.classList.contains('active'))renderBook();
   }catch(e){alert('Não foi possível salvar a equipe: '+(e.message||e))}
   finally{$('#saveTeam').disabled=false;$('#saveTeam').textContent='SALVAR EQUIPE'}
 }
@@ -4012,6 +4037,16 @@ async function confirmAssign(){
   try{
     if(editRow){
       const now=new Date().toISOString();
+      const sourceVehicle=vehicleById(editRow.viatura_id);
+      const selectedVehicle=mode==='FIXO'?vehicleById($('#assignVehicle').value):null;
+      const driverReference=role==='driver'?await quickDriverSlot(selectedVehicle||sourceVehicle,currentPlantao):null;
+      const sameSlot=driverReference?.profissional_id===editRow.titular_profissional_id &&
+        driverReference?.ala===editRow.ala_escala&&driverReference?.turno===editRow.turno_escala;
+      const keepsPermuta=norm(editRow.tipo_alteracao_escala)==='PERMUTA'&&
+        (sameSlot||(!sourceVehicle&&mode!=='FIXO'));
+      const driverMetadata=driverReference?driverScaleMetadata(driverReference,
+        keepsPermuta?'PERMUTA':editRow.profissional_id===driverReference.profissional_id?
+          (mode==='FIXO'?'FIXO':'REVEZAMENTO'):'TROCA_VIATURA'):null;
 
       if(mode==='FIXO'){
         const v=vehicleById($('#assignVehicle').value);if(!v)return alert('Escolha uma viatura.');
@@ -4033,7 +4068,11 @@ async function confirmAssign(){
           revezamento_tipo_viatura:null,
           origem_escala:'EDICAO_EQUIPE',
           status:'ATIVO',
-          saiu_em:null
+          saiu_em:null,
+          ...(role==='driver'?(driverMetadata||{
+            titular_profissional_id:null,nome_titular_escala:null,tipo_alteracao_escala:null,
+            ala_escala:null,turno_escala:null
+          }):{})
         }).eq('id',editRow.id);
         if(error)throw error;
         await syncEditedMemberOccurrence(editRow,v,funcao);
@@ -4056,7 +4095,8 @@ async function confirmAssign(){
           revezamento_tipo_viatura:type,
           origem_escala:'EDICAO_EQUIPE',
           status:'ATIVO',
-          saiu_em:null
+          saiu_em:null,
+          ...driverMetadata
         }).eq('id',editRow.id);
         if(error)throw error;
       }
@@ -4413,7 +4453,13 @@ function bookDriverName(code,index=0){
   if(!v||!isAnapolisVehicle(v))return '------';
   const m=vehicleMembers(v).find(x=>teamRoleKey(x)==='driver');
   if(m)return displayName(m.profissionais);
-  const q=priorityPeopleForRole('driver',vehicleType(v).includes('USA')?'USA':'USB',{rotationOnly:true});
+  const reference=bookDriverFixedRows.find(row=>vehicleByCode(row.codigo_viatura)?.id===v.id);
+  const linked=reference?.profissional_id?linkedRotationDriver(reference):null;
+  const type=vehicleType(v).includes('USA')?'USA':'USB';
+  if(linked&&driverRotationAllowsMember(linked,type)){
+    return (professionalNameById(linked.profissional_id)||linked.nome_snapshot||'------')+' (REVEZAMENTO)';
+  }
+  const q=priorityPeopleForRole('driver',type,{rotationOnly:true});
   return q.length?'REVEZAMENTO':'------';
 }
 function monthNamePt(dateIso){

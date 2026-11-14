@@ -607,12 +607,7 @@
         <label>CONDUTOR</label>
         <div id="qtDriverReference" class="quick-scale-placement hidden">
           <p>Titular previsto: <strong id="qtDriverPredicted"></strong></p>
-          <label for="qtDriverDecision">Quem vai assumir?</label>
-          <select id="qtDriverDecision">
-            <option value="">Manter como está</option>
-            <option value="TITULAR">Titular previsto</option>
-            <option value="PERMUTA">Permuta</option>
-          </select>
+          <button id="qtDriverPermuta" type="button" class="btn secondary" aria-pressed="false">PERMUTA</button>
         </div>
         <input id="qtDriver" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do condutor">
         <input id="qtDriverId" type="hidden">
@@ -856,6 +851,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261114-69-relatorio-duas-partes"></script>
+<script type="module" src="./app.js?v=20261114-70-equipe-titular"></script>
 </body>
 </html>
