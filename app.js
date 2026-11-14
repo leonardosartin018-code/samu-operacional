@@ -2311,17 +2311,56 @@ function bindQuickInputs(){
     };
   });
 }
+let quickDriverReference=null;
+
+async function quickDriverSlot(v,plantao){
+  if(!v||!isAnapolisVehicle(v)||!['usa','usb'].includes(quickModalMode(v)))return null;
+  const ctx=activeScaleReference();
+  const {data,error}=await supabase.from('escala_fixa_anapolis')
+    .select('id,codigo_viatura,profissional_id,nome_referencia')
+    .eq('ala',ctx.ala).eq('turno',ctx.turno).eq('ativo',true);
+  if(error)throw error;
+  const slot=(data||[]).find(row=>vehicleByCode(row.codigo_viatura)?.id===v.id);
+  return slot?.profissional_id?{...slot,plantaoId:plantao.id,vehicleId:v.id,ala:ctx.ala,turno:ctx.turno}:null;
+}
+
 async function openTeamModal(vId){
   if(!canEditOpenShift())return;
   if(!currentPlantao)await ensurePlantaoForBook();
   await ensureProfessionals();
-  selectedTeamVehicle=vId;
+  const plantao=currentPlantao;
   const v=vehicleById(vId);
+  let reference;
+  try{reference=await quickDriverSlot(v,plantao)}
+  catch(error){return alert('Não foi possível consultar o titular previsto: '+(error.message||error))}
+  if(currentPlantao?.id!==plantao?.id||!canEditOpenShift())return;
+  selectedTeamVehicle=vId;
+  quickDriverReference=reference;
+  const decision=$('#qtDriverDecision');
+  const predicted=$('#qtDriverPredicted');
+  $('#qtDriverReference').classList.toggle('hidden',!reference);
+  predicted.textContent=reference?(professionalNameById(reference.profissional_id)||reference.nome_referencia):'';
+  decision.value='';
+  decision.onchange=()=>{
+    const titular=professionals.find(p=>p.id===reference?.profissional_id);
+    $('#qtDriver').value=decision.value==='TITULAR'&&titular?professionalLabel(titular,'driver'):'';
+    $('#qtDriverId').value=decision.value==='TITULAR'&&titular?titular.id:'';
+    $('#qtDriverResults').classList.remove('show');
+    if(decision.value==='PERMUTA')$('#qtDriver').focus();
+  };
   $('#teamModalTitle').textContent='Equipe rápida — '+(v?.nome||v?.codigo||'Viatura');
   bindQuickInputs();
   configureQuickTeamFields(v);
   Object.entries(quickCfg()).forEach(([key,cfg])=>{
-    const cur=currentQuickMember(vId,key);
+    const cur=currentQuickMember(vId,key)||(key==='driver'&&reference
+      ?activeTeamRows().find(m=>teamRoleKey(m)==='driver'&&isRotationMember(m)&&
+        m.titular_profissional_id===reference.profissional_id&&m.ala_escala===reference.ala&&m.turno_escala===reference.turno)
+      :null);
+    if(key==='driver'&&reference){
+      $('#qtDriverMode').value=isRotationMember(cur)?'REVEZAMENTO':'FIXO';
+      decision.dataset.initialDriver=cur?.profissional_id||'';
+      decision.dataset.initialMode=$('#qtDriverMode').value;
+    }
     const pro=cur && (
       professionals.find(p=>p.id===cur.profissional_id) ||
       cur.profissionais ||
@@ -2348,14 +2387,21 @@ async function deactivateTeamRow(m,now){
   }
   markOperationalDirty();
 }
-async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPIDA',transferApproved=false){
+async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPIDA',transferApproved=false,driverMetadata=null){
   if(!currentPlantao)await ensurePlantaoForBook();
   const pro=professionals.find(p=>p.id===proId);
   const v=vehicleById(vId);
   if(!pro||!v)throw new Error('Profissional ou viatura não encontrado.');
   const now=new Date().toISOString();
   const currentSameRole=activeTeamRows().find(m=>m.viatura_id===vId && norm(m.funcao)===norm(funcao));
-  if(currentSameRole?.profissional_id===proId)return true;
+  if(currentSameRole?.profissional_id===proId){
+    if(driverMetadata){
+      const {error}=await supabase.from('equipe_plantao').update(driverMetadata).eq('id',currentSameRole.id);
+      if(error)throw error;
+      markOperationalDirty();
+    }
+    return true;
+  }
   const elsewhere=activeTeamRows().find(m=>m.profissional_id===proId && m.id!==currentSameRole?.id);
   if(elsewhere){
     const oldV=vehicleById(elsewhere.viatura_id);
@@ -2365,7 +2411,7 @@ async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPID
   if(currentSameRole)await deactivateTeamRow(currentSameRole,now);
   const ins=await supabase.from('equipe_plantao').insert({
     plantao_id:currentPlantao.id,profissional_id:proId,nome_snapshot:pro.nome_completo,funcao,tipo_escala:'FIXO EM VIATURA',
-    viatura_id:vId,viatura_snapshot:v.nome,status:'ATIVO',entrou_em:now,origem_escala:source
+    viatura_id:vId,viatura_snapshot:v.nome,status:'ATIVO',entrou_em:now,origem_escala:source,...driverMetadata
   }).select('id').single();
   if(ins.error)throw ins.error;
   const o=activeOccurrence(v);
@@ -2380,6 +2426,7 @@ async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPID
 }
 async function saveQuickTeam(){
   if(!canEditOpenShift()||!currentPlantao||!selectedTeamVehicle)return;
+  if($('#saveTeam').disabled)return;
   const v=vehicleById(selectedTeamVehicle);
   const mode=quickModalMode(v);
   const rows=mode==='moto'
@@ -2404,17 +2451,47 @@ async function saveQuickTeam(){
             ['nurse','#qtNurseId','Enfermeiro','nurse'],
             ['doctor','#qtDoctorId','Médico','doctor']
           ];
+  const reference=quickDriverReference;
+  const decision=reference?$('#qtDriverDecision').value:'';
+  if(reference&&(reference.plantaoId!==currentPlantao.id||reference.vehicleId!==selectedTeamVehicle||
+    reference.ala!==activeScaleReference().ala||reference.turno!==activeScaleReference().turno)){
+    return alert('A escala mudou. Reabra a Equipe rápida.');
+  }
+  const selectedDriver=$('#qtDriverId').value;
+  const typedDriver=$('#qtDriver').value.trim();
+  const initialDriver=$('#qtDriverDecision').dataset;
+  const driverMode=$('#qtDriverMode').value;
+  if(reference&&selectedDriver!=='__REMOVE__'&&!decision&&
+    ((selectedDriver&&selectedDriver!==initialDriver.initialDriver)||(!selectedDriver&&typedDriver)||driverMode!==initialDriver.initialMode)){
+    return alert('Informe se vai escalar o titular previsto ou registrar uma permuta.');
+  }
+  if(decision==='TITULAR'&&selectedDriver!==reference.profissional_id){
+    return alert('Escolha o titular previsto ou selecione Permuta para indicar outro condutor.');
+  }
+  if(decision==='PERMUTA'&&(!selectedDriver||selectedDriver==='__REMOVE__'||selectedDriver===reference.profissional_id)){
+    return alert('Selecione o condutor que vai substituir o titular.');
+  }
   $('#saveTeam').disabled=true;$('#saveTeam').textContent='SALVANDO...';
   try{
     for(const [key,idSel,funcao,allowedKey] of rows){
+      if(key==='driver'&&reference&&!decision&&selectedDriver!=='__REMOVE__')continue;
       const value=$(idSel).value;
+      const driverMetadata=key==='driver'&&reference&&decision?{
+        titular_profissional_id:reference.profissional_id,
+        nome_titular_escala:reference.nome_referencia,
+        tipo_alteracao_escala:decision==='PERMUTA'?'PERMUTA':($('#qtDriverMode').value==='REVEZAMENTO'?'REVEZAMENTO':'FIXO'),
+        ala_escala:reference.ala,turno_escala:reference.turno
+      }:null;
       const placement=$('#'+idSel.slice(1).replace(/Id$/,'Mode'));
       const wantsRotation=(mode==='usa'||mode==='usb')&&placement?.value==='REVEZAMENTO';
       if(!value){
         if(wantsRotation)throw new Error('Selecione um profissional para o revezamento de '+roleLabel(allowedKey)+'.');
         continue;
       }
-      const cur=currentQuickMember(selectedTeamVehicle,key);
+      const cur=currentQuickMember(selectedTeamVehicle,key)||(key==='driver'&&reference&&initialDriver.initialDriver
+        ?activeTeamRows().find(m=>m.profissional_id===initialDriver.initialDriver&&isRotationMember(m)&&
+          m.titular_profissional_id===reference.profissional_id)
+        :null);
       if(value==='__REMOVE__'){
         if(cur)await deactivateTeamRow(cur,new Date().toISOString());
         continue;
@@ -2422,9 +2499,12 @@ async function saveQuickTeam(){
       // O atalho rápido antes salvava TODOS como fixos, mesmo quando o operador
       // pretendia colocá-los na fila. A escolha explícita corrige a divergência.
       // Não altera o registro de ninguém se o operador não confirmar SALVAR.
-      if(!wantsRotation&&cur?.profissional_id===value)continue;
+      if(!driverMetadata&&!wantsRotation&&cur?.profissional_id===value)continue;
       const pro=professionals.find(p=>p.id===value);
       if(!pro||!allowedForField(pro,allowedKey))throw new Error('Profissional inválido para o campo '+(mode==='moto'?funcao:roleLabel(allowedKey))+'.');
+      if(driverMetadata&&cur&&cur.profissional_id!==pro.id&&isRotationMember(cur)){
+        if(memberIsBusy(cur))throw new Error('Aguarde o fim da ocorrência para trocar o condutor.');
+      }
       if(wantsRotation){
         const type=mode.toUpperCase();
         const group=type+'_'+(key==='driver'?'CONDUTOR':type==='USA'?'ENFERMEIRO':'TECNICO');
@@ -2436,14 +2516,24 @@ async function saveQuickTeam(){
             '.\n\nAo continuar, ele deixará a posição fixa e entrará na fila de revezamento '+type+
             '. Deseja confirmar esta mudança?'))return;
         }
-        await putProfessionalInRotation(pro,group,rotationRole);
+        if(driverMetadata&&cur&&cur.profissional_id!==pro.id){
+          if(memberIsBusy(cur)||activeOccurrence(v))throw new Error('Aguarde o fim da ocorrência para trocar o condutor desta viatura.');
+          await deactivateTeamRow(cur,new Date().toISOString());
+        }
+        await putProfessionalInRotation(pro,group,rotationRole,driverMetadata);
       }else{
-        await assignProfessionalToVehicle(value,selectedTeamVehicle,funcao);
+        const saved=await assignProfessionalToVehicle(value,selectedTeamVehicle,funcao,'EDICAO_RAPIDA',false,driverMetadata);
+        if(saved===false)return;
+        if(driverMetadata&&cur&&cur.profissional_id!==pro.id&&isRotationMember(cur)){
+          await deactivateTeamRow(cur,new Date().toISOString());
+        }
       }
     }
     closeModal('teamModal');
     selectedTeamVehicle=null;
+    quickDriverReference=null;
     await loadAll(selectedDate());
+    if(reference)await loadExpressScale();
   }catch(e){alert('Não foi possível salvar a equipe: '+(e.message||e))}
   finally{$('#saveTeam').disabled=false;$('#saveTeam').textContent='SALVAR EQUIPE'}
 }
@@ -3602,13 +3692,13 @@ function validateExpressSelections(entries){
   if(warnings.length&&!confirm('ATENÇÃO — ALTERAÇÕES NA EQUIPE\n\n'+[...new Set(warnings)].join('\n')+'\n\nDeseja continuar com essas alterações?'))return false;
   return true;
 }
-async function putProfessionalInRotation(pro,group,funcao){
+async function putProfessionalInRotation(pro,group,funcao,driverMetadata=null){
   const now=new Date().toISOString();
   const existing=activeTeamRows().find(m=>m.profissional_id===pro.id);
   if(existing){
     if(existing.viatura_id)await deactivateTeamRow(existing,now);
     else{
-      const {error}=await supabase.from('equipe_plantao').update({funcao,tipo_escala:'REVEZAMENTO',grupo_revezamento:group,viatura_id:null,viatura_snapshot:null,revezamento_tipo_viatura:group.startsWith('USA')?'USA':'USB',origem_escala:'ESCALA_EXPRESSA'}).eq('id',existing.id);
+      const {error}=await supabase.from('equipe_plantao').update({funcao,tipo_escala:'REVEZAMENTO',grupo_revezamento:group,viatura_id:null,viatura_snapshot:null,revezamento_tipo_viatura:group.startsWith('USA')?'USA':'USB',origem_escala:'ESCALA_EXPRESSA',...driverMetadata}).eq('id',existing.id);
       if(error)throw error;
       markOperationalDirty();
       return;
@@ -3616,7 +3706,7 @@ async function putProfessionalInRotation(pro,group,funcao){
   }
   const {error}=await supabase.from('equipe_plantao').insert({
     plantao_id:currentPlantao.id,profissional_id:pro.id,nome_snapshot:pro.nome_completo,funcao,tipo_escala:'REVEZAMENTO',status:'ATIVO',entrou_em:now,
-    grupo_revezamento:group,revezamento_tipo_viatura:group.startsWith('USA')?'USA':'USB',origem_escala:'ESCALA_EXPRESSA'
+    grupo_revezamento:group,revezamento_tipo_viatura:group.startsWith('USA')?'USA':'USB',origem_escala:'ESCALA_EXPRESSA',...driverMetadata
   });
   if(error)throw error;
   markOperationalDirty();

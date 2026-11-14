@@ -604,6 +604,15 @@
     <div class="quick-team-grid">
       <div class="quick-team-field" data-role="driver">
         <label>CONDUTOR</label>
+        <div id="qtDriverReference" class="quick-scale-placement hidden">
+          <p>Titular previsto: <strong id="qtDriverPredicted"></strong></p>
+          <label for="qtDriverDecision">Quem vai assumir?</label>
+          <select id="qtDriverDecision">
+            <option value="">Manter como está</option>
+            <option value="TITULAR">Titular previsto</option>
+            <option value="PERMUTA">Permuta</option>
+          </select>
+        </div>
         <input id="qtDriver" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do condutor">
         <input id="qtDriverId" type="hidden">
         <div id="qtDriverResults" class="autocomplete-results floating"></div>
@@ -846,6 +855,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261111-75-corrigir-guarnicao-validada"></script>
+<script type="module" src="./app.js?v=20261114-67-equipe-rapida-livro"></script>
 </body>
 </html>
