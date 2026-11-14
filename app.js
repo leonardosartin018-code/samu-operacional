@@ -4922,7 +4922,7 @@ function closingReportHtml(shift,records){
   const counted=events.filter(o=>norm(o.status)==='FINALIZADA');
   const numbers=list=>list.map(o=>o.numero||'Sem número').join(', ')||'—';
   const name=m=>m.nome_snapshot||m.profissionais?.nome_completo||'—';
-  const base=m=>m.viaturas?.bases?.nome||'—';
+  const base=m=>m.viaturas?.bases?.nome||(!m.viatura_id&&m.grupo_revezamento?'Anápolis':'—');
   const names=new Map();
   for(const m of [...members,...internal,...links]){
     if(m.profissional_id&&!names.has(m.profissional_id))names.set(m.profissional_id,name(m));
@@ -4945,6 +4945,15 @@ function closingReportHtml(shift,records){
     }
   }
   const confirmedInternal=internal.filter(m=>norm(m.status)==='ATIVO'&&['FIXO','ESCALADO','PERMUTA'].includes(norm(m.tipo_alteracao)));
+  const anapolis=members.filter(m=>norm(base(m))==='ANAPOLIS'&&norm(m.status)==='ATIVO');
+  const serving=new Set([...members.filter(m=>norm(m.status)==='ATIVO'),...confirmedInternal].map(m=>m.profissional_id));
+  const permutas=new Map();
+  for(const m of [...anapolis,...confirmedInternal]){
+    const titular=m.titular_profissional_id;
+    const isPermuta=norm(m.tipo_alteracao_escala||m.tipo_alteracao)==='PERMUTA';
+    if(!isPermuta||!titular||titular===m.profissional_id||serving.has(titular)||permutas.has(titular))continue;
+    permutas.set(titular,[m.funcao,name(m),m.nome_titular_escala||m.titular_nome_snapshot||names.get(titular)||'—']);
+  }
   const sorted=[...events].sort((a,b)=>String(a.acionada_em||a.criado_em||'').localeCompare(String(b.acionada_em||b.criado_em||'')));
   const occurrenceRows=sorted.map(o=>{
     const crew=eventLinks.get(o.id)||[];
@@ -4964,13 +4973,19 @@ function closingReportHtml(shift,records){
   return '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'+
     '<title>Relatório do plantão</title><style>body{font:15px system-ui,sans-serif;margin:24px;color:#183447}h1,h2{color:#075985}table{border-collapse:collapse;width:100%;margin-bottom:20px;font-size:13px}th,td{padding:7px;border:1px solid #cbd5e1;text-align:left;vertical-align:top}th{background:#eaf3f8}td,p{white-space:pre-wrap}section{overflow-x:auto}tr{break-inside:avoid}@page{size:A4 landscape;margin:10mm}@media print{body{margin:0;font-size:10px}table{font-size:8px}th,td{padding:3px}section{overflow:visible}h2{break-after:avoid}}</style>'+
     '<h1>Relatório de fechamento do SAMU</h1><p>'+esc(shiftTitle(shift))+' · '+esc(shift.status)+' · Parte Diária '+esc(book?.parte_diaria||'—')+
-    '<br>Abertura: '+esc(at(shift.iniciado_em))+' · Encerramento: '+esc(at(shift.encerrado_em))+'</p><p>'+esc(summary)+'</p>'+
+    '<br>Abertura: '+esc(at(shift.iniciado_em))+' · Encerramento: '+esc(at(shift.encerrado_em))+'</p>'+
+    '<h2>1. Parte Diária — Anápolis</h2><p>Responsável pelo Livro: '+esc(BOOK_SERVICE_CHIEF)+'</p>'+
+    '<h3>Equipe operacional</h3>'+table(['Viatura / fila','Profissional','Função','Escala'],
+      anapolis.map(m=>[m.viatura_snapshot||m.viaturas?.nome||m.grupo_revezamento||'—',name(m),m.funcao,m.tipo_escala]))+
+    '<h3>Serviço interno</h3>'+table(['Posição','Função','Profissional'],confirmedInternal.map(m=>[m.codigo_posicao,m.funcao,name(m)]))+
+    '<h3>Permutas</h3>'+(permutas.size?table(['Função','Substituto','Titular'],[...permutas.values()]):'<p>Sem permutas registradas.</p>')+
+    '<h3>Observações do Livro</h3><p>'+esc(book?.observacoes||'—')+'</p>'+
+    '<h2>2. Dados do plantão — Anápolis e bases descentralizadas</h2><p>'+esc(summary)+'</p>'+
     '<h2>Ocorrências por viatura</h2>'+table(['Base','Viatura','Finalizadas','Números'],[...perVehicle.values()].map(x=>[x.base,x.vehicle,x.items.length,numbers(x.items)]))+
     '<h2>Ocorrências por profissional</h2>'+table(['Profissional','Finalizadas com participação','Números'],[...names].map(([id,n])=>[n,(perPerson.get(id)||[]).length,numbers(perPerson.get(id)||[])]))+
     '<h2>Equipes operacionais</h2>'+table(['Base','Viatura / fila','Profissional','Função','Escala','Situação','Entrada','Saída'],members.map(m=>[base(m),m.viatura_snapshot||m.viaturas?.nome||m.grupo_revezamento||'—',name(m),m.funcao,m.tipo_escala,m.status,at(m.entrou_em),at(m.saiu_em)]))+
-    '<h2>Serviço interno</h2>'+table(['Posição','Função','Profissional'],confirmedInternal.map(m=>[m.codigo_posicao,m.funcao,name(m)]))+
     '<h2>Detalhamento dos atendimentos</h2><section>'+table(['Nº','Viatura / tipo','Base','Natureza','Situação','Equipe','Acionamento','Saída','QTH','Até QTH','Início retorno','Chegada à base','Finalização','Tempo total','Local','Destino da vítima','Observações'],occurrenceRows)+'</section>'+
-    '<h2>Observações do Livro</h2><p>'+esc(book?.observacoes||'—')+'</p></html>';
+    '</html>';
 }
 async function exportClosingReport(shift=currentPlantao){
   if(!isOperator()||!shift?.id)return;
