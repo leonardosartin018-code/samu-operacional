@@ -811,6 +811,7 @@ function renderScaleConfirmationStates(){
 }
 
 function renderSummary(){
+  $('#closingReportBtn').disabled=!isOperator()||!currentPlantao;
   const an=vehicles.filter(isAnapolisVehicle),rg=vehicles.filter(v=>!isAnapolisVehicle(v));
   const calc=list=>{
     const x={base:0,occurrence:0,returning:0,other:0,total:list.length};
@@ -4409,7 +4410,7 @@ function bookDriverName(code,index=0){
     return mem[index]?displayName(mem[index].profissionais):'------';
   }
   const v=vehicleByCode(code);
-  if(!v)return '------';
+  if(!v||!isAnapolisVehicle(v))return '------';
   const m=vehicleMembers(v).find(x=>teamRoleKey(x)==='driver');
   if(m)return displayName(m.profissionais);
   const q=priorityPeopleForRole('driver',vehicleType(v).includes('USA')?'USA':'USB',{rotationOnly:true});
@@ -4675,6 +4676,7 @@ function collectPermutas(){
   const registrados=new Set();
   activeTeamRows().forEach(m=>{
     const titularId=m.titular_profissional_id;
+    if(m.viatura_id&&!isAnapolisVehicle(vehicleById(m.viatura_id)))return;
     if(teamRoleKey(m)!=='driver'||norm(m.tipo_alteracao_escala)!=='PERMUTA'||
       !titularId||titularId===m.profissional_id||isServingInShift(titularId)||registrados.has(titularId))return;
     const titular=professionalNameById(titularId)||m.nome_titular_escala;
@@ -4842,10 +4844,15 @@ async function executeShiftTransition(mode){
     if(open){
       const {data,error}=await supabase.from('plantoes')
         .update({status:'ENCERRADO',encerrado_em:new Date().toISOString(),operador_encerramento:profile?.nome||session?.user?.email||'OPERADOR'})
-        .eq('id',old.id).eq('status','ABERTO').select('id').maybeSingle();
+        .eq('id',old.id).eq('status','ABERTO').select('id,encerrado_em').maybeSingle();
       if(error)throw error;
       if(!data)throw new Error('Este plantão já foi modificado por outro operador. Atualize a tela.');
       closed=true;
+      try{
+        await exportClosingReport({...old,status:'ENCERRADO',encerrado_em:data.encerrado_em});
+      }catch(reportError){
+        alert('Plantão encerrado. Não foi possível baixar o relatório: '+(reportError.message||reportError)+'. Você pode baixá-lo pelo botão Relatório do plantão.');
+      }
     }
     if(mode==='end'){
       autoFollowCurrentShift=false;
@@ -4892,6 +4899,103 @@ async function executeShiftTransition(mode){
 async function endShift(){
   openShiftTransition();
 }
+async function reportRows(makeQuery){
+  const rows=[];
+  for(let offset=0;;offset+=500){
+    const {data,error}=await makeQuery().order('id').range(offset,offset+499);
+    if(error)throw error;
+    rows.push(...data);
+    if(data.length<500)return rows;
+  }
+}
+function closingReportHtml(shift,records){
+  const {events,links,members,internal,book}=records;
+  const time=new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'short'});
+  const at=value=>value&&Number.isFinite(Date.parse(value))?time.format(new Date(value)):'—';
+  const table=(headers,rows)=>'<table><thead><tr>'+headers.map(v=>'<th>'+esc(v)+'</th>').join('')+
+    '</tr></thead><tbody>'+rows.map(row=>'<tr>'+row.map(v=>'<td>'+esc(v??'—')+'</td>').join('')+'</tr>').join('')+'</tbody></table>';
+  const eventLinks=new Map();
+  for(const link of links){
+    if(!eventLinks.has(link.ocorrencia_id))eventLinks.set(link.ocorrencia_id,[]);
+    eventLinks.get(link.ocorrencia_id).push(link);
+  }
+  const counted=events.filter(o=>norm(o.status)==='FINALIZADA');
+  const numbers=list=>list.map(o=>o.numero||'Sem número').join(', ')||'—';
+  const name=m=>m.nome_snapshot||m.profissionais?.nome_completo||'—';
+  const base=m=>m.viaturas?.bases?.nome||'—';
+  const names=new Map();
+  for(const m of [...members,...internal,...links]){
+    if(m.profissional_id&&!names.has(m.profissional_id))names.set(m.profissional_id,name(m));
+  }
+  const perPerson=new Map();
+  const perVehicle=new Map();
+  for(const m of members){
+    if(m.viatura_id&&!perVehicle.has(m.viatura_id)){
+      perVehicle.set(m.viatura_id,{vehicle:m.viatura_snapshot||m.viaturas?.nome||'—',base:base(m),items:[]});
+    }
+  }
+  for(const o of counted){
+    if(o.viatura_id){
+      if(!perVehicle.has(o.viatura_id))perVehicle.set(o.viatura_id,{vehicle:o.viatura_snapshot||o.viaturas?.nome||'—',base:o.base_snapshot||base(o),items:[]});
+      perVehicle.get(o.viatura_id).items.push(o);
+    }
+    for(const id of new Set((eventLinks.get(o.id)||[]).map(m=>m.profissional_id).filter(Boolean))){
+      if(!perPerson.has(id))perPerson.set(id,[]);
+      perPerson.get(id).push(o);
+    }
+  }
+  const confirmedInternal=internal.filter(m=>norm(m.status)==='ATIVO'&&['FIXO','ESCALADO','PERMUTA'].includes(norm(m.tipo_alteracao)));
+  const sorted=[...events].sort((a,b)=>String(a.acionada_em||a.criado_em||'').localeCompare(String(b.acionada_em||b.criado_em||'')));
+  const occurrenceRows=sorted.map(o=>{
+    const crew=eventLinks.get(o.id)||[];
+    const individual=!o.viatura_id&&crew.length>0;
+    return [
+      o.numero||'Sem número',o.viatura_snapshot||o.viaturas?.nome||(individual?'Individual':'Sem viatura'),o.base_snapshot||base(o),
+      o.natureza||'—',o.status||'—',crew.map(m=>name(m)+(m.funcao?' ('+m.funcao+')':'')).join(' • ')||'—',
+      at(o.acionada_em),at(o.saida_em),o.qth_nao_informado?'Não informado':at(o.chegada_qth_em),
+      o.qth_nao_informado?'—':fmtMinutes(minutesBetween(o.saida_em||o.acionada_em,o.chegada_qth_em)),
+      at(o.inicio_retorno_em),at(o.retorno_base_em),at(o.finalizado_em),fmtMinutes(minutesBetween(o.saida_em||o.acionada_em,o.retorno_base_em||o.finalizado_em)),
+      [o.endereco,o.bairro].filter(Boolean).join(' • ')||'—',o.destino||o.destino_ou_local||'Não informado',o.observacao||'—'
+    ];
+  });
+  const summary=counted.length+' finalizadas · '+counted.filter(o=>!o.viatura_id&&(eventLinks.get(o.id)||[]).length).length+' individuais · '+
+    events.filter(o=>norm(o.status)==='QTA').length+' QTA · '+events.filter(o=>norm(o.status)==='CANCELADA').length+' canceladas · '+
+    events.filter(o=>!['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status))).length+' em andamento';
+  return '<!doctype html><html lang="pt-BR"><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">'+
+    '<title>Relatório do plantão</title><style>body{font:15px system-ui,sans-serif;margin:24px;color:#183447}h1,h2{color:#075985}table{border-collapse:collapse;width:100%;margin-bottom:20px;font-size:13px}th,td{padding:7px;border:1px solid #cbd5e1;text-align:left;vertical-align:top}th{background:#eaf3f8}td,p{white-space:pre-wrap}section{overflow-x:auto}tr{break-inside:avoid}@page{size:A4 landscape;margin:10mm}@media print{body{margin:0;font-size:10px}table{font-size:8px}th,td{padding:3px}section{overflow:visible}h2{break-after:avoid}}</style>'+
+    '<h1>Relatório de fechamento do SAMU</h1><p>'+esc(shiftTitle(shift))+' · '+esc(shift.status)+' · Parte Diária '+esc(book?.parte_diaria||'—')+
+    '<br>Abertura: '+esc(at(shift.iniciado_em))+' · Encerramento: '+esc(at(shift.encerrado_em))+'</p><p>'+esc(summary)+'</p>'+
+    '<h2>Ocorrências por viatura</h2>'+table(['Base','Viatura','Finalizadas','Números'],[...perVehicle.values()].map(x=>[x.base,x.vehicle,x.items.length,numbers(x.items)]))+
+    '<h2>Ocorrências por profissional</h2>'+table(['Profissional','Finalizadas com participação','Números'],[...names].map(([id,n])=>[n,(perPerson.get(id)||[]).length,numbers(perPerson.get(id)||[])]))+
+    '<h2>Equipes operacionais</h2>'+table(['Base','Viatura / fila','Profissional','Função','Escala','Situação','Entrada','Saída'],members.map(m=>[base(m),m.viatura_snapshot||m.viaturas?.nome||m.grupo_revezamento||'—',name(m),m.funcao,m.tipo_escala,m.status,at(m.entrou_em),at(m.saiu_em)]))+
+    '<h2>Serviço interno</h2>'+table(['Posição','Função','Profissional'],confirmedInternal.map(m=>[m.codigo_posicao,m.funcao,name(m)]))+
+    '<h2>Detalhamento dos atendimentos</h2><section>'+table(['Nº','Viatura / tipo','Base','Natureza','Situação','Equipe','Acionamento','Saída','QTH','Até QTH','Início retorno','Chegada à base','Finalização','Tempo total','Local','Destino da vítima','Observações'],occurrenceRows)+'</section>'+
+    '<h2>Observações do Livro</h2><p>'+esc(book?.observacoes||'—')+'</p></html>';
+}
+async function exportClosingReport(shift=currentPlantao){
+  if(!isOperator()||!shift?.id)return;
+  const id=shift.id;
+  const [events,members,internal,bookResult]=await Promise.all([
+    reportRows(()=>supabase.from('ocorrencias').select('*,viaturas(nome,bases(nome))').eq('plantao_id',id)),
+    reportRows(()=>supabase.from('equipe_plantao').select('*,viaturas(nome,bases(nome))').eq('plantao_id',id)),
+    reportRows(()=>supabase.from('escala_interna_plantao').select('*').eq('plantao_id',id)),
+    supabase.from('livro_plantao').select('parte_diaria,observacoes').eq('plantao_id',id).maybeSingle()
+  ]);
+  if(bookResult.error)throw bookResult.error;
+  const links=[];
+  for(let i=0;i<events.length;i+=100){
+    const ids=events.slice(i,i+100).map(o=>o.id);
+    links.push(...await reportRows(()=>supabase.from('equipe_ocorrencia').select('*').in('ocorrencia_id',ids)));
+  }
+  const blob=new Blob([closingReportHtml(shift,{events,links,members,internal,book:bookResult.data})],{type:'text/html;charset=utf-8'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;
+  a.download='SAMU-relatorio-'+shift.data_plantao+'-'+shift.turno+'.html';
+  a.click();
+  setTimeout(()=>URL.revokeObjectURL(url),30000);
+}
+
 function exportCSV(){
   const rows=[['Ocorrencia','Viatura','Natureza','Bairro','Destino da vitima','Endereco','Equipe','Status','Saida','QTH','Inicio retorno','Chegada base','Observacao'],
     ...occurrences.map(o=>{
@@ -5092,7 +5196,8 @@ $('#shiftDate').onchange=async()=>{
     await loadExpressScale();
   }
 };
-$('#exportBtn').onclick=exportCSV;$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
+$('#exportBtn').onclick=exportCSV;
+$('#closingReportBtn').onclick=()=>exportClosingReport().catch(error=>alert('Não foi possível gerar o relatório: '+(error.message||error)));$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
 $('#shiftTransitionAcknowledge').onchange=updateShiftTransitionButtons;
 $('#shiftEndOnlyBtn').onclick=()=>executeShiftTransition('end');
 $('#shiftEndStartBtn').onclick=()=>executeShiftTransition('end_start');
