@@ -2444,7 +2444,11 @@ async function openTeamModal(vId){
     $(cfg.hidden).value=cur?.profissional_id||'';
     $(cfg.results).innerHTML='';
     $(cfg.results).classList.remove('show');
-    $(cfg.current).textContent=cur?'Já escalado: '+displayName(pro)+' • mantido ao salvar':'Nenhum profissional nesta função.';
+    $(cfg.current).innerHTML=cur
+      ?'<span class="quick-current-label">JÁ ESCALADO</span> <strong class="quick-current-name">'+
+        esc(displayName(pro))+'</strong> <small class="quick-current-note">• mantido ao salvar</small>'
+      :'Nenhum profissional nesta função.';
+    $(cfg.current).closest('.quick-current')?.classList.toggle('has-person',!!cur);
     $(cfg.remove).classList.toggle('show',!!cur);
   });
   function setDriverPermuta(enabled){
