@@ -1785,26 +1785,33 @@ function compactRotationQueue(role,type,label){
 function nextVehicleRotationCard(type,hasRotation){
   const list=type==='USA'?availableUsaTeams():availableUsbTeams();
   const first=list[0];
-  let html='<div class="rotation-next-vehicle">';
+  // A identificação "da vez" é exclusiva do primeiro item da fila.
+  // O pulso visual da USB não controla nem altera prioridades ou empenhos.
+  let html='<div class="rotation-next-vehicle'+(type==='USB'&&first?' rotation-usb-next-active':'')+'">';
   if(!first){
     return html+'<span class="rotation-vehicle-label">PRÓXIMA '+type+'</span>'+
       '<p class="rotation-vehicle-empty">Nenhuma '+type+' apta para empenho na base neste momento.</p></div>';
   }
+
   const prefix=first.v.nome||first.v.codigo;
   const displayPrefix=type==='USB'?usbFixedVehicleLabel(first):prefix;
   const initial=list.every(x=>x.occ===0&&!latestReturnForVehicle(x.v));
   html+='<div class="manual-vehicle-header"><span class="rotation-vehicle-label">PRÓXIMA '+type+' DA VEZ</span>'+
     (isOperator()&&list.length>1?'<button type="button" class="manual-order-btn" data-manual-order="'+type+'_VIATURA">↕ PERSONALIZAR ORDEM</button>':'')+
-    '</div><strong class="rotation-vehicle-prefix">'+esc(displayPrefix)+'</strong>'+
-    (type==='USB'&&!first.complete?
-      '<small class="rotation-usb-partial-note">EQUIPE FIXA PARCIAL • COMPLETAR COM REVEZAMENTO NO ACIONAMENTO</small>':'')+
-    (manualRankVehicle(first.v)!==null?'<span class="manual-order-active">ORDEM MANUAL TEMPORÁRIA</span>':
-      (initial?'<span class="rotation-default-order">SEQUÊNCIA INICIAL POR PREFIXO</span>':''));
-  html+=rotationWaitMetrics(first.base,first.occ);
-  if(hasRotation){
-    const roles=type==='USA'
-      ? [['Condutor',first.driver],['Enfermeiro',first.nurse]]
-      : [['Condutor',first.driver],['Técnico / Enfermeiro',first.tech]];
+    '</div><strong class="rotation-vehicle-prefix">'+esc(displayPrefix)+'</strong>';
+
+  if(type==='USB'){
+    // Os nomes dos fixos já estão no título (USB 01 — ROSANGELA).
+    // Exibir somente a função e o posto a completar; nunca repetir o nome.
+    const role=first.tech&&first.driver?'EQUIPE FIXA COMPLETA':
+      first.tech?'TÉCNICO / ENFERMEIRO FIXO':'CONDUTOR FIXO';
+    const note=first.tech&&first.driver?'Guarnição completa':
+      first.tech?'Condutor escolhido no acionamento':'Técnico/enfermeiro escolhido no acionamento';
+    html+='<div class="rotation-usb-crew-summary"><b>'+esc(role)+'</b>'+
+      '<span>'+esc(note)+'</span></div>';
+  }else if(hasRotation){
+    // Mantém sem alterações o detalhamento da USA.
+    const roles=[['Condutor',first.driver],['Enfermeiro',first.nurse]];
     const fixed=roles.filter(([,m])=>
       m?.viatura_id===first.v.id&&!isRotationMember(m)
     );
@@ -1816,11 +1823,18 @@ function nextVehicleRotationCard(type,hasRotation){
       ).join('')+'</div>';
     }
   }
+
+  html+=(manualRankVehicle(first.v)!==null?
+    '<span class="manual-order-active">ORDEM MANUAL TEMPORÁRIA</span>':
+    (initial?'<span class="rotation-default-order">SEQUÊNCIA INICIAL POR PREFIXO</span>':''));
+  html+=rotationWaitMetrics(first.base,first.occ);
+
   if(list.length>1){
     html+='<div class="rotation-vehicle-order">'+
       '<div class="rotation-vehicle-order-title">PRÓXIMAS NA SEQUÊNCIA</div>'+
       list.slice(1,9).map((x,i)=>
-        '<div class="rotation-vehicle-order-row"><b>'+(i+2)+'º</b><strong>'+esc(type==='USB'?usbFixedVehicleLabel(x):(x.v.nome||x.v.codigo))+
+        '<div class="rotation-vehicle-order-row"><b>'+(i+2)+'º</b><strong>'+
+        esc(type==='USB'?usbFixedVehicleLabel(x):(x.v.nome||x.v.codigo))+
         rotationWaitMetrics(x.base,x.occ)+'</strong>'+
         (manualRankVehicle(x.v)!==null?'<small>ORDEM MANUAL</small>':'')+'</div>'
       ).join('')+'</div>';
