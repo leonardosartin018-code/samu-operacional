@@ -2717,3 +2717,117 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
   :is(#vehicles,#regionalGrid) .vehicle-card .crew-slot{padding:7px 8px}
   :is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.has-professional .crew-name.has-person{font-size:.87rem}
 }
+
+/* Equipe rápida — pesquisa legível e cadastro sempre acessível.
+   Autocomplete participa do fluxo do modal em vez de sobrepor o cadastro. */
+#teamModal .quick-team-field .quick-team-input{
+  width:100%;
+  min-height:46px;
+  padding:10px 12px;
+  border:2px solid #a6c7dc;
+  border-radius:9px;
+  background:#ffffff;
+  color:#12354c;
+  font-size:16px;
+  font-weight:850;
+  line-height:1.4;
+  letter-spacing:.012em;
+}
+#teamModal .quick-team-field .quick-team-input::placeholder{
+  color:#708598;
+  font-size:14px;
+  font-weight:550;
+  letter-spacing:0;
+}
+#teamModal .quick-team-field .quick-team-input:focus{
+  border-color:#0284c7;
+  outline:2px solid #bae6fd;
+  outline-offset:1px;
+  box-shadow:0 0 0 3px rgba(14,165,233,.13);
+}
+#teamModal .quick-team-field .quick-register-inline{
+  display:block;
+  width:100%;
+  min-height:42px;
+  margin:8px 0 0;
+  padding:10px;
+  border-width:2px;
+  border-radius:9px;
+  font-size:13px;
+  font-weight:1000;
+  line-height:1.25;
+  text-align:center;
+  position:relative;
+  z-index:1;
+}
+#teamModal .quick-team-field .autocomplete-results.floating{
+  position:static;
+  left:auto;
+  right:auto;
+  top:auto;
+  bottom:auto;
+  width:100%;
+  margin:8px 0 0;
+  max-height:188px;
+  overflow-y:auto;
+  overscroll-behavior:contain;
+  border:1px solid #8bbbd4;
+  border-radius:9px;
+  background:#fff;
+  box-shadow:0 3px 12px rgba(15,39,65,.08);
+  z-index:auto;
+}
+#teamModal .quick-team-field .autocomplete-result{
+  display:block;
+  width:100%;
+  min-height:48px;
+  padding:10px 12px;
+  background:#fff;
+  color:#173c55;
+  text-align:left;
+  border:0;
+  border-bottom:1px solid #e2ebf1;
+}
+#teamModal .quick-team-field .autocomplete-result:last-child{
+  border-bottom:0;
+}
+#teamModal .quick-team-field .autocomplete-result:hover,
+#teamModal .quick-team-field .autocomplete-result:focus-visible{
+  background:#e0f2fe;
+  outline:2px solid #38bdf8;
+  outline-offset:-2px;
+}
+#teamModal .quick-team-field .autocomplete-result b{
+  display:block;
+  font-size:14px;
+  font-weight:950;
+  line-height:1.4;
+  letter-spacing:.005em;
+  overflow-wrap:anywhere;
+}
+#teamModal .quick-team-field .autocomplete-result small{
+  display:block;
+  margin-top:3px;
+  font-size:12px;
+  color:#536f81;
+  font-weight:650;
+}
+#teamModal .quick-team-field .autocomplete-empty{
+  padding:12px;
+  font-size:13px;
+  font-weight:750;
+  line-height:1.5;
+  color:#496578;
+  background:#f8fafc;
+}
+#teamModal .quick-team-field .quick-scale-placement{
+  margin-top:10px;
+}
+#teamModal .quick-team-field .quick-current.has-person .quick-current-name{
+  font-size:14px;
+  line-height:1.35;
+}
+@media(max-width:720px){
+  #teamModal .quick-team-field .quick-team-input{font-size:16px}
+  #teamModal .quick-team-field .autocomplete-result b{font-size:14px}
+}
