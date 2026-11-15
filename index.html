@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261115-87-importacao-regulacao">
+  <link rel="stylesheet" href="./styles.css?v=20261115-88-historicos-multiplos">
 </head>
 <body>
 
@@ -579,17 +579,17 @@
             <label>Paciente<input id="occImportPaciente" autocomplete="off"></label>
             <label>Idade<input id="occImportIdade" autocomplete="off"></label>
             <label>Sexo<input id="occImportSexo" autocomplete="off"></label>
-            <label>Médico regulador<input id="occImportMedico" autocomplete="off"></label>
-            <label>Data/hora da avaliação médica<input id="occImportData" autocomplete="off"></label>
+            <label class="full">Médico(s) regulador(es)<textarea id="occImportMedico" rows="2" spellcheck="false"></textarea></label>
+            <label class="full">Data/hora de cada avaliação médica<textarea id="occImportData" rows="2" spellcheck="false"></textarea></label>
             <label>Município<input id="occImportMunicipio" autocomplete="off"></label>
             <label>Logradouro<input id="occImportLogradouro" autocomplete="off"></label>
             <label>Complemento<input id="occImportComplemento" autocomplete="off"></label>
             <label class="full">Ponto de referência<input id="occImportReferencia" autocomplete="off"></label>
-            <label class="full">Histórico médico<textarea id="occImportHistorico" rows="2"></textarea></label>
+            <label class="full">Histórico médico completo (todas as avaliações)<textarea id="occImportHistorico" rows="4"></textarea></label>
             <label class="full">Observação copiada da regulação<textarea id="occImportObservacao" rows="2" placeholder="Sem observação quando o campo vier vazio"></textarea></label>
           </div>
           <p id="occImportWarnings" class="dispatch-import-warnings"></p>
-          <p class="dispatch-import-note">A data/hora acima pertence à avaliação médica e não muda o horário de saída da viatura. O destino da vítima também não será alterado.</p>
+          <p class="dispatch-import-note">Se houver várias avaliações, históricos, médicos e horários aparecem numerados na mesma ordem. O horário médico não altera a saída da viatura nem o destino da vítima.</p>
         </div>
       </section>
       <section id="dispatchCrewPanel" class="dispatch-section dispatch-crew-panel hidden" aria-label="Guarnição escolhida para o acionamento">
@@ -904,6 +904,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261115-87-importacao-regulacao"></script>
+<script type="module" src="./app.js?v=20261115-88-historicos-multiplos"></script>
 </body>
 </html>
