@@ -12,7 +12,8 @@ export function canManageVictimDestination({
   qthRecorded = false,
   qthNotInformed = false
 } = {}) {
-  if (!['EM OCORRENCIA', 'RETORNANDO'].includes(occurrenceStatus)) return false;
-  if (!['occurrence', 'returning'].includes(vehicleStatus)) return false;
-  return Boolean(qthRecorded || qthNotInformed || vehicleStatus === 'returning');
+  const inAttendance = occurrenceStatus === 'EM OCORRENCIA' && vehicleStatus === 'occurrence';
+  const returning = occurrenceStatus === 'RETORNANDO' && vehicleStatus === 'returning';
+  if (!inAttendance && !returning) return false;
+  return Boolean(qthRecorded || qthNotInformed || returning);
 }
