@@ -2886,6 +2886,9 @@ async function saveOccurrence(){
     return alert('A viatura não está disponível na base para um novo acionamento.');
   let dispatchCrew=[];
   try{dispatchCrew=v?chosenDispatchCrew(v):[]}catch(e){return alert(e.message||e)}
+  // Médicos avulsos pertencem à ocorrência; não são linhas da escala.
+  const dispatchScheduledCrew=dispatchCrew.filter(m=>!isDispatchAdhocDoctor(m));
+  const dispatchAdhocDoctors=dispatchCrew.filter(isDispatchAdhocDoctor);
   if(v){
     const missing=requiredDispatchRoles(v).filter(role=>!crewHasRole(dispatchCrew,role));
     if(missing.length)return alert('Guarnição incompleta para '+(v.nome||v.codigo)+
@@ -2921,10 +2924,10 @@ async function saveOccurrence(){
       // Outros operadores podem ter mudado a escala desde a abertura da janela.
       const [liveVehicle,liveCrew,liveOccurrence]=await Promise.all([
         supabase.from('viaturas').select('id,status_atual').eq('id',v.id).maybeSingle(),
-        dispatchCrew.length
+        dispatchScheduledCrew.length
           ?supabase.from('equipe_plantao')
             .select('id,profissional_id,status,viatura_id,tipo_escala')
-            .eq('plantao_id',currentPlantao.id).in('id',dispatchCrew.map(m=>m.id))
+            .eq('plantao_id',currentPlantao.id).in('id',dispatchScheduledCrew.map(m=>m.id))
           :Promise.resolve({data:[],error:null}),
         supabase.from('ocorrencias').select('id,plantao_id,acionada_em,criado_em')
           .eq('viatura_id',v.id)
@@ -2949,12 +2952,38 @@ async function saveOccurrence(){
       if(activeConflicts.length){
         throw new Error('Já existe uma ocorrência em andamento para esta viatura. Confira o atendimento antes de acionar novamente.');
       }
-      for(const m of dispatchCrew){
+      for(const m of dispatchScheduledCrew){
         const live=(liveCrew.data||[]).find(x=>x.id===m.id);
         if(!live||live.profissional_id!==m.profissional_id||norm(live.status)!=='ATIVO'||
            (live.viatura_id||null)!==(m.viatura_id||null)||
            norm(live.tipo_escala)!==norm(m.tipo_escala)){
           throw new Error('A escala foi alterada por outro operador. Reabra o acionamento e confira a equipe.');
+        }
+      }
+      // Médico não escalado: confere cadastro e ocupação antes de associar
+      // à ocorrência. Não exige equipe_plantao nem soma revezamento.
+      for(const m of dispatchAdhocDoctors){
+        const {data:doctor,error:doctorError}=await supabase.from('profissionais')
+          .select('id,nome_completo,funcao_sistema,ativo')
+          .eq('id',m.profissional_id).maybeSingle();
+        if(doctorError)throw doctorError;
+        if(!doctor||doctor.ativo!==true||professionalRoleKey(doctor)!=='doctor')
+          throw new Error('O cadastro do médico mudou. Escolha outro médico ou SEM MÉDICO.');
+        const {data:links,error:linksError}=await supabase.from('equipe_ocorrencia')
+          .select('ocorrencia_id').eq('profissional_id',doctor.id);
+        if(linksError)throw linksError;
+        const ids=[...new Set((links||[]).map(x=>x.ocorrencia_id).filter(Boolean))];
+        if(ids.length){
+          const {data:doctorOccurrences,error:busyError}=await supabase.from('ocorrencias')
+            .select('id,plantao_id,acionada_em,criado_em')
+            .in('id',ids).in('status',['EM OCORRENCIA','RETORNANDO']);
+          if(busyError)throw busyError;
+          const recentMs=48*60*60*1000;
+          if((doctorOccurrences||[]).some(x=>{
+            if(x.plantao_id===currentPlantao.id)return true;
+            const when=new Date(x.acionada_em||x.criado_em||'').getTime();
+            return !Number.isFinite(when)||Date.now()-when<=recentMs;
+          }))throw new Error('Este médico já está empenhado em outra ocorrência. Selecione outro ou SEM MÉDICO.');
         }
       }
     }
@@ -4420,6 +4449,9 @@ async function saveQuickRegistration(){
   const funcao=$('#quickRegRole').value;
   if(!nome)return alert('Informe o nome completo.');
   const pending=pendingQuickRegistration;
+  if(pending?.dispatchDoctorVehicleId&&professionalRoleKey({funcao_sistema:funcao})!=='doctor'){
+    return alert('No acionamento da USA, cadastre este profissional com a função Médico.');
+  }
   if(pending?.expressRole){
     const roleKey=professionalRoleKey({funcao_sistema:funcao});
     if(pending.expressRole==='nurse'&&roleKey!=='nurse'){
@@ -4443,6 +4475,21 @@ async function saveQuickRegistration(){
   professionals.sort((a,b)=>String(a.nome_completo).localeCompare(String(b.nome_completo),'pt-BR'));
   if(pending?.expressRole){
     selectExpressProfessional(data,pending.expressRole);
+  }
+  if(pending?.dispatchDoctorVehicleId &&
+     $('#occVehicleSelect').value===pending.dispatchDoctorVehicleId){
+    // Seleciona o recém-cadastrado sem alterar as escolhas do condutor
+    // e enfermeiro que já estavam feitas na janela de acionamento.
+    const v=vehicleById(pending.dispatchDoctorVehicleId);
+    const select=$('#dispatchCrew_doctor');
+    const doctor=v?dispatchCrewOptions(v,'doctor').find(m=>
+      isDispatchAdhocDoctor(m)&&m.profissional_id===data.id):null;
+    if(select&&doctor){
+      select.insertAdjacentHTML('beforeend','<option value="'+esc(doctor.id)+'">'+
+        esc(displayName(data))+' • MÉDICO AVULSO NESTA OCORRÊNCIA</option>');
+      select.value=doctor.id;
+      updateDispatchCrewStatus();
+    }
   }
   if(pending?.input&&pending?.hidden){
     if(!allowedForField(data,pending.key)){
