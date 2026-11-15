@@ -3175,3 +3175,40 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 .roster-quick-member>span{grid-column:1/-1;color:#60778b;font-size:.7rem;line-height:1.45;overflow-wrap:anywhere}
 .roster-quick-vacant{font-size:.76rem;color:#63788a;line-height:1.4}
 .roster-quick-shared{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:9px}
+
+
+/* Importação inteligente por colagem da regulação — sem dependências externas. */
+.dispatch-import{
+  border-left:5px solid #0f766e;
+  background:linear-gradient(135deg,#f0fdfa 0%,#fff 65%);
+}
+.dispatch-import .dispatch-section-heading b{color:#115e59}
+.dispatch-import-label{display:block;font-size:.8rem;font-weight:900;color:#29465a;margin-bottom:7px}
+#occImportRaw{
+  display:block;width:100%;box-sizing:border-box;min-height:85px;max-height:200px;
+  padding:11px 12px;border:1.5px solid #8caebb;border-radius:9px;
+  background:#fff;color:#163447;resize:vertical;font:inherit;font-size:.84rem;line-height:1.4;
+}
+#occImportRaw:focus-visible{outline:3px solid #99f6e4;outline-offset:2px;border-color:#0f766e}
+.dispatch-import-actions{display:flex;gap:8px 10px;align-items:center;flex-wrap:wrap;margin-top:10px}
+.dispatch-import-actions .btn{min-height:38px;font-size:.75rem;padding:9px 12px}
+.dispatch-import-actions .primary{background:#0f766e;color:#fff}
+#occImportStatus{color:#416173;font-size:.75rem;line-height:1.4;font-weight:800;flex:1 1 230px}
+#occImportStatus.ok{color:#166534}
+#occImportStatus.warn{color:#9a3412}
+.dispatch-import-review{
+  margin-top:12px;padding:13px;border:1px solid #a4d5ce;
+  border-radius:9px;background:#f8fffd;
+}
+.dispatch-import-review.hidden{display:none!important}
+.dispatch-import-review-title{display:flex;justify-content:space-between;gap:6px 12px;flex-wrap:wrap;margin-bottom:11px}
+.dispatch-import-review-title b{font-size:.76rem;color:#115e59}
+.dispatch-import-review-title span{font-size:.72rem;color:#526b79}
+.dispatch-dialog .dispatch-import-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+.dispatch-import-warnings{font-size:.73rem;font-weight:850;color:#30634f;margin:10px 0 0;line-height:1.5}
+.dispatch-import-note{font-size:.71rem;color:#526b79;margin:7px 0 0;line-height:1.5}
+@media(max-width:560px){
+  .dispatch-import-actions .btn{flex:1 1 auto}
+  .dispatch-dialog .dispatch-import-grid{grid-template-columns:minmax(0,1fr)}
+  .dispatch-import-review{padding:10px}
+}
