@@ -8,6 +8,13 @@ const normalized = text => String(text || '').normalize('NFD').replace(/[\u0300-
 const empty = value => String(value ?? '').trim() || '—';
 const baseIsAnapolis = name => normalized(name).includes('ANAPOLIS');
 const isOpen = status => ['EM OCORRENCIA','RETORNANDO'].includes(normalized(status));
+const readableStatus = status => ({
+  'EM OCORRENCIA':'EM OCORRÊNCIA',
+  'RETORNANDO':'RETORNANDO',
+  'FINALIZADA':'FINALIZADA',
+  'CANCELADA':'CANCELADA',
+  'QTA':'QTA'
+})[normalized(status)] || empty(status);
 
 function assignment(m) {
   const change = normalized(m.tipo_alteracao_escala || m.tipo_alteracao);
@@ -58,7 +65,7 @@ export function buildSamuCompleteReport(model, displayDestination) {
   add('01 — EQUIPES EFETIVAMENTE EMPENHADAS NO PLANTÃO',
     ['Viatura','Nº ocorrência','Situação','Equipe do atendimento'],
     empenhadas.map(o=>[
-      o.viatura_snapshot||o.viaturas?.nome||'—',o.numero||'Sem número',o.status||'—',crew(o)
+      o.viatura_snapshot||o.viaturas?.nome||'—',o.numero||'Sem número',readableStatus(o.status),crew(o)
     ]));
 
   // 2. Situação é um retrato do instante da emissão, não histórico retroativo.
@@ -81,7 +88,7 @@ export function buildSamuCompleteReport(model, displayDestination) {
     add(title,['Nº','Viatura','Natureza','Situação','Bairro','Destino / resultado','Equipe empenhada'],
       scoped.map(o=>[
         o.numero||'—',o.viatura_snapshot||o.viaturas?.nome||'Sem viatura',
-        empty(o.natureza),empty(o.status),empty(o.bairro),
+        empty(o.natureza),readableStatus(o.status),empty(o.bairro),
         displayDestination(o.destino),crew(o)
       ]));
     add(title+' • ENDEREÇOS E RELATOS',
@@ -121,7 +128,7 @@ export function buildSamuCompleteReport(model, displayDestination) {
     andamento:events.filter(o=>isOpen(o.status)).length,
     qta:events.filter(o=>normalized(o.status)==='QTA').length,
     canceladas:events.filter(o=>normalized(o.status)==='CANCELADA').length,
-    escalados:activeMembers.length,
+    escalados:new Set(activeMembers.map(m=>m.profissional_id||memberName(m))).size,
     viaturas:fleet.length,
     mediaQth:averageQth,
     mediaRetorno:averageReturn
