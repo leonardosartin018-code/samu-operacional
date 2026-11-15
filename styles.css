@@ -3212,3 +3212,8 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
   .dispatch-dialog .dispatch-import-grid{grid-template-columns:minmax(0,1fr)}
   .dispatch-import-review{padding:10px}
 }
+
+/* Consulta opcional do registro importado nas viaturas empenhadas. */
+.occ-regulation-detail{margin:7px 0 8px;border:1px solid #a6c7d7;border-radius:8px;background:#f6fbff}
+.occ-regulation-detail>summary{padding:9px 11px;cursor:pointer;font-size:.75rem;font-weight:900;color:#075985}
+.occ-regulation-text{white-space:pre-wrap;overflow-wrap:anywhere;max-height:260px;overflow:auto;padding:10px 12px 12px;border-top:1px solid #d4e6ef;font-size:.8rem;line-height:1.48;color:#163447}
