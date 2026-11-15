@@ -2331,7 +2331,7 @@ function openQuickRegistration(name,key,input,hidden){
 function showAutocomplete(box,list,key,input,hidden){
   box.innerHTML=list.length
     ? list.map(p=>'<button type="button" class="autocomplete-result" data-prof="'+p.id+'"><b>'+esc(professionalLabel(p,key))+'</b><small>'+esc(p.funcao_sistema||'')+'</small></button>').join('')
-    : '<div class="autocomplete-empty">Nenhum profissional encontrado.</div><button type="button" class="autocomplete-register" data-register-new="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
+    : '<div class="autocomplete-empty">Nenhum profissional encontrado. Use o botão CADASTRAR acima para incluir este nome.</div>';
   box.classList.add('show');
   box.querySelectorAll('[data-prof]').forEach(b=>b.onclick=()=>{
     const p=professionals.find(x=>x.id===b.dataset.prof);
@@ -2339,8 +2339,6 @@ function showAutocomplete(box,list,key,input,hidden){
     hidden.value=p.id;
     box.classList.remove('show');
   });
-  const add=box.querySelector('[data-register-new]');
-  if(add)add.onclick=()=>openQuickRegistration(input.value,key,input,hidden);
 }
 function quickAutocomplete(key){
   const cfg=quickCfg()[key],input=$(cfg.input),hidden=$(cfg.hidden),box=$(cfg.results),q=norm(input.value);
