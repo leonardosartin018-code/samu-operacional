@@ -846,15 +846,15 @@ function renderSummary(){
 }
 
 function memberSlotHtml(m){
-  if(!m) return '<div class="crew-slot"><div class="crew-role">VAGA</div><div class="crew-name">—</div></div>';
-  return '<div class="crew-slot"><div class="crew-role">'+esc(roleLabel(teamRoleKey(m)))+'</div><div class="crew-name">'+esc(displayName(m.profissionais))+'</div></div>';
+  if(!m) return '<div class="crew-slot is-vacant"><div class="crew-role">VAGA</div><div class="crew-name is-empty">—</div></div>';
+  return '<div class="crew-slot has-professional"><div class="crew-role">'+esc(roleLabel(teamRoleKey(m)))+'</div><div class="crew-name has-person">'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</div></div>';
 }
 function namedMemberSlotHtml(m,label){
-  return '<div class="crew-slot"><div class="crew-role">'+esc(label)+'</div><div class="crew-name">'+esc(m?displayName(m.profissionais):'—')+'</div></div>';
+  return '<div class="crew-slot '+(m?'has-professional':'is-vacant')+'"><div class="crew-role">'+esc(label)+'</div><div class="crew-name '+(m?'has-person':'is-empty')+'">'+esc(m?(displayName(m.profissionais)||m.nome_snapshot||'—'):'—')+'</div></div>';
 }
 function rotationPreviewSlotHtml(m,role){
   if(!m)return memberSlotHtml(null);
-  return '<div class="crew-slot rotation-preview"><div class="crew-role">'+esc(roleLabel(role))+' • PRÓXIMO DA FILA</div><div class="crew-name">'+esc(displayName(m.profissionais))+'</div><small class="crew-preview-note">PRÉVIA COMPARTILHADA • NÃO É FIXO</small></div>';
+  return '<div class="crew-slot rotation-preview has-professional"><div class="crew-role">'+esc(roleLabel(role))+' • PRÓXIMO DA FILA</div><div class="crew-name has-person">'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</div><small class="crew-preview-note">PRÉVIA COMPARTILHADA • NÃO É FIXO</small></div>';
 }
 function crewRowsForCard(v){
   const o=activeOccurrence(v);
