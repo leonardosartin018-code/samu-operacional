@@ -1165,7 +1165,7 @@ function syncRotationCriterionFromPlantao(){
 function renderRotationRuleHelp(){
   const crit=currentRotationCriterion();
   $('#rotationRuleHelp').textContent=crit==='occurrences'
-    ? 'Critério ativo: menor número de ocorrências. Se houver empate, passa na frente quem está há mais tempo na base.'
+    ? 'Critério ativo: menor pontuação ponderada de ocorrências. Em empate, passa na frente quem está há mais tempo na base.'
     : 'Critério padrão: mais tempo disponível na base. Se houver empate, passa na frente quem tem menos ocorrências.';
 }
 async function persistRotationCriterion(value){
@@ -1589,7 +1589,7 @@ function priorityMetricText(m,type){
 }
 function priorityReasonText(m,type){
   return currentRotationCriterion()==='occurrences'
-    ? 'Menor nº de ocorrências; empate decidido pelo maior tempo na base.'
+    ? 'Menor pontuação ponderada; empate decidido pelo maior tempo na base.'
     : 'Maior tempo na base; empate decidido pelo menor nº de ocorrências.';
 }
 function rotationPersonCard(title,role,type){
@@ -1600,7 +1600,7 @@ function rotationPersonCard(title,role,type){
     html+='<div class="priority-next"><b>'+esc(displayName(first.profissionais)||first.nome_snapshot||'—')+'</b>'+
       '<span>DA VEZ</span>'+
       '<div class="priority-assignment">'+esc(assignmentPriorityLabel(first,type))+'</div>'+
-      '<div class="priority-next-meta"><span class="priority-pill">'+esc(fmtMinutes(personBaseMinutes(first,type)))+' na base</span><span class="priority-pill">'+personOccurrenceCount(first)+' ocorrência(s)</span></div>'+
+      '<div class="priority-next-meta"><span class="priority-pill">'+esc(fmtMinutes(personBaseMinutes(first,type)))+' na base</span><span class="priority-pill">'+personOccurrenceCount(first)+' ocorrência(s) reais / '+personWeightedCount(first)+' ponto(s)</span></div>'+
       '<div class="priority-reason">'+esc(priorityReasonText(first,type))+'</div></div>';
     if(fila.length>1){
       html+=fila.slice(1,6).map((m,i)=>'<div class="priority-line"><div class="priority-line-main"><b>'+(i+2)+'. '+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</b><small>'+esc(assignmentPriorityLabel(m,type))+'</small></div><div class="priority-line-metric">'+esc(priorityMetricText(m,type))+'</div></div>').join('');
@@ -1678,8 +1678,8 @@ function usaTeamRotationCard(){
   if(first){
     html+='<div class="priority-next"><b>'+esc(first.v.nome||first.v.codigo)+'</b><span>USA DA VEZ</span>'+
       '<div class="priority-assignment">Condutor '+esc(displayName(first.driver.profissionais))+' • Enfermeiro '+esc(displayName(first.nurse.profissionais))+' • Médico '+(first.doctor?esc(displayName(first.doctor.profissionais)):'não escalado (opcional)')+'</div>'+
-      '<div class="priority-next-meta"><span class="priority-pill">'+esc(fmtMinutes(first.base))+' na base</span><span class="priority-pill">'+first.occ+' ocorrência(s)</span></div>'+
-      '<div class="priority-reason">'+(currentRotationCriterion()==='occurrences'?'Menor nº de ocorrências; empate pelo maior tempo na base.':'Maior tempo na base; empate pelo menor nº de ocorrências.')+'</div></div>';
+      '<div class="priority-next-meta"><span class="priority-pill">'+esc(fmtMinutes(first.base))+' na base</span><span class="priority-pill">'+first.occ+' ocorrência(s) reais / '+first.score+' pontos</span></div>'+
+      '<div class="priority-reason">'+(currentRotationCriterion()==='occurrences'?'Menor pontuação ponderada; empate pelo maior tempo na base.':'Maior tempo na base; empate pelo menor nº de ocorrências.')+'</div></div>';
     html+=fila.slice(1,5).map((x,i)=>'<div class="priority-line"><div class="priority-line-main"><b>'+(i+2)+'. '+esc(x.v.nome||x.v.codigo)+'</b><small>Equipe completa disponível</small></div><div class="priority-line-metric">'+esc(fmtMinutes(x.base))+' • '+x.occ+' oc.</div></div>').join('');
   }else{
     html+='<div class="priority-empty">Nenhuma USA está na base com equipe completa disponível neste momento.</div>';
@@ -1788,10 +1788,12 @@ function rotationMembersForDisplay(role,type){
 function priorityPersonName(m){
   return m?.profissionais?displayName(m.profissionais):(m?.nome_snapshot||'—');
 }
-function rotationWaitMetrics(base,count){
+function rotationWaitMetrics(base,count,score=count,rest=0){
   const time=base>=0?fmtMinutes(base)+' na base':'Tempo de base indisponível';
   return '<small class="rotation-wait-metrics">'+esc(time)+' · '+esc(count)+' '+
-    (count===1?'ocorrência':'ocorrências')+'</small>';
+    (count===1?'ocorrência real':'ocorrências reais')+
+    (score!==count?' · '+esc(score)+' pontos':'')+
+    (rest>0?' · DESCANSO '+rest+' min':'')+'</small>';
 }
 function compactRotationQueue(role,type,label){
   const members=rotationMembersForDisplay(role,type);
@@ -1812,13 +1814,13 @@ function compactRotationQueue(role,type,label){
     html+='<div class="rotation-person-next">'+
       '<span class="rotation-next-tag">PRÓXIMO DA VEZ</span>'+
       '<strong>'+esc(priorityPersonName(available[0]))+'</strong>'+
-      rotationWaitMetrics(personBaseMinutes(available[0],type),personOccurrenceCount(available[0]))+
+      rotationWaitMetrics(personBaseMinutes(available[0],type),personOccurrenceCount(available[0]),personWeightedCount(available[0]),personEffortRestMinutes(available[0]))+
       (earlyExitStatus(available[0])?'<small class="early-exit-queue-note">'+esc(earlyExitStatusLabel(available[0]))+'</small>':'')+
       (isOperator()?'<button type="button" class="early-exit-mini" data-schedule-exit="'+esc(available[0].id)+'">SAÍDA</button>':'')+'</div>';
     if(available.length>1){
       html+='<div class="rotation-person-order">'+available.slice(1,6).map((m,i)=>
         '<div class="rotation-person-row"><span>'+(i+2)+'.</span><div class="rotation-wait-person"><b>'+
-        esc(priorityPersonName(m))+'</b>'+rotationWaitMetrics(personBaseMinutes(m,type),personOccurrenceCount(m))+'</div>'+
+        esc(priorityPersonName(m))+'</b>'+rotationWaitMetrics(personBaseMinutes(m,type),personOccurrenceCount(m),personWeightedCount(m),personEffortRestMinutes(m))+'</div>'+
         (earlyExitStatus(m)?'<small class="early-exit-queue-note">'+esc(earlyExitStatusLabel(m))+'</small>':'')+
         (isOperator()?'<button type="button" class="early-exit-mini" data-schedule-exit="'+esc(m.id)+'">SAÍDA</button>':'')+
         '</div>').join('')+'</div>';
@@ -1860,7 +1862,7 @@ function nextVehicleRotationCard(type,hasRotation){
   html+=(manualRankVehicle(first.v)!==null?
     '<span class="manual-order-active">ORDEM MANUAL TEMPORÁRIA</span>':
     (initial?'<span class="rotation-default-order">SEQUÊNCIA INICIAL POR PREFIXO</span>':''));
-  html+=rotationWaitMetrics(first.base,first.occ);
+  html+=rotationWaitMetrics(first.base,first.occ,first.score,first.rest);
   if(type==='USA'&&hasRotation){
     // Mantém sem alterações o detalhamento da USA.
     const roles=[['Condutor',first.driver],['Enfermeiro',first.nurse]];
@@ -1871,7 +1873,7 @@ function nextVehicleRotationCard(type,hasRotation){
       html+='<div class="rotation-fixed-crew">'+fixed.map(([role,m])=>
         '<div class="rotation-fixed-person"><b>'+esc(priorityPersonName(m))+'</b>'+
         '<small>'+esc(role)+' • FIXO NA '+esc(prefix)+'</small>'+
-        rotationWaitMetrics(personBaseMinutes(m,type),personOccurrenceCount(m))+'</div>'
+        rotationWaitMetrics(personBaseMinutes(m,type),personOccurrenceCount(m),personWeightedCount(m),personEffortRestMinutes(m))+'</div>'
       ).join('')+'</div>';
     }
     }
@@ -1882,7 +1884,7 @@ function nextVehicleRotationCard(type,hasRotation){
       list.slice(1,9).map((x,i)=>
         '<div class="rotation-vehicle-order-row"><b>'+(i+2)+'º</b><strong>'+
         esc(type==='USB'?usbFixedVehicleLabel(x):(x.v.nome||x.v.codigo))+
-        rotationWaitMetrics(x.base,x.occ)+'</strong>'+
+        rotationWaitMetrics(x.base,x.occ,x.score,x.rest)+'</strong>'+
         (manualRankVehicle(x.v)!==null?'<small>ORDEM MANUAL</small>':'')+'</div>'
       ).join('')+'</div>';
   }
