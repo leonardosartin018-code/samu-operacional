@@ -2888,3 +2888,27 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 #occCrewCorrectModal .occ-crew-adhoc-doctor small{
   font-size:.72rem;line-height:1.4;color:#66588e;
 }
+
+/* Revezamento misto USB: prefixo com técnico/condutor fixo e fila abaixo */
+.cockpit-rotation .rotation-panel-usb .rotation-vehicle-prefix{
+  font-size:1.06rem;
+  line-height:1.35;
+  font-weight:1000;
+  overflow-wrap:anywhere;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-usb-partial-note{
+  display:block;
+  margin:6px 0 0;
+  padding:6px 8px;
+  border:1px solid #bfdbfe;
+  border-radius:6px;
+  background:#eff6ff;
+  color:#1d4ed8;
+  font-size:.66rem;
+  font-weight:850;
+  line-height:1.4;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-vehicle-order-row>strong{
+  line-height:1.35;
+  overflow-wrap:anywhere;
+}
