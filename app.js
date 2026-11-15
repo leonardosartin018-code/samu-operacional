@@ -3166,6 +3166,9 @@ function correctionCrewOptions(v,role,o){
   const candidates=[...activeTeamRows().filter(m=>original.has(m.profissional_id)),...dispatchCrewOptions(v,role)];
   const unique=new Set();
   return candidates.filter(m=>{
+    // O RPC de correção recebe IDs da equipe_plantao, não IDs avulsos.
+    // Médicos avulsos já empenhados são preservados separadamente.
+    if(isDispatchAdhocDoctor(m))return false;
     if(unique.has(m.profissional_id)||norm(m.status||'ATIVO')!=='ATIVO')return false;
     if(!dispatchRoleMatch(m,role,v))return false;
     if(!isAnapolisVehicle(v)&&m.viatura_id!==v.id)return false;
