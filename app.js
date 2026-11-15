@@ -1644,10 +1644,39 @@ function usaTeamRotationCard(){
   }
   return html+'</div>';
 }
+function usbRotationPairs(){
+  const scaleOrder=(a,b)=>String(a.entrou_em||'').localeCompare(String(b.entrou_em||''))||
+    String(a.id).localeCompare(String(b.id));
+  const drivers=rotationMembersForDisplay('driver','USB').sort(scaleOrder);
+  const techs=rotationMembersForDisplay('tech','USB').sort(scaleOrder);
+  if(!drivers.length||drivers.length!==techs.length)return [];
+  return drivers.map((driver,index)=>({driver,tech:techs[index]}));
+}
+function usbPairsForVehicle(v){
+  if(!v||!isAnapolisVehicle(v)||vehicleType(v)!=='USB'||vehicleMembers(v).length)return [];
+  return usbRotationPairs();
+}
+function usbPairKey({driver,tech}){
+  return driver.id+":"+tech.id;
+}
+function usbPairAvailable({driver,tech}){
+  return [driver,tech].every(m=>!memberIsBusy(m)&&!earlyExitStatus(m)?.cutoff);
+}
+function usbAvailablePairs(pairs){
+  const driverOrder=priorityPeopleForRole('driver','USB',{rotationOnly:true});
+  const ranks=new Map(driverOrder.map((m,index)=>[m.id,index]));
+  return pairs.filter(usbPairAvailable).sort((a,b)=>
+    (ranks.get(a.driver.id)??Infinity)-(ranks.get(b.driver.id)??Infinity));
+}
 function automaticDispatchCrew(v){
   const type=vehicleType(v);
   const fixed=vehicleMembers(v).filter(m=>!isRotationMember(m)&&!memberIsBusy(m));
   if(type.includes('MOTO'))return fixed;
+  const pairs=usbPairsForVehicle(v);
+  if(pairs.length){
+    const pair=usbAvailablePairs(pairs)[0];
+    return pair?[pair.driver,pair.tech]:[];
+  }
   const roles=type.includes('USA')?['driver','nurse','doctor']:type.includes('USB')?['driver','tech']:[];
   const used=new Set();
   const crew=[];
@@ -1686,7 +1715,9 @@ function availableUsbTeams(){
 }
 function rotationMembersForDisplay(role,type){
   return activeTeamRows().filter(m=>
-    isRotationMember(m)&&teamRoleKey(m)===role&&
+    isRotationMember(m)&&
+    (teamRoleKey(m)===role||(role==='tech'&&type==='USB'&&teamRoleKey(m)==='nurse'&&
+      norm(m.grupo_revezamento).includes('USB_TECNICO')))&&
     (role!=='driver'||driverRotationAllowsMember(m,type))
   );
 }
@@ -1775,7 +1806,32 @@ function nextVehicleRotationCard(type,hasRotation){
   }
   return html+'</div>';
 }
+function usbPairedRotationPanel(pairs){
+  const available=usbAvailablePairs(pairs);
+  const ordered=[...available,...pairs.filter(pair=>!available.includes(pair))];
+  return '<section class="rotation-panel-group rotation-panel-usb">'+
+    '<div class="rotation-panel-heading"><b>USB</b><span>DUPLAS FIXAS</span></div>'+
+    '<p class="rotation-person-only-note">Escolha uma USB em QRV no pátio ao acionar a dupla.</p>'+
+    '<div class="rotation-people-card">'+ordered.map((pair,index)=>
+      '<div class="rotation-person-row"><div class="rotation-wait-person"><b>'+
+      esc(priorityPersonName(pair.driver))+' / '+esc(priorityPersonName(pair.tech))+'</b>'+
+      '<small>'+(available.includes(pair)?(index===0?'DUPLA DA VEZ':'DISPONÍVEL'):'INDISPONÍVEL')+'</small>'+
+      rotationWaitMetrics(Math.min(personBaseMinutes(pair.driver,'USB'),personBaseMinutes(pair.tech,'USB')),
+        usbPairOccurrenceCount(pair))+
+      '</div></div>').join('')+'</div></section>';
+}
+function usbPairOccurrenceCount({driver,tech}){
+  const driverOccurrences=new Set(occurrenceTeam.filter(m=>m.profissional_id===driver.profissional_id)
+    .map(m=>m.ocorrencia_id));
+  const together=new Set(occurrenceTeam.filter(m=>m.profissional_id===tech.profissional_id&&
+    driverOccurrences.has(m.ocorrencia_id)).map(m=>m.ocorrencia_id));
+  return occurrences.filter(o=>together.has(o.id)&&norm(o.status)==='FINALIZADA').length;
+}
 function rotationPanelGroup(type){
+  if(type==='USB'){
+    const pairs=usbRotationPairs();
+    if(pairs.length)return usbPairedRotationPanel(pairs);
+  }
   const roles=type==='USA'
     ? [['driver','Condutores'],['nurse','Enfermeiros']]
     : [['driver','Condutores'],['tech','Técnicos / Enfermeiros']];
@@ -2657,6 +2713,18 @@ function renderDispatchCrewPanel(){
     updateDispatchCrewStatus();
     return;
   }
+  const pairs=usbPairsForVehicle(v);
+  if(pairs.length){
+    const available=usbAvailablePairs(pairs);
+    $('#dispatchCrewHint').textContent='Escolha a dupla completa para esta USB.';
+    root.innerHTML='<div class="dispatch-crew-field"><label for="dispatchUsbPair">Dupla USB</label>'+
+      '<select id="dispatchUsbPair">'+
+      (available.length?available.map(pair=>'<option value="'+esc(usbPairKey(pair))+'">'+
+        esc(priorityPersonName(pair.driver)+' / '+priorityPersonName(pair.tech))+'</option>').join(''):
+        '<option value="">Nenhuma dupla disponível</option>')+'</select></div>';
+    updateDispatchCrewStatus();
+    return;
+  }
   const type=vehicleType(v).includes('USA')?'USA':'USB';
   $('#dispatchCrewHint').textContent='A sugestão respeita a fila '+type+
     ' e os profissionais fixos desta viatura. Você pode trocar o nome antes de acionar, sem alterar a escala.';
@@ -2688,6 +2756,13 @@ function renderDispatchCrewPanel(){
 function chosenDispatchCrew(v){
   if(!v)return [];
   if(!dispatchUsesCrewChoice(v)||vehicleType(v).includes('MOTO'))return automaticDispatchCrew(v);
+  const pairSelect=$('#dispatchUsbPair');
+  const pairs=usbPairsForVehicle(v);
+  if(pairSelect||pairs.length){
+    const pair=pairs.find(pair=>usbPairKey(pair)===pairSelect?.value);
+    if(!pair||!usbPairAvailable(pair))throw new Error('Dupla indisponível. Reabra o acionamento para conferir a equipe.');
+    return [pair.driver,pair.tech];
+  }
   const taken=new Set(),selected=[];
   for(const role of dispatchSlotRoles(v)){
     const input=$('#dispatchCrew_'+role);
@@ -2717,6 +2792,12 @@ function updateDispatchCrewStatus(){
   }
   if(!dispatchUsesCrewChoice(v)||vehicleType(v).includes('MOTO')){
     status.textContent='Equipe atual da viatura preservada.';
+    warning.classList.add('hidden');
+    return;
+  }
+  const pair=$('#dispatchUsbPair');
+  if(pair){
+    status.textContent=pair.value?'Dupla pronta para conferência.':'Nenhuma dupla disponível na base.';
     warning.classList.add('hidden');
     return;
   }
