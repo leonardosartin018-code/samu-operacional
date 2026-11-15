@@ -2320,3 +2320,61 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 }
 .express-driver-edit:hover { background: #e5f3fc; border-color: #4c91b4; }
 .express-driver-edit:focus-visible { outline: 2px solid #0369a1; outline-offset: 2px; }
+
+/* Permuta de condutor: escolha direta entre fixo e revezamento */
+#expressPermutaModal .express-permuta-mode-field{
+  border:0;
+  padding:0;
+  margin:0;
+  min-width:0;
+}
+#expressPermutaModal .express-permuta-mode-field legend{
+  margin-bottom:7px;
+  padding:0;
+  font-size:.76rem;
+  font-weight:900;
+  color:#24475d;
+}
+#expressPermutaModal .express-permuta-mode-buttons{
+  display:grid;
+  grid-template-columns:repeat(2,minmax(0,1fr));
+  gap:9px;
+}
+#expressPermutaModal .express-permuta-mode-btn{
+  min-width:0;
+  min-height:45px;
+  padding:9px 10px;
+  border:2px solid #bdd2df;
+  border-radius:9px;
+  background:#f4f8fc;
+  color:#1e3b51;
+  font-size:.78rem;
+  line-height:1.25;
+  font-weight:950;
+  cursor:pointer;
+  transition:background-color .15s,border-color .15s,box-shadow .15s;
+}
+#expressPermutaModal .express-permuta-mode-btn:hover{
+  background:#e4f2fd;
+  border-color:#6cb3da;
+}
+#expressPermutaModal .express-permuta-mode-btn.is-selected[data-permuta-mode="FIXO"]{
+  background:#dcfce7;
+  border-color:#16a34a;
+  color:#166534;
+  box-shadow:inset 0 0 0 1px #16a34a;
+}
+#expressPermutaModal .express-permuta-mode-btn.is-selected[data-permuta-mode="REVEZAMENTO"]{
+  background:#ffedd5;
+  border-color:#ea580c;
+  color:#9a3412;
+  box-shadow:inset 0 0 0 1px #ea580c;
+}
+#expressPermutaModal .express-permuta-mode-btn:focus-visible{
+  outline:3px solid #0284c7;
+  outline-offset:2px;
+}
+@media(max-width:390px){
+  #expressPermutaModal .express-permuta-mode-buttons{gap:6px}
+  #expressPermutaModal .express-permuta-mode-btn{padding:8px 6px;font-size:.71rem}
+}
