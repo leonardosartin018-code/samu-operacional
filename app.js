@@ -1,4 +1,5 @@
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
+import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const supabase = createClient(
@@ -950,7 +951,10 @@ function victimDestinationDisplay(value){
   return dest;
 }
 function victimDestinationControlsHtml(o,v){
-  if(!o?.chegada_qth_em||!v||!['occurrence','returning'].includes(statusInfo(v).key))return '';
+  if(!o||!v||!canManageVictimDestination({
+    occurrenceStatus:norm(o.status),vehicleStatus:statusInfo(v).key,
+    qthRecorded:!!o.chegada_qth_em,qthNotInformed:o.qth_nao_informado===true
+  }))return '';
   const recorded=!!String(o.destino||'').trim();
   return '<div class="victim-destination-card '+(recorded?'recorded':'pending')+'">'+
     '<div class="victim-destination-result"><span>DESTINO DA VÍTIMA</span><strong>'+esc(victimDestinationDisplay(o.destino))+'</strong></div>'+
@@ -969,8 +973,11 @@ function openVictimDestination(occId){
   const o=occurrences.find(x=>x.id===occId);
   if(!o)return alert('Ocorrência não encontrada.');
   const v=vehicleById(o.viatura_id);
-  if(!o.chegada_qth_em||!v||!['occurrence','returning'].includes(statusInfo(v).key)){
-    return alert('O destino da vítima fica disponível após a chegada no QTH, durante a ocorrência ou o retorno.');
+  if(!v||!canManageVictimDestination({
+    occurrenceStatus:norm(o.status),vehicleStatus:statusInfo(v).key,
+    qthRecorded:!!o.chegada_qth_em,qthNotInformed:o.qth_nao_informado===true
+  })){
+    return alert('O destino pode ser informado com QTH registrado, QTH não informado ou durante o retorno da viatura. Confira a situação da ocorrência.');
   }
   selectedVictimOccurrenceId=o.id;
   $('#victimDestinationTitle').textContent='Destino da vítima • '+(v.nome||v.codigo)+' • OC. '+(o.numero||'—');
@@ -995,21 +1002,25 @@ async function saveVictimDestination(){
   button.disabled=true;
   try{
     const {data:record,error:readError}=await supabase.from('ocorrencias')
-      .select('id,status,chegada_qth_em,viatura_id').eq('id',oid).maybeSingle();
+      .select('id,status,chegada_qth_em,qth_nao_informado,viatura_id').eq('id',oid).maybeSingle();
     if(readError)throw readError;
-    if(!record||!record.chegada_qth_em||['FINALIZADA','QTA','CANCELADA'].includes(norm(record.status))){
-      throw new Error('A ocorrência foi encerrada ou ainda não tem chegada ao QTH. Atualize o painel.');
-    }
+    if(!record)throw new Error('Ocorrência não encontrada. Atualize o painel.');
     const v=vehicleById(record.viatura_id);
-    if(!v||!['occurrence','returning'].includes(statusInfo(v).key)){
-      throw new Error('A viatura não está mais em ocorrência ou retorno. Atualize o painel.');
+    if(!v||!canManageVictimDestination({
+      occurrenceStatus:norm(record.status),vehicleStatus:statusInfo(v).key,
+      qthRecorded:!!record.chegada_qth_em,qthNotInformed:record.qth_nao_informado===true
+    })){
+      throw new Error('A ocorrência mudou de situação. O destino só pode ser registrado com QTH informado, QTH não informado ou durante o retorno. Atualize o painel.');
     }
     if(dest==='QTA'){
       const saved=await setOccurrenceQta(oid,record.viatura_id);
       if(!saved)return;
     }else{
-      const {error}=await supabase.from('ocorrencias').update({destino:dest}).eq('id',oid);
+      const {data:updated,error}=await supabase.from('ocorrencias')
+        .update({destino:dest}).eq('id',oid)
+        .in('status',['EM OCORRENCIA','RETORNANDO']).select('id').maybeSingle();
       if(error)throw error;
+      if(!updated)throw new Error('A ocorrência foi encerrada ou mudou de situação. Atualize o painel antes de editar o destino.');
       await loadAll(selectedDate());
     }
     selectedVictimOccurrenceId=null;
