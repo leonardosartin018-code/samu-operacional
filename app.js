@@ -819,7 +819,8 @@ function renderScaleConfirmationStates(){
 }
 
 function renderSummary(){
-  $('#closingReportBtn').disabled=!isOperator()||!currentPlantao;
+  $('#closingReportBtn').disabled=!isOperator()||!currentPlantao||samuPdfExportInProgress;
+  $('#exportBtn').disabled=!isOperator()||!currentPlantao||samuPdfExportInProgress;
   const an=vehicles.filter(isAnapolisVehicle),rg=vehicles.filter(v=>!isAnapolisVehicle(v));
   const calc=list=>{
     const x={base:0,occurrence:0,returning:0,other:0,total:list.length};
@@ -2259,7 +2260,7 @@ function renderTeamPreview(){
       '<div class="roster-list">'+body+'</div></section>';
   };
   const driver=m=>teamRoleKey(m)==='driver';
-  const type=m=>m.viatura_id?vehicleType(vehicleById(m.viatura_id)):'';
+  const type=m=>{const v=m.viatura_id?vehicleById(m.viatura_id):null;return v?vehicleType(v):''};
   const usaDrivers=an.filter(m=>driver(m)&&type(m)==='USA');
   const usbDrivers=an.filter(m=>driver(m)&&type(m)==='USB');
   const sharedDrivers=an.filter(m=>driver(m)&&!m.viatura_id);
