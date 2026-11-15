@@ -8,6 +8,7 @@ const normalized = text => String(text || '').normalize('NFD').replace(/[\u0300-
 const empty = value => String(value ?? '').trim() || '—';
 const baseIsAnapolis = name => normalized(name).includes('ANAPOLIS');
 const isOpen = status => ['EM OCORRENCIA','RETORNANDO'].includes(normalized(status));
+const weight = o => [1,2,3].includes(Number(o?.peso_ocorrencia))?Number(o.peso_ocorrencia):1;
 const readableStatus = status => ({
   'EM OCORRENCIA':'EM OCORRÊNCIA',
   'RETORNANDO':'RETORNANDO',
@@ -85,11 +86,11 @@ export function buildSamuCompleteReport(model, displayDestination) {
     ['03 — OCORRÊNCIAS • BASES DESCENTRALIZADAS',o=>!baseIsAnapolis(occurrenceBase(o))]
   ]) {
     const scoped = events.filter(filter);
-    add(title,['Nº','Viatura','Natureza','Situação','Bairro','Destino / resultado','Equipe empenhada'],
+    add(title,['Nº','Viatura','Natureza','Situação','Bairro','Destino / resultado','Peso revezamento','Equipe empenhada'],
       scoped.map(o=>[
         o.numero||'—',o.viatura_snapshot||o.viaturas?.nome||'Sem viatura',
         empty(o.natureza),readableStatus(o.status),empty(o.bairro),
-        displayDestination(o.destino),crew(o)
+        displayDestination(o.destino),String(weight(o)),crew(o)
       ]));
     add(title+' • ENDEREÇOS E RELATOS',
       ['Nº','Viatura','Endereço / referência','Relato e observações'],
