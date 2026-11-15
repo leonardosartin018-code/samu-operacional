@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261114-75-menu-organizado">
+  <link rel="stylesheet" href="./styles.css?v=20261114-76-editar-condutor">
 </head>
 <body>
 
@@ -767,19 +767,19 @@
 <div id="expressPermutaModal" class="modal">
   <div class="dialog assign-dialog">
     <div class="dialog-head">
-      <div><div class="dialog-kicker">PERMUTA DE CONDUTOR</div><h2 id="expressPermutaTitle">Registrar permuta</h2></div>
+      <div><div class="dialog-kicker" id="expressPermutaKicker">PERMUTA DE CONDUTOR</div><h2 id="expressPermutaTitle">Registrar permuta</h2></div>
       <button class="icon-close" data-close-modal="expressPermutaModal">×</button>
     </div>
     <div id="expressPermutaTitular" class="assign-person"></div>
     <div class="form-grid">
-      <label class="full">Quem está substituindo
+      <label class="full"><span id="expressPermutaPersonLabel">Quem está substituindo</span>
         <div class="autocomplete-shell">
           <input id="expressPermutaSearch" autocomplete="off" placeholder="Digite 3 letras do nome do condutor">
           <input id="expressPermutaProId" type="hidden">
           <div id="expressPermutaResults" class="autocomplete-results floating"></div>
         </div>
       </label>
-      <label class="full">Tipo de alteração
+      <label class="full">Como escalar
         <select id="expressPermutaMode">
           <option value="FIXO">FIXO NA VIATURA</option>
           <option value="REVEZAMENTO">REVEZAMENTO</option>
@@ -851,6 +851,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261114-72-duplas-usb"></script>
+<script type="module" src="./app.js?v=20261114-76-editar-condutor"></script>
 </body>
 </html>

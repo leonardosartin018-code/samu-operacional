@@ -2300,3 +2300,23 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
     color: #fff;
   }
 }
+
+.express-driver-tools {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.express-driver-edit {
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 1px solid #a8becd;
+  border-radius: 7px;
+  background: #fff;
+  color: #075985;
+  cursor: pointer;
+}
+.express-driver-edit:hover { background: #e5f3fc; border-color: #4c91b4; }
+.express-driver-edit:focus-visible { outline: 2px solid #0369a1; outline-offset: 2px; }
