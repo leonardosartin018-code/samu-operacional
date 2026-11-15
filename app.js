@@ -3213,7 +3213,10 @@ async function openOccurrenceCrewCorrection(occurrenceId){
     (m.nome_snapshot||professionalNameById(m.profissional_id)||'—')+' ('+(m.funcao||'—')+')'
   ).join(' • ')||'Nenhum profissional gravado';
   const required=requiredDispatchRoles(v);
-  const roles=dispatchSlotRoles(v);
+  const adhocDoctor=original.find(row=>
+    norm(row.tipo_escala_no_momento)==='AVULSO_ACIONAMENTO'&&
+    correctionRoleMatchesRecorded(row,'doctor'));
+  const roles=dispatchSlotRoles(v).filter(role=>role!=='doctor'||!adhocDoctor);
   $('#occCrewCorrectFields').innerHTML=roles.map(role=>{
     const options=correctionCrewOptions(v,role,o);
     const current=original.find(row=>correctionRoleMatchesRecorded(row,role));
@@ -3231,7 +3234,10 @@ async function openOccurrenceCrewCorrection(occurrenceId){
       (needed?' • OBRIGATÓRIO':' • OPCIONAL')+'</span><select data-crew-correction-role="'+esc(role)+'">'+
       '<option value="">'+(needed?'SELECIONE UM PROFISSIONAL':'NÃO ESCALADO')+'</option>'+
       html+'</select></label>';
-  }).join('');
+  }).join('')+(adhocDoctor?
+    '<div class="occ-crew-adhoc-doctor"><b>MÉDICO AVULSO PRESERVADO</b><span>'+
+      esc(adhocDoctor.nome_snapshot||professionalNameById(adhocDoctor.profissional_id)||'—')+
+      '</span><small>O médico registrado no acionamento será mantido ao corrigir condutor ou enfermeiro.</small></div>':'');
   $('#occCrewCorrectStatus').textContent='Confira os nomes e salve apenas a equipe desta ocorrência.';
   openModal('occCrewCorrectModal');
 }
@@ -3273,9 +3279,12 @@ async function saveOccurrenceCrewCorrection(){
     names.push(dispatchRoleName(role)+': '+priorityPersonName(m));
   }
   const newIds=selected.map(x=>activeTeamRows().find(m=>m.id===x.id)?.profissional_id).sort();
-  if(JSON.stringify(newIds)===JSON.stringify(draft.oldIds)){
+  const oldScheduledRows=draft.oldRows.filter(row=>
+    norm(row.tipo_escala_no_momento)!=='AVULSO_ACIONAMENTO');
+  const oldScheduledIds=oldScheduledRows.map(row=>row.profissional_id).sort();
+  if(JSON.stringify(newIds)===JSON.stringify(oldScheduledIds)){
     // A correção de função sem trocar profissional também pode ser válida.
-    const previousRoles=draft.oldRows.map(x=>norm(x.funcao)).sort();
+    const previousRoles=oldScheduledRows.map(x=>norm(x.funcao)).sort();
     const selectedRoles=selected.map(x=>norm(activeTeamRows().find(m=>m.id===x.id)?.funcao||
       (x.role==='tech'?'Técnico de Enfermagem':dispatchRoleName(x.role)))).sort();
     if(JSON.stringify(previousRoles)===JSON.stringify(selectedRoles)){
