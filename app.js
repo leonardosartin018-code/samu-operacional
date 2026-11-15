@@ -1690,12 +1690,29 @@ function automaticDispatchCrew(v){
   return crew;
 }
 /* ---------- Painel lateral de prioridade: somente filas reais ---------- */
+/* USB: pelo menos um técnico/enfermeiro OU condutor fixo é suficiente
+   para aparecer na fila de prefixos. Sem fixo, só filas de profissionais. */
+function fixedUsbCrewForVehicleRotation(v){
+  if(!vehicleAvailableForRotation(v))return null;
+  const fixed=vehicleMembers(v).filter(m=>!isRotationMember(m)&&!memberIsBusy(m));
+  const driver=fixed.find(m=>teamRoleKey(m)==='driver')||null;
+  const tech=fixed.find(m=>['tech','nurse'].includes(teamRoleKey(m)))||null;
+  if(!driver&&!tech)return null;
+  return {v,driver,tech,nurse:null,doctor:null,
+    complete:requiredDispatchRoles(v).every(role=>crewHasRole(fixed,role)),
+    base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)};
+}
+function usbFixedVehicleLabel(item){
+  const prefix=item.v.nome||item.v.codigo;
+  const fixed=[item.tech,item.driver].filter(Boolean);
+  return prefix+(fixed.length?' — '+fixed.map(priorityPersonName).join(' / '):'');
+}
 function availableUsbTeams(){
   const crit=currentRotationCriterion();
   const eligible=vehicles.filter(v=>
     isAnapolisVehicle(v)&&vehicleType(v)==='USB'&&
     v.participa_revezamento!==false&&vehicleAvailableForRotation(v)
-  ).map(fixedCrewForVehicleRotation).filter(Boolean);
+  ).map(fixedUsbCrewForVehicleRotation).filter(Boolean);
   // Antes da primeira ocorrência da frota deste tipo, USA 01 / 02 / 06
   // e USB 01 / 02 / 03 ... ficam na sequência dos prefixos.
   const firstRound=eligible.length>0&&eligible.every(x=>x.occ===0&&!latestReturnForVehicle(x.v));
@@ -1774,10 +1791,13 @@ function nextVehicleRotationCard(type,hasRotation){
       '<p class="rotation-vehicle-empty">Nenhuma '+type+' apta para empenho na base neste momento.</p></div>';
   }
   const prefix=first.v.nome||first.v.codigo;
+  const displayPrefix=type==='USB'?usbFixedVehicleLabel(first):prefix;
   const initial=list.every(x=>x.occ===0&&!latestReturnForVehicle(x.v));
   html+='<div class="manual-vehicle-header"><span class="rotation-vehicle-label">PRÓXIMA '+type+' DA VEZ</span>'+
     (isOperator()&&list.length>1?'<button type="button" class="manual-order-btn" data-manual-order="'+type+'_VIATURA">↕ PERSONALIZAR ORDEM</button>':'')+
-    '</div><strong class="rotation-vehicle-prefix">'+esc(prefix)+'</strong>'+
+    '</div><strong class="rotation-vehicle-prefix">'+esc(displayPrefix)+'</strong>'+
+    (type==='USB'&&!first.complete?
+      '<small class="rotation-usb-partial-note">EQUIPE FIXA PARCIAL • COMPLETAR COM REVEZAMENTO NO ACIONAMENTO</small>':'')+
     (manualRankVehicle(first.v)!==null?'<span class="manual-order-active">ORDEM MANUAL TEMPORÁRIA</span>':
       (initial?'<span class="rotation-default-order">SEQUÊNCIA INICIAL POR PREFIXO</span>':''));
   html+=rotationWaitMetrics(first.base,first.occ);
@@ -1800,7 +1820,7 @@ function nextVehicleRotationCard(type,hasRotation){
     html+='<div class="rotation-vehicle-order">'+
       '<div class="rotation-vehicle-order-title">PRÓXIMAS NA SEQUÊNCIA</div>'+
       list.slice(1,9).map((x,i)=>
-        '<div class="rotation-vehicle-order-row"><b>'+(i+2)+'º</b><strong>'+esc(x.v.nome||x.v.codigo)+
+        '<div class="rotation-vehicle-order-row"><b>'+(i+2)+'º</b><strong>'+esc(type==='USB'?usbFixedVehicleLabel(x):(x.v.nome||x.v.codigo))+
         rotationWaitMetrics(x.base,x.occ)+'</strong>'+
         (manualRankVehicle(x.v)!==null?'<small>ORDEM MANUAL</small>':'')+'</div>'
       ).join('')+'</div>';
@@ -1831,7 +1851,7 @@ function usbPairOccurrenceCount({driver,tech}){
 function rotationPanelGroup(type){
   if(type==='USB'){
     const pairs=usbRotationPairs();
-    if(pairs.length)return usbPairedRotationPanel(pairs);
+    if(pairs.length&&!availableUsbTeams().length)return usbPairedRotationPanel(pairs);
   }
   const roles=type==='USA'
     ? [['driver','Condutores'],['nurse','Enfermeiros']]
@@ -1850,8 +1870,8 @@ function rotationPanelGroup(type){
     }).filter(Boolean):[];
   const fixedTeams=type==='USA'?availableUsaTeams():availableUsbTeams();
   const hasPeopleQueues=queues.some(Boolean);
-  // Sem guarnição fixa completa, não existe viatura "da vez".
-  // Apenas condutores e técnicos/enfermeiros disputam as próximas saídas.
+  // USA só aparece com guarnição fixa completa. USB aparece com pelo
+  // menos um técnico/enfermeiro ou condutor fixo, seguido das filas individuais.
   return '<section class="rotation-panel-group rotation-panel-'+type.toLowerCase()+'">'+
     '<div class="rotation-panel-heading"><b>'+type+'</b>'+
     '<span>'+(hasRotation?'ESCALA COM REVEZAMENTO':'EQUIPE FIXA')+'</span></div>'+
