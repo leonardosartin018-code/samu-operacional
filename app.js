@@ -3494,6 +3494,16 @@ async function expressUseFixed(rowId){
     await loadAll(selectedDate());await loadExpressScale();
   }catch(e){alert(e.message||e)}
 }
+// Botões diretos FIXO / REVEZAMENTO mantêm o valor consumido pelo salvamento atual.
+function setExpressPermutaMode(mode){
+  const chosen=mode==='REVEZAMENTO'?'REVEZAMENTO':'FIXO';
+  $('#expressPermutaMode').value=chosen;
+  $('#expressPermutaModeButtons [data-permuta-mode]').forEach(button=>{
+    const active=button.dataset.permutaMode===chosen;
+    button.classList.toggle('is-selected',active);
+    button.setAttribute('aria-pressed',String(active));
+  });
+}
 function expressSwap(rowId,editing=false){
   if(!canEditOpenShift())return;
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
@@ -3510,11 +3520,11 @@ function expressSwap(rowId,editing=false){
   $('#expressPermutaTitular').innerHTML='<b>Titular:</b> '+esc(r.nome_referencia||displayName(r.profissionais)||'—');
   $('#expressPermutaSearch').value=pro?professionalLabel(pro,'driver'):(current?.nome_snapshot||'');
   $('#expressPermutaProId').value=current?.profissional_id||'';
-  $('#expressPermutaMode').value=isRotationMember(current)?'REVEZAMENTO':'FIXO';
+  setExpressPermutaMode(isRotationMember(current)?'REVEZAMENTO':'FIXO');
   $('#expressPermutaResults').innerHTML='';
   $('#expressPermutaResults').classList.remove('show');
   openModal('expressPermutaModal');
-  setTimeout(()=>$(editing?'#expressPermutaMode':'#expressPermutaSearch').focus(),40);
+  setTimeout(()=>$('#expressPermutaSearch').focus(),40);
 }
 function expressPermutaAutocomplete(){
   const q=norm($('#expressPermutaSearch').value);
@@ -5436,6 +5446,9 @@ $('#confirmInternalBookBtn').onclick=()=>confirmInternalTeam('#internalScaleEdit
 $('#saveBookBtn').onclick=saveBook;$('#printBookBtn').onclick=()=>window.print();
 $('#bookObs').addEventListener('input',()=>{unsavedBook=true});
 $('#expressPermutaSearch').oninput=expressPermutaAutocomplete;
+$('#expressPermutaModeButtons [data-permuta-mode]').forEach(button=>{
+  button.onclick=()=>setExpressPermutaMode(button.dataset.permutaMode);
+});
 $('#saveExpressPermutaBtn').onclick=saveExpressPermuta;
 $('#saveQuickRegisterBtn').onclick=saveQuickRegistration;
 
