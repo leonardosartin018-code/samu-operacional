@@ -5610,7 +5610,7 @@ function samuPdfReportModel(shift,record){
   const perVehicle=new Map();
   record.vehicleSnapshot.forEach(v=>perVehicle.set(v.id,{
     name:v.nome||v.codigo||'—',base:v.bases?.nome||'Base não informada',
-    state:statusInfo(v).label,events:[],members:[]
+    state:statusInfo(v).label,stateKey:statusInfo(v).key,events:[],members:[]
   }));
   activeMembers.forEach(m=>{
     const v=perVehicle.get(m.viatura_id);
@@ -5620,7 +5620,7 @@ function samuPdfReportModel(shift,record){
     if(!o.viatura_id)return;
     if(!perVehicle.has(o.viatura_id))perVehicle.set(o.viatura_id,{
       name:o.viatura_snapshot||o.viaturas?.nome||'—',base:occurrenceBase(o),
-      state:'Não disponível na consulta',events:[],members:[]
+      state:'Não disponível na consulta',stateKey:'unknown',events:[],members:[]
     });
     perVehicle.get(o.viatura_id).events.push(o);
   });
@@ -5742,6 +5742,52 @@ function samuBookPdf(shift,model,libs){
   samuPdfParagraph(st,'Faço ao meu substituto legal a quem transmito todas as ordens em vigor, bem como todas as alterações verificadas no decorrer do serviço.');
   samuPdfFinish(st,samuReportFilename('SAMU_LIVRO_OFICIAL',shift));
 }
+
+/* Captura o Livro já diagramado no sistema quando o plantão está carregado.
+   Preserva cabeçalho, tabelas, cores e as duas folhas do documento oficial.
+   Se o ambiente impedir captura, usa o PDF semântico completo como reserva. */
+async function samuOfficialBookPdf(shift,model,libs){
+  if(currentPlantao?.id!==shift.id||!$('#bookDocument')){
+    return samuBookPdf(shift,model,libs);
+  }
+  let isolated=null;
+  try{
+    if(bookMeta?.plantao_id!==shift.id)await loadBookData();
+    renderBook();
+    const canvasModule=await import('https://esm.sh/html2canvas@1.4.1');
+    const html2canvas=canvasModule.default||canvasModule.html2canvas;
+    if(typeof html2canvas!=='function')throw new Error('Renderizador do Livro indisponível');
+    isolated=document.createElement('div');
+    isolated.className='book-workspace';
+    isolated.style.cssText='position:fixed;left:-10000px;top:0;width:795px;background:white;z-index:-1;pointer-events:none';
+    const clone=$('#bookDocument').cloneNode(true);
+    clone.style.cssText='display:block;width:795px;max-width:none;background:white';
+    isolated.appendChild(clone);
+    document.body.appendChild(isolated);
+    const pages=[...clone.querySelectorAll('.book-page')];
+    if(pages.length!==2)throw new Error('Modelo oficial do Livro incompleto');
+    const doc=new libs.jsPDF({orientation:'portrait',unit:'mm',format:'a4',compress:true});
+    const maxWidth=190,maxHeight=277;
+    for(let i=0;i<pages.length;i++){
+      if(i)doc.addPage();
+      const canvas=await html2canvas(pages[i],{
+        backgroundColor:'#ffffff',scale:2,useCORS:true,logging:false,
+        width:Math.ceil(pages[i].scrollWidth),height:Math.ceil(pages[i].scrollHeight)
+      });
+      if(!canvas.width||!canvas.height)throw new Error('Página oficial sem conteúdo');
+      const proportion=Math.min(maxWidth/canvas.width,maxHeight/canvas.height);
+      const width=canvas.width*proportion,height=canvas.height*proportion;
+      doc.addImage(canvas.toDataURL('image/jpeg',0.94),'JPEG',
+        (210-width)/2,Math.max(10,(297-height)/2),width,height);
+    }
+    doc.save(samuReportFilename('SAMU_LIVRO_OFICIAL',shift));
+  }catch(error){
+    console.warn('Captura visual do Livro não disponível; usando composição tabular.',error);
+    samuBookPdf(shift,model,libs);
+  }finally{
+    isolated?.remove();
+  }
+}
 function samuCompletePdf(shift,model,libs){
   const {record,completed,activeMembers,perPerson,perVehicle,memberName,memberBase,occurrenceBase,
     crew,numbers,clock,qth,toQth,total,averageQth,averageReturn}=model;
@@ -5753,7 +5799,7 @@ function samuCompletePdf(shift,model,libs){
   const qta=record.events.filter(o=>norm(o.status)==='QTA').length;
   const cancelled=record.events.filter(o=>norm(o.status)==='CANCELADA').length;
   const counts=[...perVehicle.values()];
-  const unavailable=counts.filter(v=>/PANE|ASSEPSIA|FALTA|SEM EQUIPE|SEM MACA|BAIX/.test(norm(v.state)));
+  const unavailable=counts.filter(v=>['asepsis','mechanical','noCrew','noStretcher'].includes(v.stateKey));
   samuPdfParagraph(st,'Total de registros: '+totalOcc+' | Finalizadas: '+completed.length+
     ' | Em andamento: '+pending+' | QTA: '+qta+' | Canceladas: '+cancelled+
     ' | Profissionais ativos na escala: '+activeMembers.length);
@@ -5813,7 +5859,7 @@ async function exportClosingReport(shift=currentPlantao,{includeBook=true}={}){
     const model=samuPdfReportModel(shift,record);
     const libs=await loadSamuPdfLibraries();
     // Dois arquivos independentes, gerados com a MESMA consulta de dados.
-    if(includeBook)samuBookPdf(shift,model,libs);
+    if(includeBook)await samuOfficialBookPdf(shift,model,libs);
     samuCompletePdf(shift,model,libs);
   }finally{
     samuPdfExportInProgress=false;
