@@ -2378,3 +2378,342 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
   #expressPermutaModal .express-permuta-mode-buttons{gap:6px}
   #expressPermutaModal .express-permuta-mode-btn{padding:8px 6px;font-size:.71rem}
 }
+
+/* SAMU: hierarquia visual operacional — Anápolis + bases descentralizadas
+   A cor de SITUAÇÃO continua no card. Cores de equipe/ação distinguem leitura. */
+:root{
+  --samu-person-yellow:#ffe083;
+  --samu-person-dark:#122d3d;
+}
+
+/* 1. Seções separadas sem competir com o status das viaturas */
+#vehicles .vehicle-operational-group{
+  padding:11px;
+  border-radius:13px;
+  box-shadow:0 5px 15px rgba(15,39,65,.055);
+}
+#vehicles .vehicle-operational-group.moto{
+  background:#fff8ee;
+  border-color:#fed7aa;
+  border-left-color:#ea580c;
+}
+#vehicles .vehicle-operational-group.usa{
+  background:#fff3f4;
+  border-color:#fecdd3;
+  border-left-color:#dc2626;
+}
+#vehicles .vehicle-operational-group.usb{
+  background:#f0f7ff;
+  border-color:#bfdbfe;
+  border-left-color:#2563eb;
+}
+#vehicles .vehicle-operational-group.occurrence{
+  background:#fff1f2;
+  border-color:#fda4af;
+  border-left-color:#dc2626;
+}
+#vehicles .vehicle-operational-group.returning{
+  background:#fff8e8;
+  border-color:#fcd34d;
+  border-left-color:#d97706;
+}
+#vehicles .vehicle-operational-group.asepsis{
+  background:#eef6ff;
+  border-color:#93c5fd;
+  border-left-color:#2563eb;
+}
+#vehicles .vehicle-operational-group.mechanical,
+#vehicles .vehicle-operational-group.noCrew{
+  background:#f1f5f9;
+  border-color:#94a3b8;
+  border-left-color:#475569;
+}
+#vehicles .vehicle-operational-group.noStretcher{
+  background:#f8f3ff;
+  border-color:#d8b4fe;
+  border-left-color:#7e22ce;
+}
+#vehicles .vehicle-operational-group .vehicle-group-head{
+  padding:8px 9px;
+  margin-bottom:10px;
+  border:1px solid rgba(148,163,184,.20);
+  border-radius:8px;
+  background:rgba(255,255,255,.75);
+}
+#vehicles .vehicle-operational-group .vehicle-group-head b{
+  font-size:.84rem;
+  letter-spacing:.055em;
+}
+
+/* Cada base tem seu próprio quadro e cabeçalho, sem alterar a sequência. */
+#regionalGrid .regional-card{
+  min-width:0;
+  padding:12px;
+  border:1px solid #b7d1e2;
+  border-top:4px solid #0e7490;
+  border-radius:13px;
+  background:#f0f7fb;
+  box-shadow:0 5px 16px rgba(15,39,65,.07);
+}
+#regionalGrid .regional-card:nth-child(3n+2){
+  background:#f4f8ff;
+  border-color:#b7cce9;
+  border-top-color:#2563eb;
+}
+#regionalGrid .regional-card:nth-child(3n){
+  background:#f2faf7;
+  border-color:#badccc;
+  border-top-color:#0f766e;
+}
+#regionalGrid .regional-card-head{
+  padding:9px 10px;
+  margin-bottom:11px;
+  border:1px solid rgba(109,143,168,.28);
+  border-radius:9px;
+  background:#fff;
+}
+#regionalGrid .regional-card-head .regional-name{
+  font-size:1.08rem;
+  color:#153a54;
+}
+#regionalGrid .regional-card-head .regional-sub{
+  color:#506779;
+}
+#regionalGrid .regional-vehicles{
+  gap:11px;
+}
+
+/* 2. Papel em branco; profissional de fato escalado em amarelo sobre
+   campo escuro. VAGA permanece discreta, sem realce amarelo. */
+:is(#vehicles,#regionalGrid) .vehicle-card .crew-grid{
+  gap:7px;
+  margin:9px 0;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot{
+  min-width:0;
+  padding:8px 10px;
+  border-radius:8px;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.has-professional{
+  background:var(--samu-person-dark);
+  border:1px solid rgba(191,219,254,.32);
+  box-shadow:inset 3px 0 0 rgba(253,224,71,.73);
+  color:#fff;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.has-professional .crew-role{
+  color:#f8fafc;
+  opacity:1;
+  font-size:.64rem;
+  font-weight:850;
+  line-height:1.3;
+  letter-spacing:.045em;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.has-professional .crew-name.has-person{
+  color:var(--samu-person-yellow);
+  font-size:.94rem;
+  font-weight:1000;
+  line-height:1.26;
+  letter-spacing:.01em;
+  text-transform:uppercase;
+  text-shadow:0 1px 1px rgba(0,0,0,.24);
+  overflow-wrap:anywhere;
+}
+#vehicles .vehicle-operational-group.occurrence .vehicle-card .crew-name.has-person{
+  font-size:1rem;
+}
+#regionalGrid .vehicle-card .crew-name.has-person{
+  font-size:.9rem;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card.status-returning .crew-slot.has-professional{
+  background:#243342;
+  border-color:#64748b;
+  color:#fff;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.is-vacant{
+  background:rgba(15,23,42,.12);
+  border:1px dashed rgba(226,232,240,.40);
+  box-shadow:none;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.is-vacant .crew-name.is-empty{
+  color:#e2e8f0;
+  font-weight:650;
+  opacity:.8;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card.status-returning .crew-slot.is-vacant .crew-role,
+:is(#vehicles,#regionalGrid) .vehicle-card.status-returning .crew-slot.is-vacant .crew-name{
+  color:#50320a;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.rotation-preview.has-professional{
+  background:#6b3d10;
+  border-color:#fbbf24;
+  box-shadow:inset 3px 0 0 #fbbf24;
+}
+:is(#vehicles,#regionalGrid) .crew-slot.rotation-preview.has-professional .crew-preview-note{
+  color:#fff7d6;
+}
+
+/* 3. Botões de status identificáveis mesmo sem abrir outro menu.
+   O estado operacional continua sendo determinado pelo card e pelo banco. */
+:is(#vehicles,#regionalGrid) .vehicle-card .status-strip{
+  gap:5px;
+  margin-top:8px;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button{
+  min-height:30px;
+  font-size:.6rem;
+  line-height:1.2;
+  padding:6px 3px;
+  font-weight:900;
+  white-space:normal;
+  transition:filter .15s ease, box-shadow .15s ease;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button[data-status="base"]{
+  background:#dcfce7;
+  color:#14532d;
+  border-color:#86efac;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button[data-status="asepsis"]{
+  background:#dbeafe;
+  color:#1e40af;
+  border-color:#93c5fd;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button[data-status="mechanical"]{
+  background:#fee2e2;
+  color:#991b1b;
+  border-color:#fca5a5;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button[data-status="noCrew"]{
+  background:#e2e8f0;
+  color:#334155;
+  border-color:#94a3b8;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button[data-status="noStretcher"]{
+  background:#ede9fe;
+  color:#5b21b6;
+  border-color:#c4b5fd;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button.active{
+  box-shadow:inset 0 0 0 2px currentColor;
+  font-weight:1000;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button:hover:not(:disabled){
+  filter:brightness(.94);
+}
+:is(#vehicles,#regionalGrid) .vehicle-card :is(button,.status-strip button):focus-visible{
+  outline:3px solid #facc15;
+  outline-offset:2px;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .dispatch-btn{
+  background:#16a34a;
+  border:1px solid #86efac;
+  color:#fff;
+  font-weight:1000;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .edit-team-btn{
+  background:#dbeafe;
+  border-color:#93c5fd;
+  color:#1d4ed8;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .qta-btn{
+  background:#ede9fe;
+  border-color:#a78bfa;
+  color:#5b21b6;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .return-btn{
+  background:#fde68a;
+  border-color:#f59e0b;
+  color:#78350f;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .arrive-btn{
+  background:#fef3c7;
+  border-color:#eab308;
+  color:#713f12;
+}
+:is(#vehicles,#regionalGrid) .vehicle-card .qta-btn,
+:is(#vehicles,#regionalGrid) .vehicle-card .return-btn{
+  animation:none;
+}
+
+/* 4. Modal de equipe rápida: grupos bem separados e nomes já salvos em foco */
+#teamModal .quick-team-grid{
+  gap:12px;
+}
+#teamModal .quick-team-field{
+  padding:11px;
+  border-radius:10px;
+  border:1px solid #c3d8e6;
+  background:#f3f8fd;
+  box-shadow:0 2px 6px rgba(15,39,65,.04);
+}
+#teamModal .quick-team-field[data-role="driver"]{
+  background:#f0f7ff;
+  border-left:4px solid #2563eb;
+}
+#teamModal .quick-team-field[data-role="tech"]{
+  background:#f0fdfa;
+  border-left:4px solid #0f766e;
+}
+#teamModal .quick-team-field[data-role="nurse"]{
+  background:#f2f8ff;
+  border-left:4px solid #0284c7;
+}
+#teamModal .quick-team-field[data-role="doctor"]{
+  background:#faf5ff;
+  border-left:4px solid #7c3aed;
+}
+#teamModal .quick-team-field>label{
+  font-size:.72rem;
+  font-weight:950;
+  color:#17364e;
+}
+#teamModal .quick-current.has-person{
+  padding:7px 9px;
+  gap:6px;
+  min-height:35px;
+  flex-wrap:wrap;
+  border-radius:7px;
+  border:1px solid #335d73;
+  background:#123549;
+  color:#fff;
+}
+#teamModal .quick-current.has-person .quick-current-label{
+  color:#fff;
+  font-size:.65rem;
+  font-weight:850;
+}
+#teamModal .quick-current.has-person .quick-current-name{
+  color:var(--samu-person-yellow);
+  font-size:.86rem;
+  font-weight:1000;
+}
+#teamModal .quick-current.has-person .quick-current-note{
+  color:#cbd5e1;
+  font-size:.6rem;
+}
+#teamModal .quick-team-field[data-role="driver"] .quick-register-inline{
+  background:#e0f2fe;
+  border-color:#7dd3fc;
+  color:#075985;
+}
+#teamModal .quick-team-field[data-role="tech"] .quick-register-inline{
+  background:#ccfbf1;
+  border-color:#5eead4;
+  color:#115e59;
+}
+#teamModal .quick-team-field[data-role="nurse"] .quick-register-inline{
+  background:#dbeafe;
+  border-color:#93c5fd;
+  color:#1e40af;
+}
+#teamModal .quick-team-field[data-role="doctor"] .quick-register-inline{
+  background:#ede9fe;
+  border-color:#c4b5fd;
+  color:#5b21b6;
+}
+
+@media(max-width:720px){
+  #regionalGrid .regional-card{padding:9px}
+  #regionalGrid .regional-card-head{padding:8px}
+  :is(#vehicles,#regionalGrid) .vehicle-card .crew-slot{padding:7px 8px}
+  :is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.has-professional .crew-name.has-person{font-size:.87rem}
+}
