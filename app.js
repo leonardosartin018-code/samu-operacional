@@ -5397,14 +5397,32 @@ function closingReportHtml(shift,records){
     '<h2>Detalhamento dos atendimentos</h2><section>'+table(['Nº','Viatura / tipo','Base','Natureza','Situação','Equipe','Acionamento','Saída','QTH','Até QTH','Início retorno','Chegada à base','Finalização','Tempo total','Local','Destino da vítima','Observações'],occurrenceRows)+'</section>'+
     '</html>';
 }
-async function exportClosingReport(shift=currentPlantao){
-  if(!isOperator()||!shift?.id)return;
+
+/* Exportações separadas: Livro oficial (somente Anápolis) e relatório analítico.
+   PDFs são gerados no navegador. A versão do Livro visual permanece inalterada. */
+let samuPdfExportInProgress=false;
+async function loadSamuPdfLibraries(){
+  try{
+    const [jspdfModule,tableModule]=await Promise.all([
+      import('https://esm.sh/jspdf@2.5.2'),
+      import('https://esm.sh/jspdf-autotable@3.8.4')
+    ]);
+    const jsPDF=jspdfModule.jsPDF||jspdfModule.default?.jsPDF;
+    const autoTable=tableModule.autoTable||tableModule.default;
+    if(typeof jsPDF!=='function'||typeof autoTable!=='function')
+      throw new Error('bibliotecas incompletas');
+    return {jsPDF,autoTable};
+  }catch(error){
+    throw new Error('Não foi possível carregar o gerador de PDFs. Confira a conexão com a internet e tente novamente. '+(error.message||error));
+  }
+}
+async function fetchSamuReportData(shift){
   const id=shift.id;
   const [events,members,internal,bookResult]=await Promise.all([
     reportRows(()=>supabase.from('ocorrencias').select('*,viaturas(nome,bases(nome))').eq('plantao_id',id)),
     reportRows(()=>supabase.from('equipe_plantao').select('*,viaturas(nome,bases(nome))').eq('plantao_id',id)),
     reportRows(()=>supabase.from('escala_interna_plantao').select('*').eq('plantao_id',id)),
-    supabase.from('livro_plantao').select('parte_diaria,observacoes').eq('plantao_id',id).maybeSingle()
+    supabase.from('livro_plantao').select('*').eq('plantao_id',id).maybeSingle()
   ]);
   if(bookResult.error)throw bookResult.error;
   const links=[];
@@ -5412,13 +5430,245 @@ async function exportClosingReport(shift=currentPlantao){
     const ids=events.slice(i,i+100).map(o=>o.id);
     links.push(...await reportRows(()=>supabase.from('equipe_ocorrencia').select('*').in('ocorrencia_id',ids)));
   }
-  const blob=new Blob([closingReportHtml(shift,{events,links,members,internal,book:bookResult.data})],{type:'text/html;charset=utf-8'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;
-  a.download='SAMU-relatorio-'+shift.data_plantao+'-'+shift.turno+'.html';
-  a.click();
-  setTimeout(()=>URL.revokeObjectURL(url),30000);
+  // Situação da frota: retrato do instante de emissão, NÃO registro histórico.
+  return {events,links,members,internal,book:bookResult.data,vehicleSnapshot:[...vehicles]};
+}
+const SAMU_REPORT_TIME_DISCLAIMER='ATENÇÃO: Horários e durações são registros operacionais, sujeitos a atraso, omissão e inexatidão. Falhas de rádio, comunicação, rede ou lançamento tardio podem impedir o registro no momento exato. "Não informado" não significa que o atendimento não ocorreu. Conferir com as equipes antes de auditoria ou avaliação de desempenho.';
+function samuPdfReportModel(shift,record){
+  const linksByOccurrence=new Map();
+  record.links.forEach(m=>{
+    if(!linksByOccurrence.has(m.ocorrencia_id))linksByOccurrence.set(m.ocorrencia_id,[]);
+    linksByOccurrence.get(m.ocorrencia_id).push(m);
+  });
+  const memberName=m=>m.nome_snapshot||m.profissionais?.nome_completo||'Não informado';
+  const memberBase=m=>m.viaturas?.bases?.nome||(!m.viatura_id?'Anápolis':m.base_snapshot||'Base não informada');
+  const occurrenceBase=o=>o.base_snapshot||o.viaturas?.bases?.nome||(
+    o.viatura_id?record.vehicleSnapshot.find(v=>v.id===o.viatura_id)?.bases?.nome||'Base não informada':'Sem viatura');
+  const completed=record.events.filter(o=>norm(o.status)==='FINALIZADA');
+  const activeMembers=record.members.filter(m=>norm(m.status)==='ATIVO');
+  const perPerson=new Map();
+  for(const m of [...record.members,...record.internal,...record.links]){
+    if(m.profissional_id&&!perPerson.has(m.profissional_id))
+      perPerson.set(m.profissional_id,{name:memberName(m),events:new Map(),role:m.funcao||'—',base:memberBase(m)});
+  }
+  record.links.forEach(link=>{
+    const p=perPerson.get(link.profissional_id);
+    const occ=completed.find(o=>o.id===link.ocorrencia_id);
+    if(p&&occ)p.events.set(occ.id,occ);
+  });
+  const perVehicle=new Map();
+  record.vehicleSnapshot.forEach(v=>perVehicle.set(v.id,{
+    name:v.nome||v.codigo||'—',base:v.bases?.nome||'Base não informada',
+    state:statusInfo(v).label,events:[],members:[]
+  }));
+  activeMembers.forEach(m=>{
+    const v=perVehicle.get(m.viatura_id);
+    if(v)v.members.push(m);
+  });
+  completed.forEach(o=>{
+    if(!o.viatura_id)return;
+    if(!perVehicle.has(o.viatura_id))perVehicle.set(o.viatura_id,{
+      name:o.viatura_snapshot||o.viaturas?.nome||'—',base:occurrenceBase(o),
+      state:'Não disponível na consulta',events:[],members:[]
+    });
+    perVehicle.get(o.viatura_id).events.push(o);
+  });
+  const crew=o=>(linksByOccurrence.get(o.id)||[]).map(m=>
+    memberName(m)+(m.funcao?' ('+m.funcao+')':'')).join(' / ')||'Não registrada';
+  const numbers=list=>list.map(o=>'Nº '+(o.numero||'não informado')).join(', ')||'—';
+  const clock=value=>fmtTime(value);
+  const qth=o=>o.qth_nao_informado?'NÃO INFORMADO':clock(o.chegada_qth_em);
+  const toQth=o=>o.qth_nao_informado?null:minutesBetween(o.saida_em||o.acionada_em,o.chegada_qth_em);
+  const total=o=>minutesBetween(o.saida_em||o.acionada_em,o.retorno_base_em||o.finalizado_em);
+  const travel=completed.map(toQth).filter(n=>n!==null);
+  const returnTimes=completed.map(o=>minutesBetween(o.inicio_retorno_em,o.retorno_base_em)).filter(n=>n!==null);
+  const average=values=>values.length?fmtMinutes(Math.round(values.reduce((a,b)=>a+b,0)/values.length))+' ('+values.length+' registros)':'Não calculável (sem horários completos)';
+  return {shift,record,linksByOccurrence,completed,activeMembers,perPerson,perVehicle,
+    memberName,memberBase,occurrenceBase,crew,numbers,clock,qth,toQth,total,
+    averageQth:average(travel),averageReturn:average(returnTimes)};
+}
+function samuPdfLayout(jsPDF,autoTable,landscape,title,subline){
+  const doc=new jsPDF({orientation:landscape?'landscape':'portrait',unit:'mm',format:'a4',compress:true});
+  const w=doc.internal.pageSize.getWidth();
+  const state={doc,autoTable,w,y:14,margin:12};
+  doc.setFillColor(6,66,101);doc.rect(0,0,w,11,'F');
+  doc.setTextColor(255,255,255);doc.setFont('helvetica','bold');doc.setFontSize(10);
+  doc.text('CENTRAL OPERACIONAL SAMU  |  ANÁPOLIS',12,7.5);
+  doc.setTextColor(20,49,72);doc.setFontSize(16);doc.text(title,12,21);
+  doc.setFont('helvetica','normal');doc.setFontSize(9);
+  const subtitle=doc.splitTextToSize(subline,w-24);
+  doc.text(subtitle,12,27);state.y=27+subtitle.length*4.5+5;
+  return state;
+}
+function samuPdfParagraph(st,text,{size=9,warning=false}={}){
+  const {doc,w,margin}=st;
+  doc.setFont('helvetica',warning?'bold':'normal');doc.setFontSize(size);
+  const lines=doc.splitTextToSize(String(text||'—'),w-margin*2);
+  const needed=lines.length*(size*.42)+5;
+  if(st.y+needed>doc.internal.pageSize.getHeight()-17){doc.addPage();st.y=16}
+  if(warning){doc.setTextColor(146,65,14)}
+  else doc.setTextColor(51,65,85);
+  doc.text(lines,margin,st.y);st.y+=needed;
+  doc.setTextColor(20,49,72);
+}
+function samuPdfSection(st,title,headers,rows){
+  const {doc,autoTable,w,margin}=st;
+  if(st.y>doc.internal.pageSize.getHeight()-42){doc.addPage();st.y=16}
+  doc.setFillColor(232,242,249);doc.rect(margin,st.y-4,w-2*margin,8,'F');
+  doc.setFont('helvetica','bold');doc.setFontSize(10);doc.setTextColor(10,68,104);
+  doc.text(title,margin+2,st.y+1.2);st.y+=9;
+  autoTable(doc,{
+    startY:st.y,
+    head:[headers],
+    body:(rows.length?rows:[headers.map((_,i)=>i===0?'Sem registros':'—')]),
+    margin:{left:margin,right:margin,top:14,bottom:15},
+    styles:{font:'helvetica',fontSize:7.6,cellPadding:2.5,overflow:'linebreak',valign:'top',lineColor:[220,230,238],lineWidth:0.15},
+    headStyles:{fillColor:[10,83,130],textColor:255,fontStyle:'bold'},
+    alternateRowStyles:{fillColor:[246,249,252]},
+    showHead:'everyPage',
+    theme:'grid'
+  });
+  st.y=doc.lastAutoTable.finalY+9;
+}
+function samuPdfFinish(st,filename){
+  const {doc,w}=st;
+  const total=doc.internal.getNumberOfPages();
+  for(let i=1;i<=total;i++){
+    doc.setPage(i);doc.setFont('helvetica','normal');doc.setFontSize(7.5);
+    doc.setTextColor(90,107,121);
+    doc.line(12,doc.internal.pageSize.getHeight()-12,w-12,doc.internal.pageSize.getHeight()-12);
+    doc.text('SAMU • Gerado em '+new Date().toLocaleString('pt-BR'),12,doc.internal.pageSize.getHeight()-8);
+    doc.text('Página '+i+' / '+total,w-12,doc.internal.pageSize.getHeight()-8,{align:'right'});
+  }
+  doc.save(filename);
+}
+function samuReportFilename(prefix,shift){
+  return prefix+'_'+String(shift.data_plantao||'').replace(/[^0-9-]/g,'')+'_'+norm(shift.turno||'PLANTAO')+'.pdf';
+}
+function samuBookPdf(shift,model,libs){
+  const {record,activeMembers,memberName,memberBase}=model;
+  const st=samuPdfLayout(libs.jsPDF,libs.autoTable,false,'LIVRO OFICIAL — SERVIÇO DE DIA',
+    'ESTADO DE GOIÁS • PREFEITURA DE ANÁPOLIS • CBM-GO / SAMU 192\n'+
+    shiftTitle(shift)+' • Parte Diária Nº '+(record.book?.parte_diaria||'Não informado'));
+  samuPdfParagraph(st,'Responsável pelo serviço: '+BOOK_SERVICE_CHIEF+' | Rádio 1º: '+
+    (record.internal.find(m=>m.codigo_posicao==='RADIO-01'&&norm(m.status)==='ATIVO')?.nome_snapshot||'—')+
+    ' | Rádio 2º: '+(record.internal.find(m=>m.codigo_posicao==='RADIO-02'&&norm(m.status)==='ATIVO')?.nome_snapshot||'—'));
+  samuPdfParagraph(st,'I — PARTE: SERVIÇO INTERNO. Escala e alterações verificadas no decorrer do serviço.');
+  const anapolis=activeMembers.filter(m=>norm(memberBase(m))==='ANAPOLIS');
+  const canon=v=>norm(v||'').replace(/[^A-Z0-9]/g,'').replace(/0(\d)$/,'$1');
+  const drivers=anapolis.filter(m=>/CONDUTOR|MOTOLANCIA/.test(norm(m.funcao)));
+  const driverSlots=['MOTOLÂNCIA','USA 01','USA 02','USA 06','USB 01','USB 02','USB 03','USB 04','USB 05','USB 06'];
+  const driverRows=driverSlots.map(label=>{
+    const team=drivers.filter(m=>canon(m.viatura_snapshot||m.viaturas?.nome)===canon(label));
+    return [label,team.map(memberName).join(' / ')||'—'];
+  });
+  const sanitarySlots=BOOK_INTERNAL_SLOTS.filter(s=>s.setor==='SANITARIA');
+  sanitarySlots.forEach(slot=>{
+    const item=record.internal.find(m=>m.codigo_posicao===slot.code&&norm(m.status)==='ATIVO'&&
+      !['AUSENTE','VAGO','DESESCALADO'].includes(norm(m.tipo_alteracao)));
+    driverRows.push([slot.bookLabel||slot.label,item?memberName(item):'—']);
+  });
+  samuPdfSection(st,'A) CONDUTORES / AMBULÂNCIAS', ['VTR','NOME'],driverRows);
+  samuPdfSection(st,'B) EQUIPE OPERACIONAL — ANÁPOLIS',
+    ['Viatura / fila','Profissional','Função','Situação'],
+    anapolis.map(m=>[m.viatura_snapshot||m.viaturas?.nome||m.grupo_revezamento||'Revezamento',
+      memberName(m),m.funcao||'—',m.tipo_escala||'—']));
+  const internal=BOOK_INTERNAL_SLOTS.filter(s=>s.setor==='CENTRAL').map(slot=>{
+    const m=record.internal.find(x=>x.codigo_posicao===slot.code&&norm(x.status)==='ATIVO'&&
+      !['AUSENTE','VAGO','DESESCALADO'].includes(norm(x.tipo_alteracao)));
+    return [slot.label,m?memberName(m):'—'];
+  });
+  samuPdfSection(st,'C) RÁDIO-OPERADORES, TARM E LAVADORES',['Função','Profissional'],internal);
+  const isServing=new Set([...activeMembers,...record.internal.filter(m=>norm(m.status)==='ATIVO')].map(m=>m.profissional_id));
+  const permutas=[...anapolis,...record.internal].filter(m=>
+    norm(m.tipo_alteracao_escala||m.tipo_alteracao)==='PERMUTA'&&
+    m.titular_profissional_id&&m.titular_profissional_id!==m.profissional_id&&
+    !isServing.has(m.titular_profissional_id)).map(m=>[
+      m.funcao||'—',memberName(m),m.nome_titular_escala||m.titular_nome_snapshot||'—'
+    ]);
+  samuPdfSection(st,'PERMUTAS',['Função','Substituto','Substituído'],permutas);
+  samuPdfParagraph(st,'OBSERVAÇÕES DO LIVRO: '+(record.book?.observacoes||'Sem observações registradas.'));
+  samuPdfParagraph(st,'Faço ao meu substituto legal a quem transmito todas as ordens em vigor, bem como todas as alterações verificadas no decorrer do serviço.');
+  samuPdfFinish(st,samuReportFilename('SAMU_LIVRO_OFICIAL',shift));
+}
+function samuCompletePdf(shift,model,libs){
+  const {record,completed,activeMembers,perPerson,perVehicle,memberName,memberBase,occurrenceBase,
+    crew,numbers,clock,qth,toQth,total,averageQth,averageReturn}=model;
+  const st=samuPdfLayout(libs.jsPDF,libs.autoTable,true,'RELATÓRIO OPERACIONAL COMPLETO',
+    shiftTitle(shift)+' | Situação: '+(shift.status||'—')+
+    ' | Parte Diária '+(record.book?.parte_diaria||'—'));
+  const totalOcc=record.events.length;
+  const pending=record.events.filter(o=>!['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status))).length;
+  const qta=record.events.filter(o=>norm(o.status)==='QTA').length;
+  const cancelled=record.events.filter(o=>norm(o.status)==='CANCELADA').length;
+  const counts=[...perVehicle.values()];
+  const unavailable=counts.filter(v=>/PANE|ASSEPSIA|FALTA|SEM EQUIPE|SEM MACA|BAIX/.test(norm(v.state)));
+  samuPdfParagraph(st,'Total de registros: '+totalOcc+' | Finalizadas: '+completed.length+
+    ' | Em andamento: '+pending+' | QTA: '+qta+' | Canceladas: '+cancelled+
+    ' | Profissionais ativos na escala: '+activeMembers.length);
+  samuPdfParagraph(st,'Deslocamento médio até QTH: '+averageQth+' | Retorno médio: '+averageReturn+'. '+
+    'Médias usam somente durações completas e válidas; não representam todos os atendimentos.');
+  samuPdfParagraph(st,'Viaturas indisponíveis na emissão: '+unavailable.length+
+    (unavailable.length?' | '+unavailable.map(v=>v.name+' ('+v.state+')').join(', '):'')+
+    '. O status da frota é consultado no momento da geração, não representa o estado histórico durante todo o plantão.');
+  samuPdfParagraph(st,SAMU_REPORT_TIME_DISCLAIMER,{size:8,warning:true});
+  const areas=[
+    ['ANÁPOLIS',v=>norm(v.base)==='ANAPOLIS'],
+    ['BASES DESCENTRALIZADAS',v=>norm(v.base)!=='ANAPOLIS']
+  ];
+  for(const [title,filter] of areas){
+    const fleet=counts.filter(filter).sort((a,b)=>a.base.localeCompare(b.base,'pt-BR')||a.name.localeCompare(b.name,'pt-BR'));
+    samuPdfSection(st,'FROTA E EQUIPE ESCALADA — '+title,
+      ['Base','Viatura','Situação na emissão','Profissionais escalados','Ocorrências finalizadas','Números'],
+      fleet.map(v=>[v.base,v.name,v.state,v.members.map(m=>memberName(m)+' ('+(m.funcao||'—')+')').join(' / ')||'Sem equipe fixa',
+        String(v.events.length),numbers(v.events)]));
+  }
+  samuPdfSection(st,'PROFISSIONAIS — PARTICIPAÇÃO NAS OCORRÊNCIAS',
+    ['Profissional','Função','Base / vinculação','Participações finalizadas','Números das ocorrências'],
+    [...perPerson.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(p=>[
+      p.name,p.role,p.base,String(p.events.size),numbers([...p.events.values()])
+    ]));
+  const activeInternal=record.internal.filter(m=>norm(m.status)==='ATIVO');
+  samuPdfSection(st,'SERVIÇO INTERNO — ANÁPOLIS',['Posição','Função','Nome','Alteração'],
+    activeInternal.map(m=>[m.codigo_posicao,m.funcao,memberName(m),m.tipo_alteracao||'—']));
+  for(const [title,test] of [
+    ['OCORRÊNCIAS — ANÁPOLIS',o=>norm(occurrenceBase(o))==='ANAPOLIS'],
+    ['OCORRÊNCIAS — BASES DESCENTRALIZADAS',o=>norm(occurrenceBase(o))!=='ANAPOLIS']]){
+    const rows=record.events.filter(test).sort((a,b)=>String(a.acionada_em||a.criado_em||'').localeCompare(String(b.acionada_em||b.criado_em||'')));
+    samuPdfSection(st,title+' / DADOS DO ATENDIMENTO',
+      ['Nº','Viatura','Natureza','Situação','Local / endereço','Destino / resultado da vítima','Equipe','Observações'],
+      rows.map(o=>[o.numero||'—',o.viatura_snapshot||o.viaturas?.nome||'Sem viatura',
+        o.natureza||'—',o.status||'—',[o.bairro,o.endereco].filter(Boolean).join(' / ')||'—',
+        victimDestinationDisplay(o.destino),crew(o),o.observacao||'—']));
+    samuPdfSection(st,title+' / TEMPOS OPERACIONAIS',
+      ['Nº','Viatura','Acionamento','Saída','Chegada QTH','Até QTH','Início retorno','Chegada base','Tempo retorno','Tempo total'],
+      rows.map(o=>[o.numero||'—',o.viatura_snapshot||o.viaturas?.nome||'—',clock(o.acionada_em),
+        clock(o.saida_em),qth(o),fmtMinutes(toQth(o)),clock(o.inicio_retorno_em),
+        clock(o.retorno_base_em),fmtMinutes(minutesBetween(o.inicio_retorno_em,o.retorno_base_em)),
+        fmtMinutes(total(o))]));
+  }
+  samuPdfParagraph(st,'LEITURA DOS DADOS: ocorrências finalizadas compõem as contagens de produtividade. QTA, canceladas e em andamento aparecem na listagem de atendimentos, mas não contam como finalizadas. Horários não informados não geram tempo estimado.');
+  samuPdfFinish(st,samuReportFilename('SAMU_RELATORIO_COMPLETO',shift));
+}
+async function exportClosingReport(shift=currentPlantao,{includeBook=true}={}){
+  if(!isOperator()||!shift?.id)return;
+  if(samuPdfExportInProgress)return;
+  samuPdfExportInProgress=true;
+  const button=$('#closingReportBtn'),pdfButton=$('#exportBtn');
+  if(button)button.disabled=true;
+  if(pdfButton)pdfButton.disabled=true;
+  try{
+    const record=await fetchSamuReportData(shift);
+    const model=samuPdfReportModel(shift,record);
+    const libs=await loadSamuPdfLibraries();
+    // Dois arquivos independentes, gerados com a MESMA consulta de dados.
+    if(includeBook)samuBookPdf(shift,model,libs);
+    samuCompletePdf(shift,model,libs);
+  }finally{
+    samuPdfExportInProgress=false;
+    if(button)button.disabled=!isOperator()||!currentPlantao;
+    if(pdfButton)pdfButton.disabled=!isOperator()||!currentPlantao;
+  }
 }
 
 function exportCSV(){
@@ -5621,7 +5871,7 @@ $('#shiftDate').onchange=async()=>{
     await loadExpressScale();
   }
 };
-$('#exportBtn').onclick=exportCSV;
+$('#exportBtn').onclick=()=>exportClosingReport(currentPlantao,{includeBook:false}).catch(error=>alert('Não foi possível gerar o PDF: '+(error.message||error)));
 $('#closingReportBtn').onclick=()=>exportClosingReport().catch(error=>alert('Não foi possível gerar o relatório: '+(error.message||error)));$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
 $('#shiftTransitionAcknowledge').onchange=updateShiftTransitionButtons;
 $('#shiftEndOnlyBtn').onclick=()=>executeShiftTransition('end');
