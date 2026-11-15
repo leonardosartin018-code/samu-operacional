@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261114-76-editar-condutor">
+  <link rel="stylesheet" href="./styles.css?v=20261115-76-permuta-botoes-fixo-revezamento">
 </head>
 <body>
 
@@ -779,12 +779,14 @@
           <div id="expressPermutaResults" class="autocomplete-results floating"></div>
         </div>
       </label>
-      <label class="full">Como escalar
-        <select id="expressPermutaMode">
-          <option value="FIXO">FIXO NA VIATURA</option>
-          <option value="REVEZAMENTO">REVEZAMENTO</option>
-        </select>
-      </label>
+      <fieldset class="full express-permuta-mode-field">
+        <legend>Como escalar</legend>
+        <input id="expressPermutaMode" type="hidden" value="FIXO">
+        <div id="expressPermutaModeButtons" class="express-permuta-mode-buttons" role="group" aria-label="Como escalar o condutor">
+          <button type="button" class="express-permuta-mode-btn is-selected" data-permuta-mode="FIXO" aria-pressed="true">FIXO NA VIATURA</button>
+          <button type="button" class="express-permuta-mode-btn" data-permuta-mode="REVEZAMENTO" aria-pressed="false">REVEZAMENTO</button>
+        </div>
+      </fieldset>
     </div>
     <div class="team-modal-note">O Livro só registra a permuta quando o titular está fora de serviço no plantão.</div>
     <div class="modal-actions">
@@ -851,6 +853,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261114-76-editar-condutor"></script>
+<script type="module" src="./app.js?v=20261115-76-permuta-botoes-fixo-revezamento"></script>
 </body>
 </html>
