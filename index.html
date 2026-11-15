@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261115-90-pdf-equipes-relatorio">
+  <link rel="stylesheet" href="./styles.css?v=20261115-91-peso-descanso">
 </head>
 <body>
 
@@ -721,6 +721,29 @@
   </div>
 </div>
 
+<div id="occEffortModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="occEffortTitle">
+  <div class="dialog occ-effort-dialog">
+    <div class="dialog-head">
+      <div><div class="dialog-kicker">RETORNO À BASE • JUSTIÇA DO REVEZAMENTO</div><h2 id="occEffortTitle">Finalizar atendimento</h2></div>
+      <button class="icon-close" type="button" data-close-modal="occEffortModal" aria-label="Fechar">×</button>
+    </div>
+    <p class="occ-effort-intro">Uma ocorrência atendida continua sendo 1 ocorrência real. O peso especial serve exclusivamente para a prioridade na fila, sem falsificar a produtividade.</p>
+    <div class="occ-effort-options" id="occEffortOptions">
+      <label><input type="radio" name="occEffortWeight" value="1" checked><span><b>PESO 1 — NORMAL</b><small>1 ponto na fila • sem descanso extra</small></span></label>
+      <label><input type="radio" name="occEffortWeight" value="2"><span><b>PESO 2 — PROLONGADA</b><small>2 pontos na fila • 30 minutos de prioridade reduzida</small></span></label>
+      <label><input type="radio" name="occEffortWeight" value="3"><span><b>PESO 3 — EXCEPCIONAL</b><small>3 pontos na fila • 60 minutos de prioridade reduzida</small></span></label>
+    </div>
+    <label id="occEffortReasonWrap" class="occ-effort-reason hidden">Motivo obrigatório do peso especial
+      <input id="occEffortReason" maxlength="180" placeholder="Ex.: transferência intermunicipal, longa duração ou alta complexidade">
+    </label>
+    <p id="occEffortPreview" class="occ-effort-preview">A ocorrência será finalizada com peso normal.</p>
+    <div class="modal-actions">
+      <button type="button" class="btn" data-close-modal="occEffortModal">CANCELAR</button>
+      <button type="button" class="btn primary" id="confirmOccEffortBtn">CONFIRMAR CHEGADA À BASE</button>
+    </div>
+  </div>
+</div>
+
 <div id="victimDestinationModal" class="modal" role="dialog" aria-modal="true" aria-labelledby="victimDestinationTitle">
   <div class="dialog victim-destination-dialog">
     <div class="dialog-head">
@@ -906,6 +929,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261115-90-pdf-equipes-relatorio"></script>
+<script type="module" src="./app.js?v=20261115-91-peso-descanso"></script>
 </body>
 </html>

@@ -2,6 +2,7 @@ import { parseRegulationClipboard, formatImportedAddress, formatImportedObservat
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
 import { createSamuPdfArchive, downloadSamuFile } from './samu-report-download.js?v=20261115-90-pdf-equipes-relatorio';
 import { buildSamuCompleteReport } from './samu-report-structure.js?v=20261115-90-pdf-equipes-relatorio';
+import { occurrenceEffortWeight, effortRestMinutes, weightedCompletedScore, restTimeRemaining, lastCompletedOccurrence, effortAdjustmentNote } from './rotation-weight-rules.js?v=20261115-91-peso-descanso';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const supabase = createClient(
@@ -1164,7 +1165,7 @@ function syncRotationCriterionFromPlantao(){
 function renderRotationRuleHelp(){
   const crit=currentRotationCriterion();
   $('#rotationRuleHelp').textContent=crit==='occurrences'
-    ? 'Critério ativo: menor número de ocorrências. Se houver empate, passa na frente quem está há mais tempo na base.'
+    ? 'Critério ativo: menor pontuação ponderada de ocorrências. Em empate, passa na frente quem está há mais tempo na base.'
     : 'Critério padrão: mais tempo disponível na base. Se houver empate, passa na frente quem tem menos ocorrências.';
 }
 async function persistRotationCriterion(value){
@@ -1420,6 +1421,23 @@ function personOccurrenceCount(m){
 function vehicleOccurrenceCount(v){
   return occurrences.filter(o=>o.viatura_id===v.id&&!['QTA','CANCELADA'].includes(norm(o.status))).length;
 }
+/* Pontuação operacional distinta da contagem física de atendimentos. */
+function personWeightedCount(m){
+  const stored=Number(m?.pontuacao_revezamento);
+  return Number.isFinite(stored)?stored:personOccurrenceCount(m);
+}
+function vehicleWeightedCount(v){
+  const list=occurrences.filter(o=>o.viatura_id===v?.id&&!['QTA','CANCELADA'].includes(norm(o.status)));
+  return weightedCompletedScore(list)+list.filter(o=>norm(o.status)!=='FINALIZADA').length;
+}
+function lastPersonCompleted(m){
+  const ids=new Set(occurrenceTeam.filter(link=>link.profissional_id===m?.profissional_id).map(link=>link.ocorrencia_id));
+  return lastCompletedOccurrence(occurrences.filter(o=>ids.has(o.id)));
+}
+function personEffortRestMinutes(m){return restTimeRemaining(lastPersonCompleted(m))}
+function vehicleEffortRestMinutes(v){
+  return restTimeRemaining(lastCompletedOccurrence(occurrences.filter(o=>o.viatura_id===v?.id)));
+}
 function assignmentPriorityLabel(m,type){
   const fixed=fixedVehicleForMemberType(m,type);
   if(fixed)return 'FIXO — '+(fixed.nome||fixed.codigo);
@@ -1536,6 +1554,9 @@ function priorityPeopleForRole(role,type,{rotationOnly=false}={}){
   return candidates.sort((a,b)=>{
       const oneTime=compareManualRank(manualRankMember(a,role,type),manualRankMember(b,role,type));
       if(oneTime)return oneTime;
+      // Descanso reduz a prioridade automática; seleção manual continua possível.
+      const ar=personEffortRestMinutes(a),br=personEffortRestMinutes(b);
+      if(Boolean(ar)!==Boolean(br))return ar?1:-1;
       if(isFirstRound){
         const ar=Number(a.ordem_inicial),br=Number(b.ordem_inicial);
         if(a.ordem_inicial!=null&&b.ordem_inicial!=null&&Number.isFinite(ar)&&Number.isFinite(br)&&ar!==br)
@@ -1548,8 +1569,8 @@ function priorityPeopleForRole(role,type,{rotationOnly=false}={}){
       // Quem está realmente à frente por tempo/ocorrências mantém vantagem.
       const ab=personBaseMinutes(a,type)+earlyExitPriorityBonus(a).base;
       const bb=personBaseMinutes(b,type)+earlyExitPriorityBonus(b).base;
-      const ao=personOccurrenceCount(a)-earlyExitPriorityBonus(a).occ;
-      const bo=personOccurrenceCount(b)-earlyExitPriorityBonus(b).occ;
+      const ao=personWeightedCount(a)-earlyExitPriorityBonus(a).occ;
+      const bo=personWeightedCount(b)-earlyExitPriorityBonus(b).occ;
       if(crit==='occurrences'){
         if(ao!==bo)return ao-bo;
         if(ab!==bb)return bb-ab;
@@ -1562,11 +1583,13 @@ function priorityPeopleForRole(role,type,{rotationOnly=false}={}){
     });
 }
 function priorityMetricText(m,type){
-  return fmtMinutes(personBaseMinutes(m,type))+' base • '+personOccurrenceCount(m)+' oc.';
+  const rest=personEffortRestMinutes(m);
+  return fmtMinutes(personBaseMinutes(m,type))+' base • '+personOccurrenceCount(m)+' ocorr. reais • '+
+    personWeightedCount(m)+' pontos'+(rest?' • descanso sugerido '+rest+' min':'');
 }
 function priorityReasonText(m,type){
   return currentRotationCriterion()==='occurrences'
-    ? 'Menor nº de ocorrências; empate decidido pelo maior tempo na base.'
+    ? 'Menor pontuação ponderada; empate decidido pelo maior tempo na base.'
     : 'Maior tempo na base; empate decidido pelo menor nº de ocorrências.';
 }
 function rotationPersonCard(title,role,type){
@@ -1577,7 +1600,7 @@ function rotationPersonCard(title,role,type){
     html+='<div class="priority-next"><b>'+esc(displayName(first.profissionais)||first.nome_snapshot||'—')+'</b>'+
       '<span>DA VEZ</span>'+
       '<div class="priority-assignment">'+esc(assignmentPriorityLabel(first,type))+'</div>'+
-      '<div class="priority-next-meta"><span class="priority-pill">'+esc(fmtMinutes(personBaseMinutes(first,type)))+' na base</span><span class="priority-pill">'+personOccurrenceCount(first)+' ocorrência(s)</span></div>'+
+      '<div class="priority-next-meta"><span class="priority-pill">'+esc(fmtMinutes(personBaseMinutes(first,type)))+' na base</span><span class="priority-pill">'+personOccurrenceCount(first)+' ocorrência(s) reais / '+personWeightedCount(first)+' ponto(s)</span></div>'+
       '<div class="priority-reason">'+esc(priorityReasonText(first,type))+'</div></div>';
     if(fila.length>1){
       html+=fila.slice(1,6).map((m,i)=>'<div class="priority-line"><div class="priority-line-main"><b>'+(i+2)+'. '+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</b><small>'+esc(assignmentPriorityLabel(m,type))+'</small></div><div class="priority-line-metric">'+esc(priorityMetricText(m,type))+'</div></div>').join('');
@@ -1622,7 +1645,7 @@ function fixedCrewForVehicleRotation(v){
     teamRoleKey(m)==='nurse'&&norm(m.funcao).includes('TECN')))||null;
   const doctor=fixed.find(m=>teamRoleKey(m)==='doctor')||null;
   return {v,driver,nurse,tech,doctor,complete:true,
-    base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)};
+    base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v),score:vehicleWeightedCount(v),rest:vehicleEffortRestMinutes(v)};
 }
 function availableUsaTeams(){
   const crit=currentRotationCriterion();
@@ -1636,14 +1659,15 @@ function availableUsaTeams(){
   return eligible.sort((a,b)=>{
     const oneTime=compareManualRank(manualRankVehicle(a.v),manualRankVehicle(b.v));
     if(oneTime)return oneTime;
+    if(Boolean(a.rest)!==Boolean(b.rest))return a.rest?1:-1;
     if(firstRound)return String(a.v.nome||a.v.codigo).localeCompare(
       String(b.v.nome||b.v.codigo),'pt-BR',{numeric:true});
     if(crit==='occurrences'){
-      if(a.occ!==b.occ)return a.occ-b.occ;
+      if(a.score!==b.score)return a.score-b.score;
       if(a.base!==b.base)return b.base-a.base;
     }else{
       if(a.base!==b.base)return b.base-a.base;
-      if(a.occ!==b.occ)return a.occ-b.occ;
+      if(a.score!==b.score)return a.score-b.score;
     }
     return String(a.v.nome).localeCompare(String(b.v.nome),'pt-BR');
   });
@@ -1654,8 +1678,8 @@ function usaTeamRotationCard(){
   if(first){
     html+='<div class="priority-next"><b>'+esc(first.v.nome||first.v.codigo)+'</b><span>USA DA VEZ</span>'+
       '<div class="priority-assignment">Condutor '+esc(displayName(first.driver.profissionais))+' • Enfermeiro '+esc(displayName(first.nurse.profissionais))+' • Médico '+(first.doctor?esc(displayName(first.doctor.profissionais)):'não escalado (opcional)')+'</div>'+
-      '<div class="priority-next-meta"><span class="priority-pill">'+esc(fmtMinutes(first.base))+' na base</span><span class="priority-pill">'+first.occ+' ocorrência(s)</span></div>'+
-      '<div class="priority-reason">'+(currentRotationCriterion()==='occurrences'?'Menor nº de ocorrências; empate pelo maior tempo na base.':'Maior tempo na base; empate pelo menor nº de ocorrências.')+'</div></div>';
+      '<div class="priority-next-meta"><span class="priority-pill">'+esc(fmtMinutes(first.base))+' na base</span><span class="priority-pill">'+first.occ+' ocorrência(s) reais / '+first.score+' pontos</span></div>'+
+      '<div class="priority-reason">'+(currentRotationCriterion()==='occurrences'?'Menor pontuação ponderada; empate pelo maior tempo na base.':'Maior tempo na base; empate pelo menor nº de ocorrências.')+'</div></div>';
     html+=fila.slice(1,5).map((x,i)=>'<div class="priority-line"><div class="priority-line-main"><b>'+(i+2)+'. '+esc(x.v.nome||x.v.codigo)+'</b><small>Equipe completa disponível</small></div><div class="priority-line-metric">'+esc(fmtMinutes(x.base))+' • '+x.occ+' oc.</div></div>').join('');
   }else{
     html+='<div class="priority-empty">Nenhuma USA está na base com equipe completa disponível neste momento.</div>';
@@ -1683,8 +1707,12 @@ function usbPairAvailable({driver,tech}){
 function usbAvailablePairs(pairs){
   const driverOrder=priorityPeopleForRole('driver','USB',{rotationOnly:true});
   const ranks=new Map(driverOrder.map((m,index)=>[m.id,index]));
-  return pairs.filter(usbPairAvailable).sort((a,b)=>
-    (ranks.get(a.driver.id)??Infinity)-(ranks.get(b.driver.id)??Infinity));
+  return pairs.filter(usbPairAvailable).sort((a,b)=>{
+    const ar=Math.max(personEffortRestMinutes(a.driver),personEffortRestMinutes(a.tech));
+    const br=Math.max(personEffortRestMinutes(b.driver),personEffortRestMinutes(b.tech));
+    if(Boolean(ar)!==Boolean(br))return ar?1:-1;
+    return (ranks.get(a.driver.id)??Infinity)-(ranks.get(b.driver.id)??Infinity);
+  });
 }
 function automaticDispatchCrew(v){
   const type=vehicleType(v);
@@ -1717,7 +1745,7 @@ function fixedUsbCrewForVehicleRotation(v){
   if(!driver&&!tech)return null;
   return {v,driver,tech,nurse:null,doctor:null,
     complete:requiredDispatchRoles(v).every(role=>crewHasRole(fixed,role)),
-    base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)};
+    base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v),score:vehicleWeightedCount(v),rest:vehicleEffortRestMinutes(v)};
 }
 function usbFixedVehicleLabel(item){
   const prefix=item.v.nome||item.v.codigo;
@@ -1736,14 +1764,15 @@ function availableUsbTeams(){
   return eligible.sort((a,b)=>{
     const oneTime=compareManualRank(manualRankVehicle(a.v),manualRankVehicle(b.v));
     if(oneTime)return oneTime;
+    if(Boolean(a.rest)!==Boolean(b.rest))return a.rest?1:-1;
     if(firstRound)return String(a.v.nome||a.v.codigo).localeCompare(
       String(b.v.nome||b.v.codigo),'pt-BR',{numeric:true});
     if(crit==='occurrences'){
-      if(a.occ!==b.occ)return a.occ-b.occ;
+      if(a.score!==b.score)return a.score-b.score;
       if(a.base!==b.base)return b.base-a.base;
     }else{
       if(a.base!==b.base)return b.base-a.base;
-      if(a.occ!==b.occ)return a.occ-b.occ;
+      if(a.score!==b.score)return a.score-b.score;
     }
     return String(a.v.nome||a.v.codigo).localeCompare(String(b.v.nome||b.v.codigo),'pt-BR',{numeric:true});
   });
@@ -1759,10 +1788,12 @@ function rotationMembersForDisplay(role,type){
 function priorityPersonName(m){
   return m?.profissionais?displayName(m.profissionais):(m?.nome_snapshot||'—');
 }
-function rotationWaitMetrics(base,count){
+function rotationWaitMetrics(base,count,score=count,rest=0){
   const time=base>=0?fmtMinutes(base)+' na base':'Tempo de base indisponível';
   return '<small class="rotation-wait-metrics">'+esc(time)+' · '+esc(count)+' '+
-    (count===1?'ocorrência':'ocorrências')+'</small>';
+    (count===1?'ocorrência real':'ocorrências reais')+
+    (score!==count?' · '+esc(score)+' pontos':'')+
+    (rest>0?' · DESCANSO '+rest+' min':'')+'</small>';
 }
 function compactRotationQueue(role,type,label){
   const members=rotationMembersForDisplay(role,type);
@@ -1783,13 +1814,13 @@ function compactRotationQueue(role,type,label){
     html+='<div class="rotation-person-next">'+
       '<span class="rotation-next-tag">PRÓXIMO DA VEZ</span>'+
       '<strong>'+esc(priorityPersonName(available[0]))+'</strong>'+
-      rotationWaitMetrics(personBaseMinutes(available[0],type),personOccurrenceCount(available[0]))+
+      rotationWaitMetrics(personBaseMinutes(available[0],type),personOccurrenceCount(available[0]),personWeightedCount(available[0]),personEffortRestMinutes(available[0]))+
       (earlyExitStatus(available[0])?'<small class="early-exit-queue-note">'+esc(earlyExitStatusLabel(available[0]))+'</small>':'')+
       (isOperator()?'<button type="button" class="early-exit-mini" data-schedule-exit="'+esc(available[0].id)+'">SAÍDA</button>':'')+'</div>';
     if(available.length>1){
       html+='<div class="rotation-person-order">'+available.slice(1,6).map((m,i)=>
         '<div class="rotation-person-row"><span>'+(i+2)+'.</span><div class="rotation-wait-person"><b>'+
-        esc(priorityPersonName(m))+'</b>'+rotationWaitMetrics(personBaseMinutes(m,type),personOccurrenceCount(m))+'</div>'+
+        esc(priorityPersonName(m))+'</b>'+rotationWaitMetrics(personBaseMinutes(m,type),personOccurrenceCount(m),personWeightedCount(m),personEffortRestMinutes(m))+'</div>'+
         (earlyExitStatus(m)?'<small class="early-exit-queue-note">'+esc(earlyExitStatusLabel(m))+'</small>':'')+
         (isOperator()?'<button type="button" class="early-exit-mini" data-schedule-exit="'+esc(m.id)+'">SAÍDA</button>':'')+
         '</div>').join('')+'</div>';
@@ -1831,7 +1862,7 @@ function nextVehicleRotationCard(type,hasRotation){
   html+=(manualRankVehicle(first.v)!==null?
     '<span class="manual-order-active">ORDEM MANUAL TEMPORÁRIA</span>':
     (initial?'<span class="rotation-default-order">SEQUÊNCIA INICIAL POR PREFIXO</span>':''));
-  html+=rotationWaitMetrics(first.base,first.occ);
+  html+=rotationWaitMetrics(first.base,first.occ,first.score,first.rest);
   if(type==='USA'&&hasRotation){
     // Mantém sem alterações o detalhamento da USA.
     const roles=[['Condutor',first.driver],['Enfermeiro',first.nurse]];
@@ -1842,7 +1873,7 @@ function nextVehicleRotationCard(type,hasRotation){
       html+='<div class="rotation-fixed-crew">'+fixed.map(([role,m])=>
         '<div class="rotation-fixed-person"><b>'+esc(priorityPersonName(m))+'</b>'+
         '<small>'+esc(role)+' • FIXO NA '+esc(prefix)+'</small>'+
-        rotationWaitMetrics(personBaseMinutes(m,type),personOccurrenceCount(m))+'</div>'
+        rotationWaitMetrics(personBaseMinutes(m,type),personOccurrenceCount(m),personWeightedCount(m),personEffortRestMinutes(m))+'</div>'
       ).join('')+'</div>';
     }
     }
@@ -1853,7 +1884,7 @@ function nextVehicleRotationCard(type,hasRotation){
       list.slice(1,9).map((x,i)=>
         '<div class="rotation-vehicle-order-row"><b>'+(i+2)+'º</b><strong>'+
         esc(type==='USB'?usbFixedVehicleLabel(x):(x.v.nome||x.v.codigo))+
-        rotationWaitMetrics(x.base,x.occ)+'</strong>'+
+        rotationWaitMetrics(x.base,x.occ,x.score,x.rest)+'</strong>'+
         (manualRankVehicle(x.v)!==null?'<small>ORDEM MANUAL</small>':'')+'</div>'
       ).join('')+'</div>';
   }
@@ -2506,7 +2537,7 @@ function bindVehicleActions(root){
   root.querySelectorAll('[data-act="qta"]').forEach(b=>b.onclick=()=>setOccurrenceQta(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="return"]').forEach(b=>b.onclick=()=>setReturning(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="undo-return"]').forEach(b=>b.onclick=()=>undoReturning(b));
-  root.querySelectorAll('[data-act="arrive"]').forEach(b=>b.onclick=()=>setArrived(b.dataset.o,b.dataset.v));
+  root.querySelectorAll('[data-act="arrive"]').forEach(b=>b.onclick=()=>openEffortArrivalModal(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="edit-team"]').forEach(b=>b.onclick=()=>openOccurrenceCrewCorrection(b.dataset.o||activeOccurrence(vehicleById(b.dataset.v))?.id));
   root.querySelectorAll('[data-status]').forEach(b=>b.onclick=()=>setVehicleStatus(b.dataset.v,b.dataset.status));
   root.querySelectorAll('[data-status-select]').forEach(s=>s.onchange=()=>{if(s.value)setVehicleStatus(s.dataset.v,s.value)});
@@ -3496,21 +3527,76 @@ async function creditOccurrence(occ){
   }
   await supabase.from('ocorrencias').update({creditou_revezamento:true}).eq('id',occ.id);
 }
-async function setArrived(oid,vid){
-  if(!isOperator()||!confirm('Confirmar CHEGADA À BASE e finalizar o atendimento?'))return;
-  const now=new Date().toISOString();
-  const o=occurrences.find(x=>x.id===oid);
-  if(oid){
-    const r=await supabase.from('ocorrencias').update({status:'FINALIZADA',retorno_base_em:now,finalizado_em:now,finalizado_por:profile?.nome||null})
-      .eq('id',oid).eq('status','RETORNANDO').select('id').maybeSingle();
-    if(r.error)return alert(r.error.message);
-    if(!r.data)return alert('A ocorrência já mudou de situação. Atualize o painel.');
-    await creditOccurrence(o);
-    await clearManualOnReturn(oid,vid);
-  }
-  if(vid)await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid);
-  await loadAll(selectedDate());
+/* Retorno à base com opção de peso especial. */
+let pendingEffortArrival=null;
+function refreshEffortArrival(){
+  const selected=document.querySelector('input[name="occEffortWeight"]:checked');
+  const weight=occurrenceEffortWeight(selected?.value);
+  $('#occEffortReasonWrap').classList.toggle('hidden',weight===1);
+  $('#occEffortPreview').textContent=weight===1
+    ?'Uma ocorrência real e um ponto na fila. Confirme para finalizar normalmente.'
+    :'Uma ocorrência real, '+weight+' pontos na fila e '+effortRestMinutes(weight)+
+      ' minutos de prioridade reduzida após o retorno. O rádio pode escolher a equipe manualmente se necessário.';
 }
+function openEffortArrivalModal(oid,vid){
+  if(!isOperator())return;
+  const occ=occurrences.find(o=>o.id===oid&&o.viatura_id===vid);
+  const vehicle=vehicleById(vid);
+  if(!occ||norm(occ.status)!=='RETORNANDO'||statusInfo(vehicle).key!=='returning'){
+    return alert('A situação da ocorrência mudou. Atualize o painel antes de finalizar.');
+  }
+  pendingEffortArrival={oid,vid};
+  $('#occEffortTitle').textContent='Finalizar '+(vehicle.nome||vehicle.codigo)+' • OC. '+(occ.numero||'—');
+  document.querySelector('input[name="occEffortWeight"][value="1"]').checked=true;
+  $('#occEffortReason').value='';
+  refreshEffortArrival();
+  openModal('occEffortModal');
+}
+async function confirmEffortArrival(){
+  if(!pendingEffortArrival||!isOperator())return;
+  const weight=occurrenceEffortWeight(document.querySelector('input[name="occEffortWeight"]:checked')?.value);
+  const reason=$('#occEffortReason').value.trim();
+  if(weight>1&&!reason)return alert('Informe o motivo do peso especial para registrar no histórico.');
+  const btn=$('#confirmOccEffortBtn');
+  if(btn.disabled)return;
+  btn.disabled=true;
+  try{
+    const {oid,vid}=pendingEffortArrival;
+    await setArrived(oid,vid,weight,reason);
+    pendingEffortArrival=null;
+    closeModal('occEffortModal');
+  }catch(e){alert('Não foi possível finalizar o atendimento: '+(e.message||e))}
+  finally{btn.disabled=false}
+}
+async function setArrived(oid,vid,weight=1,reason=''){
+  if(!isOperator()||!currentPlantao)return;
+  const current=occurrences.find(o=>o.id===oid&&o.viatura_id===vid);
+  if(!current||norm(current.status)!=='RETORNANDO')throw new Error('A ocorrência não está retornando. Atualize o painel.');
+  const now=new Date().toISOString();
+  const peso=occurrenceEffortWeight(weight);
+  const justification=effortAdjustmentNote({
+    weight:peso,reason,operator:profile?.nome||session?.user?.email||'operador',
+    time:new Date(now).toLocaleString('pt-BR')
+  });
+  const notes=[String(current.observacao||'').trim(),justification].filter(Boolean).join('\n\n')||null;
+  const {data,error}=await supabase.from('ocorrencias')
+    .update({status:'FINALIZADA',retorno_base_em:now,finalizado_em:now,
+      finalizado_por:profile?.nome||null,peso_ocorrencia:peso,observacao:notes})
+    .eq('id',oid).eq('status','RETORNANDO').select('id').maybeSingle();
+  if(error)throw error;
+  if(!data)throw new Error('A ocorrência foi alterada por outro operador. Atualize o painel.');
+  // Crédito físico continua sendo 1. Somente a pontuação do revezamento recebe o peso.
+  await creditOccurrence({...current,peso_ocorrencia:peso});
+  await clearManualOnReturn(oid,vid);
+  if(vid){
+    const vr=await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid);
+    if(vr.error)throw vr.error;
+  }
+  await loadAll(selectedDate());
+  if(peso>1)setSync('Peso '+peso+' aplicado à ocorrência '+(current.numero||'—')+
+    '. Descanso sugerido de '+effortRestMinutes(peso)+' minutos.','warn');
+}
+
 async function setVehicleStatus(vId,key){
   if(!isOperator())return;
   const v=vehicleById(vId);
@@ -5483,6 +5569,34 @@ async function saveBook(){
   }
 }
 
+/* Prévia do repasse: exibe quem está realmente empenhado na ocorrência.
+   Não presume dobra de plantão nem muda a escala do próximo turno. */
+function activeShiftHandoffPreview(){
+  const active=occurrences.filter(o=>['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status)));
+  if(!active.length)return '';
+  const items=active.map(o=>{
+    const vehicle=vehicleById(o.viatura_id);
+    const members=occurrenceMembers(o.id);
+    const crew=members.length?members.map(m=>
+      (m.nome_snapshot||displayName(m.profissionais)||'Não identificado')+
+      (m.funcao?' — '+m.funcao:'')
+    ).join(' / '):'Guarnição não registrada. Confira antes de encerrar!';
+    return '<article class="shift-handoff-item">'+
+      '<div><strong>'+esc(vehicle?.nome||o.viatura_snapshot||'SEM VIATURA')+
+      ' • OC. '+esc(o.numero||'—')+'</strong><span>'+esc(o.status||'EM ATENDIMENTO')+'</span></div>'+
+      '<p><b>Equipe que está na rua:</b> '+esc(crew)+'</p>'+
+      '<p><b>Natureza:</b> '+esc(o.natureza||'Não informada')+
+      ' • <b>Saída:</b> '+esc(fmtTime(o.saida_em||o.acionada_em))+'</p>'+
+      '</article>';
+  });
+  return '<section class="shift-handoff-review"><h3>EQUIPES AINDA EM ATENDIMENTO — REPASSE OBRIGATÓRIO</h3>'+
+    '<p>Estas equipes pertencem à ocorrência em andamento, mesmo que não dobrem a próxima escala. '+
+    'Registre a passagem com o novo rádio-operador. O sistema não deve supor que todos dobrarão.</p>'+
+    items.join('')+
+    '<p class="shift-handoff-warning">Atenção: esta é uma conferência visual. A transferência formal da guarnição '+
+    'para o novo turno e a decisão individual de dobrar exigem confirmação específica no futuro módulo de repasse.</p>'+
+    '</section>';
+}
 /* ---------- Troca e encerramento manual de plantão ---------- */
 function openShiftTransition(){
   if(!isOperator())return;
@@ -5506,7 +5620,8 @@ function openShiftTransition(){
     'A escala anterior fica no histórico. O sistema não encerra ocorrências nem altera automaticamente a situação das viaturas.'
   ].filter(Boolean);
   $('#shiftTransitionTitle').textContent=open?'Trocar ou encerrar plantão':reopen?'Reabrir plantão vigente':'Iniciar próxima escala';
-  $('#shiftTransitionDetails').innerHTML=points.map(p=>'<p>'+p+'</p>').join('');
+  $('#shiftTransitionDetails').innerHTML=points.map(p=>'<p>'+p+'</p>').join('')+
+    (open?activeShiftHandoffPreview():'');
   $('#shiftTransitionAcknowledge').checked=false;
   $('#shiftEndOnlyBtn').classList.toggle('hidden',!open);
   $('#shiftEndStartBtn').classList.toggle('hidden',!open);
@@ -6275,6 +6390,8 @@ $('#occImportClearBtn').onclick=resetRegulationImport;
   $('#' + id).addEventListener('input',syncRegulationAddress));$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
 $('#occNumberCorrectForm').onsubmit=async e=>{e.preventDefault();await saveNumberCorrection()};
 $('#occCrewCorrectForm').onsubmit=async e=>{e.preventDefault();await saveOccurrenceCrewCorrection()};
+$('input[name="occEffortWeight"]').forEach(r=>r.onchange=refreshEffortArrival);
+$('#confirmOccEffortBtn').onclick=confirmEffortArrival;
 $('#victimDestinationChoice').onchange=refreshVictimDestinationChoice;
 $('#saveVictimDestinationBtn').onclick=saveVictimDestination;
 $('#loadScaleBtn').onclick=askToApplyScaleReference;
