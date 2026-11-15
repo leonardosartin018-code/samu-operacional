@@ -611,6 +611,7 @@
         </div>
         <input id="qtDriver" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do condutor">
         <input id="qtDriverId" type="hidden">
+        <button type="button" class="quick-register-inline" data-quick-register="driver">+ CADASTRAR CONDUTOR</button>
         <div id="qtDriverResults" class="autocomplete-results floating"></div>
         <div class="quick-scale-placement" data-quick-placement="driver">
           <label for="qtDriverMode">Como escalar</label>
@@ -620,13 +621,14 @@
           </select>
           <small data-quick-placement-hint="driver">Fixo: profissional vinculado a esta viatura.</small>
         </div>
-        <button type="button" class="quick-register-inline" data-quick-register="driver">+ CADASTRAR CONDUTOR</button>
+        
         <div class="quick-current"><span id="qtDriverCurrent"></span><button id="qtDriverRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
       <div class="quick-team-field" data-role="tech">
         <label>TÉCNICO DE ENFERMAGEM</label>
         <input id="qtTech" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do técnico ou enfermeiro">
         <input id="qtTechId" type="hidden">
+        <button type="button" class="quick-register-inline" data-quick-register="tech">+ CADASTRAR TÉCNICO / ENFERMEIRO</button>
         <div id="qtTechResults" class="autocomplete-results floating"></div>
         <div class="quick-scale-placement" data-quick-placement="tech">
           <label for="qtTechMode">Como escalar</label>
@@ -636,13 +638,14 @@
           </select>
           <small data-quick-placement-hint="tech">Fixo: profissional vinculado a esta viatura.</small>
         </div>
-        <button type="button" class="quick-register-inline" data-quick-register="tech">+ CADASTRAR TÉCNICO / ENFERMEIRO</button>
+        
         <div class="quick-current"><span id="qtTechCurrent"></span><button id="qtTechRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
       <div class="quick-team-field" data-role="nurse">
         <label>ENFERMEIRO</label>
         <input id="qtNurse" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do enfermeiro">
         <input id="qtNurseId" type="hidden">
+        <button type="button" class="quick-register-inline" data-quick-register="nurse">+ CADASTRAR ENFERMEIRO</button>
         <div id="qtNurseResults" class="autocomplete-results floating"></div>
         <div class="quick-scale-placement" data-quick-placement="nurse">
           <label for="qtNurseMode">Como escalar</label>
@@ -652,15 +655,16 @@
           </select>
           <small data-quick-placement-hint="nurse">Fixo: profissional vinculado a esta viatura.</small>
         </div>
-        <button type="button" class="quick-register-inline" data-quick-register="nurse">+ CADASTRAR ENFERMEIRO</button>
+        
         <div class="quick-current"><span id="qtNurseCurrent"></span><button id="qtNurseRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
       <div class="quick-team-field" data-role="doctor">
         <label>MÉDICO</label>
         <input id="qtDoctor" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do médico">
         <input id="qtDoctorId" type="hidden">
-        <div id="qtDoctorResults" class="autocomplete-results floating"></div>
         <button type="button" class="quick-register-inline" data-quick-register="doctor">+ CADASTRAR MÉDICO</button>
+        <div id="qtDoctorResults" class="autocomplete-results floating"></div>
+        
         <div class="quick-current"><span id="qtDoctorCurrent"></span><button id="qtDoctorRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
     </div>
