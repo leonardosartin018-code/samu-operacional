@@ -3426,14 +3426,18 @@ function expressRowState(r){
   if(!r.profissional_id)return {state:'unresolved',label:'NÃO CADASTRADO',v,current};
 
   if(current){
-    const moved=norm(current.tipo_alteracao_escala)==='TROCA_VIATURA'||
-      (current.profissional_id!==r.profissional_id&&isServingInShift(r.profissional_id));
-    if(moved&&!isRotationMember(current))return {state:'fixed',label:'TROCA DE VIATURA',v,current};
-    const isPermuta=!moved&&current.profissional_id!==r.profissional_id&&norm(current.tipo_alteracao_escala)==='PERMUTA';
+    // Uma permuta registrada continua sendo permuta mesmo quando o titular
+    // está substituindo alguém em outra viatura. A presença dele em outro
+    // posto NÃO anula a identificação da permuta desta posição.
+    const isPermuta=current.profissional_id!==r.profissional_id&&
+      norm(current.tipo_alteracao_escala)==='PERMUTA';
     if(isPermuta){
       const mode=isRotationMember(current)?'REVEZ.':'FIXO';
       return {state:'permuta',label:'PERMUTA • '+mode,v,current};
     }
+    const moved=norm(current.tipo_alteracao_escala)==='TROCA_VIATURA'||
+      (current.profissional_id!==r.profissional_id&&isServingInShift(r.profissional_id));
+    if(moved&&!isRotationMember(current))return {state:'fixed',label:'TROCA DE VIATURA',v,current};
     if(isRotationMember(current))return {state:'rotation',label:'REVEZAMENTO',v,current};
     return {state:'fixed',label:'FIXO',v,current};
   }
