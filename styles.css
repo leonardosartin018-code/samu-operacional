@@ -2831,3 +2831,44 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
   #teamModal .quick-team-field .quick-team-input{font-size:16px}
   #teamModal .quick-team-field .autocomplete-result b{font-size:14px}
 }
+
+/* Médico opcional no acionamento da USA — cadastro sem alterar a escala */
+#occModal .dispatch-crew-field[data-dispatch-slot="doctor"]{
+  background:#fbf8ff;
+  border-color:#c4b5fd;
+  border-left:4px solid #7c3aed;
+}
+#occModal .dispatch-register-doctor{
+  display:block;
+  width:100%;
+  min-height:39px;
+  padding:9px 10px;
+  margin-top:9px;
+  border:1px solid #9b8ce9;
+  border-radius:8px;
+  background:#ede9fe;
+  color:#4c1d95;
+  font-size:.8rem;
+  font-weight:950;
+  text-align:center;
+  cursor:pointer;
+}
+#occModal .dispatch-register-doctor:hover{
+  background:#ddd6fe;
+  border-color:#7c3aed;
+}
+#occModal .dispatch-register-doctor:focus-visible{
+  outline:3px solid #7c3aed;
+  outline-offset:2px;
+}
+#occModal .dispatch-doctor-help{
+  display:block;
+  margin-top:7px;
+  color:#5b4f77;
+  font-size:.72rem;
+  font-weight:700;
+  line-height:1.4;
+}
+@media(max-width:650px){
+  #occModal .dispatch-register-doctor{font-size:.76rem}
+}
