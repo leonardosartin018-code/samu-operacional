@@ -2652,6 +2652,24 @@ function dispatchRoleMatch(m,role,v){
     (norm(m.grupo_revezamento).includes('USB_TECNICO')||
       (m.viatura_id===v.id&&norm(m.funcao).includes('TECN')));
 }
+// Médico registrado no banco, mas não escalado: participação avulsa somente
+// nesta ocorrência. Não cria escala nem modifica a fila do revezamento.
+function dispatchAdhocDoctorRow(p){
+  return {
+    id:'AVULSO:'+p.id,
+    profissional_id:p.id,
+    funcao:'Médico',
+    profissionais:p,
+    nome_snapshot:p.nome_completo,
+    status:'ATIVO',
+    viatura_id:null,
+    tipo_escala:'AVULSO_ACIONAMENTO'
+  };
+}
+function isDispatchAdhocDoctor(m){
+  return !!m && m.tipo_escala==='AVULSO_ACIONAMENTO' &&
+    String(m.id||'').startsWith('AVULSO:') && teamRoleKey(m)==='doctor';
+}
 function dispatchCrewOptions(v,role){
   if(!v)return [];
   const type=vehicleType(v).includes('USA')?'USA':'USB';
@@ -2672,12 +2690,19 @@ function dispatchCrewOptions(v,role){
     added.add(m.profissional_id);
     choices.push(m);
   };
+  const appendDoctorsOutsideScale=()=>{
+    if(role!=='doctor')return;
+    const scheduledIds=new Set(activeTeamRows().map(m=>m.profissional_id));
+    professionals.filter(p=>p.ativo!==false&&professionalRoleKey(p)==='doctor'&&
+      !scheduledIds.has(p.id)).forEach(p=>append(dispatchAdhocDoctorRow(p)));
+  };
   vehicleMembers(v).filter(m=>dispatchRoleMatch(m,role,v)).forEach(append);
   if(!isAnapolisVehicle(v)){
     // Bases descentralizadas não puxam profissionais do revezamento de
     // Anápolis. Só oferecem profissionais escalados da própria base.
     activeTeamRows().filter(m=>!isRotationMember(m)&&m.viatura_id&&m.viatura_id!==v.id&&
       dispatchRoleMatch(m,role,v)).forEach(append);
+    appendDoctorsOutsideScale();
     return choices;
   }
   if(role==='doctor'){
@@ -2695,6 +2720,7 @@ function dispatchCrewOptions(v,role){
   // exige confirmação explícita porque a viatura de origem perderá a função.
   activeTeamRows().filter(m=>!isRotationMember(m)&&m.viatura_id&&m.viatura_id!==v.id&&
     dispatchRoleMatch(m,role,v)).forEach(append);
+  appendDoctorsOutsideScale();
   return choices;
 }
 function dispatchRoleName(role){
@@ -2702,7 +2728,8 @@ function dispatchRoleName(role){
 }
 function dispatchSuggestion(v,role,choices){
   const suggested=automaticDispatchCrew(v).find(m=>dispatchRoleMatch(m,role,v));
-  return choices.find(m=>m.profissional_id===suggested?.profissional_id)||choices[0]||null;
+  return choices.find(m=>m.profissional_id===suggested?.profissional_id)||
+    (role==='doctor'?null:choices[0]||null);
 }
 function renderDispatchCrewPanel(){
   const v=vehicleById($('#occVehicleSelect').value);
@@ -2739,7 +2766,8 @@ function renderDispatchCrewPanel(){
       const fixed=!isRotationMember(m)&&m.viatura_id===v.id;
       const elsewhere=!isRotationMember(m)&&m.viatura_id&&m.viatura_id!==v.id;
       const origin=elsewhere?vehicleById(m.viatura_id):null;
-      const status=fixed?' • FIXO NESTA VIATURA':elsewhere
+      const status=isDispatchAdhocDoctor(m)?' • CADASTRADO • AVULSO NESTA OCORRÊNCIA':
+        fixed?' • FIXO NESTA VIATURA':elsewhere
         ?' • FIXO '+(origin?.nome||'EM OUTRA VIATURA')+' (TROCA PONTUAL)':' • REVEZAMENTO';
       return '<option value="'+esc(m.id)+'"'+(m.id===suggested?.id?' selected':'')+'>'+
         esc(displayName(m.profissionais))+status+'</option>';
@@ -2750,10 +2778,21 @@ function renderDispatchCrewPanel(){
       '<select id="dispatchCrew_'+role+'" data-dispatch-role="'+role+'" data-suggested-id="'+esc(suggested?.id||'')+'" aria-label="Selecionar '+esc(dispatchRoleName(role))+' para o acionamento">'+
         '<option value="">'+(required?'SELECIONE UM PROFISSIONAL':'SEM MÉDICO')+'</option>'+
         display+'</select>'+
+      (role==='doctor'?
+        '<button type="button" class="dispatch-register-doctor" data-dispatch-register-doctor>+ CADASTRAR MÉDICO</button>'+
+        '<small class="dispatch-doctor-help">Médico opcional. Se não houver, mantenha SEM MÉDICO e acione normalmente.</small>':'')+
       '<div class="dispatch-crew-choice-label" data-dispatch-choice="'+role+'"></div>'+
     '</div>';
   }).join('');
   root.querySelectorAll('[data-dispatch-role]').forEach(el=>el.onchange=updateDispatchCrewStatus);
+  const registerDoctor=root.querySelector('[data-dispatch-register-doctor]');
+  if(registerDoctor)registerDoctor.onclick=()=>{
+    if(!isOperator())return;
+    const activeVehicle=vehicleById($('#occVehicleSelect').value);
+    if(!activeVehicle||!vehicleType(activeVehicle).includes('USA'))return;
+    openQuickRegistration('','doctor',null,null);
+    pendingQuickRegistration.dispatchDoctorVehicleId=activeVehicle.id;
+  };
   updateDispatchCrewStatus();
 }
 function chosenDispatchCrew(v){
@@ -2814,7 +2853,8 @@ function updateDispatchCrewStatus(){
     const fixed=m&&!isRotationMember(m)&&m.viatura_id===v.id;
     if(note){
       const otherVehicle=m&&!isRotationMember(m)&&m.viatura_id!==v.id?vehicleById(m.viatura_id):null;
-      note.textContent=!chosen?'NÃO SELECIONADO':otherVehicle
+      note.textContent=!chosen?(input.dataset.dispatchRole==='doctor'?'SEM MÉDICO • OPCIONAL':'NÃO SELECIONADO'):
+        isDispatchAdhocDoctor(m)?'MÉDICO AVULSO • SOMENTE NESTA OCORRÊNCIA':otherVehicle
         ?'TROCA PONTUAL • FIXO '+(otherVehicle.nome||otherVehicle.codigo):different?'ESCOLHA MANUAL':
         fixed?'FIXO NA VIATURA':'SUGESTÃO • PRÓXIMO DA VEZ';
       note.classList.toggle('manual',different&&!!chosen);
