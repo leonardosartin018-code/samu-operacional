@@ -582,6 +582,7 @@ function openPage(id, options={}){
   document.querySelector(tabSelector)?.classList.add('active');
   if(id==='history') renderHistory();
   if(id==='team'){
+    $('#teamOperationalPanel')?.classList.toggle('roster-only',teamView==='roster');
     const navigateToTeamSection=()=>{
       if(teamView==='roster'){
         $('.team-preview-wrap')?.scrollIntoView({behavior:'smooth',block:'start'});
@@ -790,6 +791,7 @@ function renderAll(){
   renderDestinations();
   renderHistory();
   renderTeamPreview();
+  renderRegionalQuickScale();
   renderScaleConfirmationStates();
   if(!$('#teamInternalPanel')?.classList.contains('hidden')) renderInternalEditors();
   if($('#book')?.classList.contains('active')) renderBook();
@@ -2146,13 +2148,22 @@ function renderRegional(){
 
 function destinationCard(o){
   const v=vehicleById(o.viatura_id);
-  return '<div class="destination-card">'+
-    '<div class="occ-number">OC. '+esc(o.numero||'—')+'</div>'+
-    '<div class="occ-vehicle">'+esc(v?.nome||o.viatura_snapshot||'Sem viatura')+'</div>'+
-    '<div class="destination-victim-label">VÍTIMA FICOU / RESULTADO</div>'+
-    '<div class="occ-place">'+esc(victimDestinationDisplay(o.destino))+'</div>'+
-    (isOperator()?'<div class="destination-actions"><button class="edit" data-edit-occ="'+o.id+'">EDITAR</button><button class="delete" data-delete-occ="'+o.id+'">EXCLUIR</button></div>':'')+
-  '</div>';
+  const qth=qthElapsedMinutes(o);
+  const finalized=norm(o.status)==='FINALIZADA';
+  return '<article class="destination-card destination-record">'+
+    '<div class="destination-record-top"><div><strong>OC. '+esc(o.numero||'—')+'</strong>'+
+      '<span>'+esc(v?.nome||o.viatura_snapshot||'Sem viatura')+'</span></div>'+
+      '<span class="destination-record-status '+(finalized?'complete':'pending')+'">'+esc(o.status||'—')+'</span></div>'+
+    '<div class="destination-record-body">'+
+      '<div><small>DESTINO / RESULTADO DA VÍTIMA</small><strong>'+esc(victimDestinationDisplay(o.destino))+'</strong></div>'+
+      '<div><small>NATUREZA / BAIRRO</small><span>'+esc([o.natureza,o.bairro].filter(Boolean).join(' • ')||'Não informado')+'</span></div>'+
+      '<div><small>EQUIPE QUE ATENDEU</small><span>'+esc(occurrenceCrewText(o)||'Não registrada')+'</span></div>'+
+    '</div>'+
+    '<div class="destination-record-bottom"><span>Saída: <b>'+fmtTime(o.saida_em||o.acionada_em)+
+      '</b></span><span>Até QTH: <b>'+esc(o.qth_nao_informado?'Não informado':fmtMinutes(qth))+'</b></span></div>'+
+    (isOperator()?'<div class="destination-actions"><button class="edit" data-edit-occ="'+o.id+'">EDITAR</button>'+
+      '<button class="delete" data-delete-occ="'+o.id+'">EXCLUIR</button></div>':'')+
+  '</article>';
 }
 function renderDestinations(){
   const active=occurrences.filter(o=>norm(o.status)!=='CANCELADA');
@@ -2160,10 +2171,15 @@ function renderDestinations(){
   const an=active.filter(o=>o.viatura_id&&anIds.has(o.viatura_id));
   const rg=active.filter(o=>o.viatura_id&&!anIds.has(o.viatura_id));
   const un=active.filter(o=>!o.viatura_id);
-  const make=list=>list.length?list.map(destinationCard).join(''):'<div class="priority-empty">Nenhuma ocorrência registrada.</div>';
+  const make=list=>list.length?[...list].sort((a,b)=>
+    String(b.acionada_em||b.criado_em||'').localeCompare(String(a.acionada_em||a.criado_em||'')))
+    .map(destinationCard).join(''):'<div class="priority-empty">Nenhum registro neste grupo.</div>';
   $('#destAnapolis').innerHTML=make(an);
   $('#destRegional').innerHTML=make(rg);
   $('#destUnassigned').innerHTML=make(un);
+  $('#destAnapolisCount').textContent=an.length+' registro(s)';
+  $('#destRegionalCount').textContent=rg.length+' registro(s)';
+  $('#destUnassignedCount').textContent=un.length+' registro(s)';
   $('#destUnassignedWrap').classList.toggle('hidden',!un.length);
   bindOccurrenceActions($('#base'));
 }
@@ -2199,73 +2215,208 @@ function individualOccurrencesByProfessional(plantaoId){
   }
   return byProfessional;
 }
+function completedOccurrencesForMember(m){
+  if(!m.profissional_id)return [];
+  const linked=new Set(occurrenceTeam.filter(link=>link.profissional_id===m.profissional_id).map(link=>link.ocorrencia_id));
+  return occurrences.filter(o=>linked.has(o.id)&&norm(o.status)==='FINALIZADA');
+}
 function rosterPersonHtml(m,individualOccurrences){
   const v=vehicleById(m.viatura_id);
   const assign=v?.nome||m.viatura_snapshot||m.grupo_revezamento||m.tipo_escala||'SEM VIATURA';
   const individual=[...(individualOccurrences?.values()||[])].sort((a,b)=>
     String(b.criado_em||b.acionada_em||'').localeCompare(String(a.criado_em||a.acionada_em||'')));
-  const occurrenceLine=individual.length
-    ? '<div class="roster-person-meta"><strong>Ocorrências individuais:</strong> '+
-      individual.map(o=>esc(o.numero?'Nº '+o.numero:'Sem número')).join(' · ')+'</div>'
-    : '';
-  return '<div class="roster-person"><div><div class="roster-person-name">'+esc(displayName(m.profissionais))+'</div><div class="roster-person-meta">'+esc(m.funcao)+' • '+esc(assign)+'</div>'+
-    occurrenceLine+(earlyExitStatus(m)?'<div class="early-exit-roster-label">'+esc(earlyExitStatusLabel(m))+'</div>':'')+'</div>'+
+  const completed=completedOccurrencesForMember(m);
+  const merged=new Map([...completed,...individual].map(o=>[o.id,o]));
+  const list=[...merged.values()].sort((a,b)=>String(a.numero||'').localeCompare(String(b.numero||''),'pt-BR',{numeric:true}));
+  const stats='<div class="roster-person-stat"><strong>'+list.length+'</strong><span>ocorrência(s) finalizada(s) com participação</span></div>'+
+    '<div class="roster-person-occurrences"><b>Números:</b> '+
+    (list.length?list.map(o=>'<span>Nº '+esc(o.numero||'não informado')+'</span>').join(''):'Nenhum registro de participação finalizada')+'</div>';
+  return '<div class="roster-person roster-person-rich"><div class="roster-person-info">'+
+    '<div class="roster-person-name">'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</div>'+
+    '<div class="roster-person-meta">'+esc(m.funcao)+' • '+esc(assign)+'</div>'+stats+
+    (earlyExitStatus(m)?'<div class="early-exit-roster-label">'+esc(earlyExitStatusLabel(m))+'</div>':'')+'</div>'+
     '<div class="roster-person-actions">'+
-      '<button class="person-occ" data-individual-occ="'+m.id+'">LANÇAR Nº OCORRÊNCIA</button>'+
+      (isOperator()?'<button class="person-occ" data-individual-occ="'+m.id+'">LANÇAR Nº OCORRÊNCIA</button>':'')+
       (isOperator()&&isRotationMember(m)&&['driver','tech','nurse'].includes(teamRoleKey(m))
         ?'<button type="button" class="person-early-exit" data-schedule-exit="'+esc(m.id)+'">'+
           (earlyExitStatus(m)?'EDITAR SAÍDA':'PROGRAMAR SAÍDA')+'</button>':'')+
-      (isOperator()?'<button class="person-edit" data-edit-member="'+m.id+'">EDITAR</button><button class="person-remove" data-remove-member="'+m.id+'">RETIRAR DA ESCALA</button>':'')+
+      (isOperator()?'<button class="person-edit" data-edit-member="'+m.id+'">EDITAR</button>'+
+        '<button class="person-remove" data-remove-member="'+m.id+'">RETIRAR DA ESCALA</button>':'')+
     '</div></div>';
 }
 function renderTeamPreview(){
   const active=activeTeamRows();
   const individualByProfessional=individualOccurrencesByProfessional(currentPlantao?.id);
   $('#teamShiftRosterCount').textContent=active.length+' escalado(s)';
-  const an=active.filter(m=>!m.viatura_id || isAnapolisVehicle(vehicleById(m.viatura_id)));
-  const rg=active.filter(m=>m.viatura_id && !isAnapolisVehicle(vehicleById(m.viatura_id)));
-  const renderRegion=(title,subtitle,list)=>{
-    const groups=[['driver','CONDUTORES'],['tech','TÉCNICOS'],['nurse','ENFERMEIROS'],['doctor','MÉDICOS'],['moto','MOTOLÂNCIA']];
-    return '<section class="roster-region"><div class="roster-region-head"><b>'+title+'</b><span>'+subtitle+'</span></div>'+
-      groups.map(([key,label])=>{
-        const arr=list.filter(m=>teamRoleKey(m)===key);
-        if(!arr.length)return '';
-        const scope={driver:'CONDUTORES',tech:'TECNICOS',nurse:'ENFERMEIROS'}[key];
-        const hasFixed=title==='ANÁPOLIS'&&scope&&arr.some(m=>bulkRotationCandidates(scope).some(x=>x.id===m.id));
-        return '<div class="roster-role-group role-'+key+'"><div class="roster-role-head"><b>'+label+'</b><div class="roster-role-tools"><span>'+arr.length+'</span>'+
-          (isOperator()&&hasFixed?'<button type="button" class="roster-bulk-rotation-btn" data-bulk-rotation="'+scope+'">⇄ FIXOS → REVEZAMENTO</button>':'')+
-          '</div></div><div class="roster-list">'+arr.map(m=>rosterPersonHtml(m,individualByProfessional.get(m.profissional_id))).join('')+'</div></div>';
-      }).join('')+
-      (!list.length?'<div class="priority-empty">Nenhum profissional escalado nesta região.</div>':'')+
-    '</section>';
+  const an=active.filter(m=>!m.viatura_id||isAnapolisVehicle(vehicleById(m.viatura_id)));
+  const rg=active.filter(m=>m.viatura_id&&!isAnapolisVehicle(vehicleById(m.viatura_id)));
+  const displayPersons=arr=>arr.map(m=>rosterPersonHtml(m,individualByProfessional.get(m.profissional_id))).join('');
+  const roleHeader=(title,subtitle,size,body,cls)=>{
+    if(!size)return '';
+    return '<section class="roster-role-group role-'+cls+'"><div class="roster-role-head"><b>'+esc(title)+'</b>'+
+      '<span>'+size+' escalado(s)</span></div>'+
+      (subtitle?'<div class="roster-role-sub">'+esc(subtitle)+'</div>':'')+
+      '<div class="roster-list">'+body+'</div></section>';
   };
-  $('#teamPreview').innerHTML=
-    renderRegion('ANÁPOLIS','Equipe operacional e profissionais em revezamento sem viatura fixa.',an)+
-    renderRegion('BASES DESCENTRALIZADAS','Profissionais vinculados às viaturas regionais.',rg);
+  const driver=m=>teamRoleKey(m)==='driver';
+  const type=m=>m.viatura_id?vehicleType(vehicleById(m.viatura_id)):'';
+  const usaDrivers=an.filter(m=>driver(m)&&type(m)==='USA');
+  const usbDrivers=an.filter(m=>driver(m)&&type(m)==='USB');
+  const sharedDrivers=an.filter(m=>driver(m)&&!m.viatura_id);
+  const otherDrivers=an.filter(m=>driver(m)&&!usaDrivers.includes(m)&&!usbDrivers.includes(m)&&!sharedDrivers.includes(m));
+  const anRoles=[
+    ['CONDUTORES DAS USA','Equipe de suporte avançado',usaDrivers,'usa-driver'],
+    ['CONDUTORES DAS USB','Equipe de suporte básico',usbDrivers,'usb-driver'],
+    ['CONDUTORES EM REVEZAMENTO','Disponíveis nas filas compartilhadas',sharedDrivers,'shared-driver'],
+    ['OUTROS CONDUTORES','Demais alocações',otherDrivers,'driver'],
+    ['TÉCNICOS / ENFERMEIROS DAS USB','Técnicos e enfermeiros que ocupam função na USB',
+      an.filter(m=>teamRoleKey(m)==='tech'||(teamRoleKey(m)==='nurse'&&
+        (type(m)==='USB'||norm(m.grupo_revezamento).includes('USB_TECNICO')))),'tech'],
+    ['ENFERMEIROS DAS USA','Enfermeiros vinculados à USA ou ao seu revezamento',
+      an.filter(m=>teamRoleKey(m)==='nurse'&&type(m)!=='USB'&&!norm(m.grupo_revezamento).includes('USB_TECNICO')),'nurse'],
+    ['MÉDICOS','Médicos escalados',an.filter(m=>teamRoleKey(m)==='doctor'),'doctor'],
+    ['MOTOLÂNCIA','Profissionais da motolância',an.filter(m=>teamRoleKey(m)==='moto'),'moto']
+  ];
+  const anHtml='<section class="roster-region"><div class="roster-region-head"><b>ANÁPOLIS</b>'+
+    '<span>Equipes separadas por viatura e função. Contagens por participação confirmada na ocorrência.</span></div>'+
+    anRoles.map(([name,note,list,cls])=>roleHeader(name,note,list.length,displayPersons(list),cls)).join('')+
+    (!an.length?'<div class="priority-empty">Sem profissionais escalados.</div>':'')+'</section>';
+  const bases=new Map();
+  rg.forEach(m=>{
+    const v=vehicleById(m.viatura_id);
+    const base=v?.bases?.nome||'Base não informada';
+    if(!bases.has(base))bases.set(base,new Map());
+    const vv=bases.get(base),key=m.viatura_id;
+    if(!vv.has(key))vv.set(key,{v,people:[]});
+    vv.get(key).people.push(m);
+  });
+  const regionalHtml='<section class="roster-region roster-regional"><div class="roster-region-head"><b>BASES DESCENTRALIZADAS</b>'+
+    '<span>Equipe agrupada por base e viatura.</span></div>'+
+    [...bases.entries()].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR')).map(([base,groups])=>
+      '<div class="roster-base-group"><h3>'+esc(base)+'</h3><div class="roster-vehicle-grid">'+
+      [...groups.values()].map(({v,people})=>{
+        const counted=occurrences.filter(o=>o.viatura_id===v?.id&&norm(o.status)==='FINALIZADA');
+        return '<div class="roster-vehicle-card"><header><b>'+esc(v?.nome||'Sem viatura')+'</b>'+
+          '<span>'+counted.length+' ocorrência(s) finalizada(s)</span></header>'+
+          '<div class="roster-list">'+displayPersons(people)+'</div></div>';
+      }).join('')+'</div></div>').join('')+
+    (!rg.length?'<div class="priority-empty">Sem profissionais escalados.</div>':'')+'</section>';
+  $('#teamPreview').innerHTML=anHtml+regionalHtml;
   $('#teamPreview').querySelectorAll('[data-individual-occ]').forEach(b=>b.onclick=()=>openIndividualOccurrence(b.dataset.individualOcc));
   $('#teamPreview').querySelectorAll('[data-edit-member]').forEach(b=>b.onclick=()=>openEditTeamMember(b.dataset.editMember));
   $('#teamPreview').querySelectorAll('[data-remove-member]').forEach(b=>b.onclick=()=>removeTeamMember(b.dataset.removeMember));
   bindEarlyExitButtons($('#teamPreview'));
-  $('#teamPreview').querySelectorAll('[data-bulk-rotation]').forEach(b=>
-    b.onclick=()=>openBulkRotationModal(b.dataset.bulkRotation));
+}
+function renderRegionalQuickScale(){
+  const root=$('#regionalQuickScaleGrid');
+  if(!root)return;
+  const reg=vehicles.filter(v=>!isAnapolisVehicle(v));
+  const groups=new Map();
+  reg.forEach(v=>{
+    const base=v.bases?.nome||'BASE NÃO INFORMADA';
+    if(!groups.has(base))groups.set(base,[]);
+    groups.get(base).push(v);
+  });
+  root.innerHTML=[...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR')).map(([base,list])=>
+    '<div class="regional-quick-base"><h3>'+esc(base)+'</h3><div class="regional-quick-vehicles">'+
+    list.map(v=>{
+      const names=vehicleMembers(v).map(m=>'<div class="regional-quick-person"><small>'+esc(m.funcao||'Equipe')+'</small>'+
+        '<b>'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</b></div>').join('');
+      const st=statusInfo(v);
+      const finish=occurrences.filter(o=>o.viatura_id===v.id&&norm(o.status)==='FINALIZADA').length;
+      return '<article class="regional-quick-vehicle">'+
+        '<header><b>'+esc(v.nome||v.codigo)+'</b><span>'+esc(st.label)+'</span></header>'+
+        '<div class="regional-quick-count">'+finish+' ocorrência(s) finalizada(s) no plantão</div>'+
+        '<div class="regional-quick-crew">'+(names||'<span class="regional-quick-empty">Equipe não vinculada à viatura.</span>')+'</div>'+
+        '<div class="regional-quick-actions">'+
+          (isOperator()?'<button type="button" class="regional-edit-team" data-regional-team="'+v.id+'">ESCALAR / EDITAR EQUIPE</button>':'')+
+          (isOperator()&&st.key==='base'?'<button type="button" class="regional-dispatch" data-regional-dispatch="'+v.id+'">ACIONAR VIATURA</button>':'')+
+        '</div></article>';
+    }).join('')+'</div></div>'
+  ).join('')||'<div class="priority-empty">Nenhuma viatura de base descentralizada cadastrada.</div>';
+  root.querySelectorAll('[data-regional-team]').forEach(b=>b.onclick=()=>openTeamModal(b.dataset.regionalTeam));
+  root.querySelectorAll('[data-regional-dispatch]').forEach(b=>b.onclick=()=>openOccurrenceModal(b.dataset.regionalDispatch));
 }
 
 function renderHistory(){
   const tbody=$('#historyTable');
+  const cards=$('#historyCards'),overview=$('#historyOverview');
+  const finalized=occurrences.filter(o=>norm(o.status)==='FINALIZADA');
+  const active=occurrences.filter(o=>!['FINALIZADA','CANCELADA','QTA'].includes(norm(o.status)));
+  const qta=occurrences.filter(o=>norm(o.status)==='QTA');
+  const qtd=finalized.map(o=>o.qth_nao_informado?null:qthElapsedMinutes(o)).filter(n=>n!==null);
+  const average=qtd.length?fmtMinutes(Math.round(qtd.reduce((a,b)=>a+b,0)/qtd.length)):'Não calculável';
+  overview.innerHTML=[
+    ['OCORRÊNCIAS FINALIZADAS',finalized.length],
+    ['EM ANDAMENTO',active.length],
+    ['QTA',qta.length],
+    ['MÉDIA ATÉ QTH',average+' • '+qtd.length+' registros']
+  ].map(([key,val])=>'<div class="history-stat"><span>'+key+'</span><strong>'+val+'</strong></div>').join('');
   if(!occurrences.length){
+    cards.innerHTML='<div class="priority-empty">Nenhuma ocorrência registrada neste plantão.</div>';
     tbody.innerHTML='<tr><td colspan="16">Nenhuma ocorrência registrada neste plantão.</td></tr>';
     return;
   }
-  tbody.innerHTML=occurrences.map(o=>{
+  const anIds=new Set(vehicles.filter(isAnapolisVehicle).map(v=>v.id));
+  const groups=[
+    ['ANÁPOLIS',o=>o.viatura_id&&anIds.has(o.viatura_id)],
+    ['BASES DESCENTRALIZADAS',o=>o.viatura_id&&!anIds.has(o.viatura_id)],
+    ['SEM VIATURA INFORMADA',o=>!o.viatura_id]
+  ];
+  const ordered=[...occurrences].sort((a,b)=>
+    String(b.acionada_em||b.criado_em||'').localeCompare(String(a.acionada_em||a.criado_em||'')));
+  cards.innerHTML=groups.map(([name,test])=>{
+    const list=ordered.filter(test);
+    if(!list.length)return '';
+    const count=list.filter(o=>norm(o.status)==='FINALIZADA').length;
+    return '<section class="history-area"><header><b>'+name+'</b>'+
+      '<span>'+list.length+' registro(s) • '+count+' finalizada(s)</span></header>'+
+      '<div class="history-card-grid">'+list.map(o=>{
+        const v=vehicleById(o.viatura_id);
+        const duration=o.qth_nao_informado?'Não informado':fmtMinutes(qthElapsedMinutes(o));
+        const late=norm(o.status)==='FINALIZADA';
+        const place=[o.bairro,o.endereco].filter(Boolean).join(' • ')||'Não informado';
+        return '<article class="history-record">'+
+          '<div class="history-record-head"><div><b>OC. '+esc(o.numero||'—')+'</b>'+
+          '<span>'+esc(v?.nome||o.viatura_snapshot||'Sem viatura')+'</span></div>'+
+          '<em class="'+(late?'done':'active')+'">'+esc(o.status||'—')+'</em></div>'+
+          '<div class="history-record-primary">'+
+            '<div><small>NATUREZA</small><b>'+esc(o.natureza||'Não informada')+'</b></div>'+
+            '<div><small>DESTINO / RESULTADO</small><b>'+esc(victimDestinationDisplay(o.destino))+'</b></div>'+
+          '</div>'+
+          '<div class="history-record-crew"><small>EQUIPE QUE ATENDEU</small><strong>'+esc(occurrenceCrewText(o)||'Não registrada')+'</strong></div>'+
+          '<div class="history-timeline">'+
+            '<div><small>SAÍDA</small><b>'+fmtTime(o.saida_em||o.acionada_em)+'</b></div>'+
+            '<div><small>QTH</small><b>'+esc(qthDisplayTime(o))+'</b></div>'+
+            '<div><small>ATÉ QTH</small><b>'+esc(duration)+'</b></div>'+
+            '<div><small>INÍCIO RETORNO</small><b>'+fmtTime(o.inicio_retorno_em)+'</b></div>'+
+            '<div><small>CHEGADA BASE</small><b>'+fmtTime(o.retorno_base_em)+'</b></div>'+
+            '<div><small>TEMPO TOTAL</small><b>'+fmtMinutes(minutesBetween(o.saida_em||o.acionada_em,o.retorno_base_em||o.finalizado_em))+'</b></div>'+
+          '</div>'+
+          '<details class="history-record-more"><summary>VER LOCAL, RETORNO E OBSERVAÇÕES</summary>'+
+            '<p><b>Local:</b> '+esc(place)+'</p>'+
+            '<p><b>Tempo de retorno:</b> '+fmtMinutes(minutesBetween(o.inicio_retorno_em,o.retorno_base_em))+'</p>'+
+            '<p><b>Observação:</b> '+esc(o.observacao||'Sem observações')+'</p></details>'+
+          (isOperator()?'<div class="history-actions"><button class="history-edit" data-edit-occ="'+o.id+'">EDITAR</button>'+
+            '<button class="history-delete" data-delete-occ="'+o.id+'">EXCLUIR</button></div>':'')+
+          '</article>';
+      }).join('')+'</div></section>';
+  }).join('');
+  tbody.innerHTML=ordered.map(o=>{
     const v=vehicleById(o.viatura_id);
-    const tq=qthElapsedMinutes(o);
-    const tr=minutesBetween(o.inicio_retorno_em,o.retorno_base_em);
+    const tq=qthElapsedMinutes(o),tr=minutesBetween(o.inicio_retorno_em,o.retorno_base_em);
     const tt=minutesBetween(o.saida_em||o.acionada_em,o.retorno_base_em||o.finalizado_em);
     return '<tr>'+
-      '<td>'+esc(o.numero||'—')+'</td><td>'+esc(v?.nome||o.viatura_snapshot||'—')+'</td><td>'+esc(o.natureza||'—')+'</td><td>'+esc(o.bairro||'—')+'</td><td>'+esc(victimDestinationDisplay(o.destino))+'</td><td>'+esc(o.endereco||'—')+'</td><td>'+esc(occurrenceCrewText(o))+'</td>'+
-      '<td>'+fmtTime(o.saida_em||o.acionada_em)+'</td><td>'+esc(qthDisplayTime(o))+'</td><td>'+fmtMinutes(tq)+'</td><td>'+fmtTime(o.inicio_retorno_em)+'</td><td>'+fmtTime(o.retorno_base_em)+'</td><td>'+fmtMinutes(tr)+'</td><td>'+fmtMinutes(tt)+'</td><td>'+esc(o.observacao||'—')+'</td>'+
-      '<td>'+(isOperator()?'<div class="history-actions"><button class="history-edit" data-edit-occ="'+o.id+'">EDITAR</button><button class="history-delete" data-delete-occ="'+o.id+'">EXCLUIR</button></div>':'—')+'</td>'+
-    '</tr>';
+      '<td>'+esc(o.numero||'—')+'</td><td>'+esc(v?.nome||o.viatura_snapshot||'—')+'</td>'+
+      '<td>'+esc(o.natureza||'—')+'</td><td>'+esc(o.bairro||'—')+'</td>'+
+      '<td>'+esc(victimDestinationDisplay(o.destino))+'</td><td>'+esc(o.endereco||'—')+'</td>'+
+      '<td>'+esc(occurrenceCrewText(o))+'</td>'+
+      '<td>'+fmtTime(o.saida_em||o.acionada_em)+'</td><td>'+esc(qthDisplayTime(o))+'</td>'+
+      '<td>'+fmtMinutes(tq)+'</td><td>'+fmtTime(o.inicio_retorno_em)+'</td>'+
+      '<td>'+fmtTime(o.retorno_base_em)+'</td><td>'+fmtMinutes(tr)+'</td><td>'+fmtMinutes(tt)+'</td>'+
+      '<td>'+esc(o.observacao||'—')+'</td>'+
+      '<td>'+(isOperator()?'<div class="history-actions"><button class="history-edit" data-edit-occ="'+o.id+'">EDITAR</button>'+
+        '<button class="history-delete" data-delete-occ="'+o.id+'">EXCLUIR</button></div>':'—')+'</td></tr>';
   }).join('');
   bindOccurrenceActions($('#history'));
 }

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261115-85-usa-revezamento-retratil">
+  <link rel="stylesheet" href="./styles.css?v=20261115-86-relatorios-historico-equipes">
 </head>
 <body>
 
@@ -57,8 +57,8 @@
       <label class="date-field">Data do plantão<input id="shiftDate" type="date"></label>
       <span id="dayAlaBadge" class="day-ala-badge">ALA DO DIA: —</span>
       <span id="roleBadge" class="role-badge">CONSULTA</span>
-      <button id="exportBtn" class="btn">Exportar CSV</button>
-      <button id="closingReportBtn" class="btn" disabled>Relatório do plantão</button>
+      <button id="exportBtn" class="btn">Exportar resumo PDF</button>
+      <button id="closingReportBtn" class="btn" disabled>Livro + relatório PDF</button>
       <button id="endShiftBtn" class="btn danger">ENCERRAR PLANTÃO</button>
       <button id="logoutBtn" class="btn">Sair</button>
     </div>
@@ -142,15 +142,15 @@
             </div>
             <div class="destination-stack">
               <div class="destination-split-card">
-                <div class="destination-split-title">Ocorrências de Anápolis</div>
+                <div class="destination-split-title">Anápolis <small id="destAnapolisCount">0 registros</small></div>
                 <div id="destAnapolis" class="destination-board"></div>
               </div>
               <div class="destination-split-card">
-                <div class="destination-split-title">Ocorrências das bases descentralizadas</div>
+                <div class="destination-split-title">Bases descentralizadas <small id="destRegionalCount">0 registros</small></div>
                 <div id="destRegional" class="destination-board"></div>
               </div>
               <div id="destUnassignedWrap" class="destination-split-card hidden">
-                <div class="destination-split-title">Ocorrências sem viatura informada</div>
+                <div class="destination-split-title">Sem viatura informada <small id="destUnassignedCount">0 registros</small></div>
                 <div id="destUnassigned" class="destination-board"></div>
               </div>
             </div>
@@ -251,6 +251,18 @@
             <button id="confirmExpressBtn" class="express-confirm-btn">CONFIRMAR ESCALA</button>
           </div>
         </div>
+
+
+        <section id="regionalQuickScale" class="regional-quick-scale" aria-label="Escala e acionamento das bases descentralizadas">
+          <div class="regional-quick-head">
+            <div>
+              <h2>Bases descentralizadas — equipe e acionamento rápido</h2>
+              <p>Selecione a viatura da base para escalar ou alterar condutor, técnico, enfermeiro e médico. O acionamento abre a mesma conferência de guarnição utilizada em Anápolis.</p>
+            </div>
+            <span>SEM ALTERAR O REVEZAMENTO DE ANÁPOLIS</span>
+          </div>
+          <div id="regionalQuickScaleGrid" class="regional-quick-grid"></div>
+        </section>
 
         <div class="team-search-wrap">
           <div>
@@ -428,7 +440,13 @@
             <p>Se algum dado foi lançado errado, use EDITAR. A exclusão exige confirmação.</p>
           </div>
         </div>
-        <div class="table-wrap history-table-wrap">
+
+        <div class="history-context-note">Os tempos dependem dos horários informados pelo rádio-operador e pelas equipes. Falhas de comunicação, rádio ou registro podem causar lacunas e diferenças entre o horário real e o registrado.</div>
+        <div id="historyOverview" class="history-overview"></div>
+        <div id="historyCards" class="history-groups"></div>
+        <details class="history-advanced">
+          <summary>CONSULTAR TABELA COMPLETA — TODOS OS CAMPOS E HORÁRIOS</summary>
+          <div class="table-wrap history-table-wrap">
           <table>
             <thead>
               <tr>
@@ -438,7 +456,8 @@
             </thead>
             <tbody id="historyTable"></tbody>
           </table>
-        </div>
+          </div>
+        </details>
       </section>
     </section>
   </main>
@@ -857,6 +876,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261115-85-usa-revezamento-retratil"></script>
+<script type="module" src="./app.js?v=20261115-86-relatorios-historico-equipes"></script>
 </body>
 </html>
