@@ -5569,6 +5569,34 @@ async function saveBook(){
   }
 }
 
+/* Prévia do repasse: exibe quem está realmente empenhado na ocorrência.
+   Não presume dobra de plantão nem muda a escala do próximo turno. */
+function activeShiftHandoffPreview(){
+  const active=occurrences.filter(o=>['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status)));
+  if(!active.length)return '';
+  const items=active.map(o=>{
+    const vehicle=vehicleById(o.viatura_id);
+    const members=occurrenceMembers(o.id);
+    const crew=members.length?members.map(m=>
+      (m.nome_snapshot||displayName(m.profissionais)||'Não identificado')+
+      (m.funcao?' — '+m.funcao:'')
+    ).join(' / '):'Guarnição não registrada. Confira antes de encerrar!';
+    return '<article class="shift-handoff-item">'+
+      '<div><strong>'+esc(vehicle?.nome||o.viatura_snapshot||'SEM VIATURA')+
+      ' • OC. '+esc(o.numero||'—')+'</strong><span>'+esc(o.status||'EM ATENDIMENTO')+'</span></div>'+
+      '<p><b>Equipe que está na rua:</b> '+esc(crew)+'</p>'+
+      '<p><b>Natureza:</b> '+esc(o.natureza||'Não informada')+
+      ' • <b>Saída:</b> '+esc(fmtTime(o.saida_em||o.acionada_em))+'</p>'+
+      '</article>';
+  });
+  return '<section class="shift-handoff-review"><h3>EQUIPES AINDA EM ATENDIMENTO — REPASSE OBRIGATÓRIO</h3>'+
+    '<p>Estas equipes pertencem à ocorrência em andamento, mesmo que não dobrem a próxima escala. '+
+    'Registre a passagem com o novo rádio-operador. O sistema não deve supor que todos dobrarão.</p>'+
+    items.join('')+
+    '<p class="shift-handoff-warning">Atenção: esta é uma conferência visual. A transferência formal da guarnição '+
+    'para o novo turno e a decisão individual de dobrar exigem confirmação específica no futuro módulo de repasse.</p>'+
+    '</section>';
+}
 /* ---------- Troca e encerramento manual de plantão ---------- */
 function openShiftTransition(){
   if(!isOperator())return;
@@ -5592,7 +5620,8 @@ function openShiftTransition(){
     'A escala anterior fica no histórico. O sistema não encerra ocorrências nem altera automaticamente a situação das viaturas.'
   ].filter(Boolean);
   $('#shiftTransitionTitle').textContent=open?'Trocar ou encerrar plantão':reopen?'Reabrir plantão vigente':'Iniciar próxima escala';
-  $('#shiftTransitionDetails').innerHTML=points.map(p=>'<p>'+p+'</p>').join('');
+  $('#shiftTransitionDetails').innerHTML=points.map(p=>'<p>'+p+'</p>').join('')+
+    (open?activeShiftHandoffPreview():'');
   $('#shiftTransitionAcknowledge').checked=false;
   $('#shiftEndOnlyBtn').classList.toggle('hidden',!open);
   $('#shiftEndStartBtn').classList.toggle('hidden',!open);
