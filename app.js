@@ -3382,9 +3382,32 @@ async function loadExpressScale(){
 function expressDecisionTime(m){
   return new Date(m?.saiu_em||m?.entrou_em||m?.criado_em||0).getTime()||0;
 }
+// A posição de origem da escala (titular + ala/turno + tipo de viatura)
+// não é a mesma coisa que a pessoa que está cobrindo outro titular.
+// Ex.: Gabriel, titular da USB 06, pode estar em serviço substituindo
+// Robson na USA 01; isso NÃO torna sua escala da USA 01 a decisão da USB 06.
+function expressReferenceOwnsMember(r,v,m,{includeAbsent=false}={}){
+  if(!r?.profissional_id||!v||!m||
+     m.titular_profissional_id!==r.profissional_id)return false;
+  if(norm(m.ala_escala)!==norm(r.ala)||
+     norm(m.turno_escala)!==norm(r.turno))return false;
+  if(m.viatura_id)return m.viatura_id===v.id;
+  if(includeAbsent&&norm(m.tipo_alteracao_escala)==='AUSENTE')return true;
+  if(!isRotationMember(m))return false;
+  const expected=vehicleType(v).includes('USA')?'USA':'USB';
+  return norm(m.revezamento_tipo_viatura)===expected||
+    norm(m.grupo_revezamento)===expected+'_CONDUTOR';
+}
+function expressMemberOwnsSeat(r,v,m){
+  return !!m&&(
+    (m.viatura_id===v?.id&&teamRoleKey(m)==='driver')||
+    (isRotationMember(m)&&expressReferenceOwnsMember(r,v,m))
+  );
+}
 function expressLatestDecision(r){
+  const v=vehicleByCode(r.codigo_viatura);
   return team
-    .filter(m=>m.titular_profissional_id===r.profissional_id || (m.profissional_id===r.profissional_id && norm(m.ala_escala)===norm(activeScaleReference().ala) && norm(m.turno_escala)===norm(activeScaleReference().turno)))
+    .filter(m=>expressReferenceOwnsMember(r,v,m,{includeAbsent:true}))
     .sort((a,b)=>expressDecisionTime(b)-expressDecisionTime(a))[0]||null;
 }
 function isServingInShift(id){
@@ -3397,7 +3420,7 @@ function expressRowState(r){
   const active=activeTeamRows();
   const current=(v?currentByRole(v.id,'driver'):null)||active.find(m=>
     teamRoleKey(m)==='driver'&&isRotationMember(m)&&
-    (m.titular_profissional_id===r.profissional_id||m.profissional_id===r.profissional_id)
+    expressReferenceOwnsMember(r,v,m)
   )||null;
 
   if(!r.profissional_id)return {state:'unresolved',label:'NÃO CADASTRADO',v,current};
@@ -3464,6 +3487,16 @@ async function expressUseFixed(rowId){
   try{
     const st=expressRowState(r);
     const now=new Date().toISOString();
+    const titularEmOutroPosto=activeTeamRows().find(m=>
+      m.profissional_id===r.profissional_id && m.id!==st.current?.id);
+    if(st.state!=='fixed'&&titularEmOutroPosto){
+      const other=vehicleById(titularEmOutroPosto.viatura_id);
+      throw new Error((r.nome_referencia||'O titular')+' já está escalado '+ 
+        (other?'na '+(other.nome||other.codigo):'em outro revezamento/permuta')+
+        '. A escala dele será preservada. Corrija primeiro a posição de origem, se desejar transferi-lo.');
+    }
+    if(st.current&&!expressMemberOwnsSeat(r,v,st.current))
+      throw new Error('A posição encontrada pertence a outra viatura. Nenhuma alteração realizada.');
 
     if(st.state==='fixed'&&st.current){
       const {error}=await supabase.from('equipe_plantao').update({
@@ -3561,6 +3594,8 @@ async function saveExpressPermuta(){
   saveButton.disabled=true;
   try{
     const old=expressRowState(r).current;
+    if(old&&!expressMemberOwnsSeat(r,v,old))
+      throw new Error('Proteção da escala: a equipe encontrada pertence a outra viatura. Nenhum profissional foi desescalado.');
     const scale=activeScaleReference();
     if(scale.ala!==r.ala||scale.turno!==r.turno||
       (expressDriverEdit&&(expressDriverEdit.memberId!==old?.id||expressDriverEdit.plantaoId!==currentPlantao.id))){
@@ -3623,6 +3658,17 @@ async function expressToggleRotation(rowId){
   try{
     const st=expressRowState(r);
     const now=new Date().toISOString();
+    if(st.state!=='rotation'){
+      const titularEmOutroPosto=activeTeamRows().find(m=>m.profissional_id===r.profissional_id);
+      if(titularEmOutroPosto){
+        const other=vehicleById(titularEmOutroPosto.viatura_id);
+        throw new Error((r.nome_referencia||'O titular')+' já está escalado '+
+          (other?'na '+(other.nome||other.codigo):'em outra posição do revezamento/permuta')+
+          '. Não será retirado automaticamente para revezar nesta posição.');
+      }
+    }
+    if(st.current&&!expressMemberOwnsSeat(r,v,st.current))
+      throw new Error('A escala pertence a outra posição. Nenhuma alteração realizada.');
 
     if(st.state==='rotation'&&st.current){
       await supabase.from('equipe_plantao').update({
@@ -3668,6 +3714,13 @@ async function expressAbsent(rowId){
   try{
     const now=new Date().toISOString();
     const st=expressRowState(r);
+    if(st.current&&!expressMemberOwnsSeat(r,v,st.current))
+      throw new Error('A equipe encontrada pertence a outra posição. Nenhuma alteração realizada.');
+    if(st.current&&st.current.profissional_id!==r.profissional_id&&
+      !confirm('O titular '+(r.nome_referencia||'')+
+        ' tem uma permuta ativa com '+displayName(st.current.profissionais)+
+        '. Marcar AUSENTE também retirará este substituto da posição '+
+        (v.nome||v.codigo)+'. Deseja continuar?'))return;
     if(st.current)await deactivateTeamRow(st.current,now);
 
     const pro=professionals.find(p=>p.id===r.profissional_id);
