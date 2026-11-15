@@ -3498,7 +3498,7 @@ async function expressUseFixed(rowId){
 function setExpressPermutaMode(mode){
   const chosen=mode==='REVEZAMENTO'?'REVEZAMENTO':'FIXO';
   $('#expressPermutaMode').value=chosen;
-  $('#expressPermutaModeButtons [data-permuta-mode]').forEach(button=>{
+  $$('#expressPermutaModeButtons [data-permuta-mode]').forEach(button=>{
     const active=button.dataset.permutaMode===chosen;
     button.classList.toggle('is-selected',active);
     button.setAttribute('aria-pressed',String(active));
