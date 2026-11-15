@@ -1040,6 +1040,7 @@ function occurrenceInfoHtml(v,o){
     (canCorrectNumber?'<button type="button" class="occ-number-correct-btn" data-act="correct-occ-number" data-o="'+esc(o.id)+'" title="Corrigir apenas o número desta ocorrência">✎ EDITAR Nº</button>':'')+
     '</div>'+
     '<div class="occ-address">'+esc([o.bairro,o.endereco,o.destino].filter(Boolean).join(' • '))+'</div>'+
+    (o.observacao?'<details class="occ-regulation-detail"><summary>AVALIAÇÃO / OBSERVAÇÕES DO ATENDIMENTO</summary><div class="occ-regulation-text">'+esc(o.observacao)+'</div></details>':'')+
     '<div class="occ-timeline">'+
       '<div class="occ-time-chip"><span>INÍCIO / SAÍDA</span><b>'+fmtTime(inicio)+'</b></div>'+
       '<div class="occ-time-chip"><span>CHEGADA QTH</span><b>'+esc(qthDisplayTime(o))+'</b></div>'+
