@@ -2295,6 +2295,12 @@ nav.tabs .tab.book-tab.active{
 }
 @media screen and (prefers-reduced-motion: no-preference) {
   :is(#expressDriverGrid, #internalScaleEditor) .express-row-badge.vacant {
-    animation: team-unassigned-pulse 1.8s ease-in-out infinite alternate;
+    animation: unassigned-badge-blink 1.6s step-end infinite;
+  }
+}
+@keyframes unassigned-badge-blink {
+  50% {
+    background-color: #92400e;
+    color: #fff;
   }
 }
