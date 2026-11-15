@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261115-86-relatorios-historico-equipes">
+  <link rel="stylesheet" href="./styles.css?v=20261115-87-importacao-regulacao">
 </head>
 <body>
 
@@ -564,6 +564,34 @@
           <label>Hora início / saída<input id="occStart" type="time"></label>
         </div>
       </section>
+      <section class="dispatch-section dispatch-import" aria-label="Importação de dados da regulação">
+        <div class="dispatch-section-heading"><b>IMPORTAÇÃO RÁPIDA DA REGULAÇÃO</b><span>Copie tudo no sistema principal e cole uma vez</span></div>
+        <label class="dispatch-import-label" for="occImportRaw">Texto copiado da ocorrência</label>
+        <textarea id="occImportRaw" rows="3" spellcheck="false" placeholder="Clique aqui e pressione Ctrl+V com Avaliação Médica, Localização da Ocorrência e, se houver, Observação."></textarea>
+        <div class="dispatch-import-actions">
+          <button id="occImportParseBtn" type="button" class="btn primary">ORGANIZAR DADOS</button>
+          <button id="occImportClearBtn" type="button" class="btn">LIMPAR IMPORTAÇÃO</button>
+          <span id="occImportStatus" role="status" aria-live="polite">Cole o texto para preencher automaticamente os dados.</span>
+        </div>
+        <div id="occImportReview" class="dispatch-import-review hidden">
+          <div class="dispatch-import-review-title"><b>CONFERÊNCIA DOS DADOS IMPORTADOS</b><span>Edite o que precisar. Bairro e endereço aparecem em Local e Detalhes.</span></div>
+          <div class="form-grid dispatch-import-grid">
+            <label>Paciente<input id="occImportPaciente" autocomplete="off"></label>
+            <label>Idade<input id="occImportIdade" autocomplete="off"></label>
+            <label>Sexo<input id="occImportSexo" autocomplete="off"></label>
+            <label>Médico regulador<input id="occImportMedico" autocomplete="off"></label>
+            <label>Data/hora da avaliação médica<input id="occImportData" autocomplete="off"></label>
+            <label>Município<input id="occImportMunicipio" autocomplete="off"></label>
+            <label>Logradouro<input id="occImportLogradouro" autocomplete="off"></label>
+            <label>Complemento<input id="occImportComplemento" autocomplete="off"></label>
+            <label class="full">Ponto de referência<input id="occImportReferencia" autocomplete="off"></label>
+            <label class="full">Histórico médico<textarea id="occImportHistorico" rows="2"></textarea></label>
+            <label class="full">Observação copiada da regulação<textarea id="occImportObservacao" rows="2" placeholder="Sem observação quando o campo vier vazio"></textarea></label>
+          </div>
+          <p id="occImportWarnings" class="dispatch-import-warnings"></p>
+          <p class="dispatch-import-note">A data/hora acima pertence à avaliação médica e não muda o horário de saída da viatura. O destino da vítima também não será alterado.</p>
+        </div>
+      </section>
       <section id="dispatchCrewPanel" class="dispatch-section dispatch-crew-panel hidden" aria-label="Guarnição escolhida para o acionamento">
         <div class="dispatch-section-heading"><b>EQUIPE DO ACIONAMENTO</b><span>Revise antes de empenhar</span></div>
         <p id="dispatchCrewHint" class="dispatch-crew-hint">A sugestão segue o revezamento e mantém os fixos da viatura.</p>
@@ -876,6 +904,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261115-86-relatorios-historico-equipes"></script>
+<script type="module" src="./app.js?v=20261115-87-importacao-regulacao"></script>
 </body>
 </html>

@@ -1,3 +1,4 @@
+import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const supabase = createClient(
@@ -1039,6 +1040,7 @@ function occurrenceInfoHtml(v,o){
     (canCorrectNumber?'<button type="button" class="occ-number-correct-btn" data-act="correct-occ-number" data-o="'+esc(o.id)+'" title="Corrigir apenas o número desta ocorrência">✎ EDITAR Nº</button>':'')+
     '</div>'+
     '<div class="occ-address">'+esc([o.bairro,o.endereco,o.destino].filter(Boolean).join(' • '))+'</div>'+
+    (o.observacao?'<details class="occ-regulation-detail"><summary>AVALIAÇÃO / OBSERVAÇÕES DO ATENDIMENTO</summary><div class="occ-regulation-text">'+esc(o.observacao)+'</div></details>':'')+
     '<div class="occ-timeline">'+
       '<div class="occ-time-chip"><span>INÍCIO / SAÍDA</span><b>'+fmtTime(inicio)+'</b></div>'+
       '<div class="occ-time-chip"><span>CHEGADA QTH</span><b>'+esc(qthDisplayTime(o))+'</b></div>'+
@@ -3146,6 +3148,90 @@ function updateDispatchCrewStatus(){
   warning.classList.toggle('hidden',!changed);
   if(changed)warning.textContent='A escolha manual vale somente para esta ocorrência. A escala e a sequência do revezamento não serão alteradas permanentemente.';
 }
+/* ---------- Importação do texto copiado da central de regulação ---------- */
+const regulationImportFieldIds = {
+  paciente:'occImportPaciente',idade:'occImportIdade',sexo:'occImportSexo',
+  historico:'occImportHistorico',medicoRegulador:'occImportMedico',
+  dataHoraAvaliacao:'occImportData',municipio:'occImportMunicipio',
+  logradouro:'occImportLogradouro',complemento:'occImportComplemento',
+  referencia:'occImportReferencia',observacaoOrigem:'occImportObservacao'
+};
+let regulationImportLoaded = false;
+let regulationAutoAddress = '';
+let regulationAutoBairro = '';
+
+function resetRegulationImport() {
+  if ($('#occEndereco').value && $('#occEndereco').value === regulationAutoAddress) $('#occEndereco').value = '';
+  if ($('#occBairro').value && $('#occBairro').value === regulationAutoBairro) $('#occBairro').value = '';
+  regulationAutoAddress = '';
+  regulationAutoBairro = '';
+  regulationImportLoaded = false;
+  $('#occImportRaw').value = '';
+  Object.values(regulationImportFieldIds).forEach(id => { $('#' + id).value = ''; });
+  $('#occImportReview').classList.add('hidden');
+  $('#occImportWarnings').textContent = '';
+  $('#occImportStatus').className = '';
+  $('#occImportStatus').textContent = 'Cole o texto para preencher automaticamente os dados.';
+}
+function readRegulationImport() {
+  if (!regulationImportLoaded) return null;
+  const data = {};
+  for (const [key, id] of Object.entries(regulationImportFieldIds)) {
+    data[key] = $('#' + id).value.trim();
+  }
+  data.bairro = $('#occBairro').value.trim();
+  return data;
+}
+function syncRegulationAddress() {
+  if (!regulationImportLoaded) return;
+  const proposed = formatImportedAddress(readRegulationImport());
+  const field = $('#occEndereco');
+  if (!field.value.trim() || field.value === regulationAutoAddress) {
+    field.value = proposed;
+    regulationAutoAddress = proposed;
+  }
+}
+function importRegulationText() {
+  const raw = $('#occImportRaw').value;
+  if (!raw.trim()) {
+    resetRegulationImport();
+    return;
+  }
+  const parsed = parseRegulationClipboard(raw);
+  const status = $('#occImportStatus');
+  status.className = parsed.valid ? 'ok' : 'warn';
+  if (!parsed.valid) {
+    if (regulationImportLoaded) {
+      if ($('#occEndereco').value === regulationAutoAddress) $('#occEndereco').value = '';
+      if ($('#occBairro').value === regulationAutoBairro) $('#occBairro').value = '';
+    }
+    regulationImportLoaded = false;
+    regulationAutoAddress = '';
+    regulationAutoBairro = '';
+    $('#occImportReview').classList.add('hidden');
+    status.textContent = parsed.warnings[0] || 'Texto não reconhecido. Copie Avaliação Médica e Localização da Ocorrência.';
+    return;
+  }
+  for (const [key, id] of Object.entries(regulationImportFieldIds)) {
+    $('#' + id).value = parsed.data[key] || '';
+  }
+  const bairroField = $('#occBairro');
+  if (parsed.data.bairro && (!bairroField.value.trim() || bairroField.value === regulationAutoBairro)) {
+    bairroField.value = parsed.data.bairro;
+    regulationAutoBairro = parsed.data.bairro;
+  } else if (parsed.data.bairro && bairroField.value !== parsed.data.bairro) {
+    parsed.warnings.push('Bairro já preenchido manualmente: confira a diferença com o texto copiado.');
+  }
+  regulationImportLoaded = true;
+  syncRegulationAddress();
+  const proposedAddress = formatImportedAddress(parsed.data);
+  if (proposedAddress && $('#occEndereco').value !== proposedAddress) {
+    parsed.warnings.push('Endereço já preenchido manualmente: confira se corresponde à regulação.');
+  }
+  $('#occImportReview').classList.remove('hidden');
+  status.textContent = parsed.recognized + ' campos identificados. Confira os dados abaixo antes de acionar.';
+  $('#occImportWarnings').textContent = parsed.warnings.length ? 'CONFERIR: ' + parsed.warnings.join(' ') : 'Endereço e informações médicas prontos para conferência.';
+}
 function openOccurrenceModal(vId=null){
   if(!isOperator())return;
   if(!currentPlantao)return alert('Selecione um plantão antes de lançar ocorrência.');
@@ -3153,11 +3239,16 @@ function openOccurrenceModal(vId=null){
   populateVehicleSelect($('#occVehicleSelect'),vId,true);
   $('#occModalTitle').textContent=vId?'Acionar '+(vehicleById(vId)?.nome||'viatura'):'Lançar ocorrência manual';
   $('#occNumber').value='';$('#occNature').value='';$('#occBairro').value='';$('#occDestino').value='';$('#occEndereco').value='';$('#occObs').value='';$('#occStart').value=nowLocalTime();
+  resetRegulationImport();
   renderDispatchCrewPanel();
   openModal('occModal');
 }
 async function saveOccurrence(){
   if(!canEditOpenShift()||!currentPlantao)return;
+  if ($('#occImportRaw').value.trim() && !regulationImportLoaded) {
+    return alert('O texto colado ainda não foi reconhecido. Confira os dados da importação ou limpe o campo antes de acionar.');
+  }
+  const importedRegulation = readRegulationImport();
   const vId=$('#occVehicleSelect').value||null;
   const v=vehicleById(vId);
   if(vId&&!v)return alert('Viatura não encontrada. Abra o acionamento novamente.');
@@ -3189,7 +3280,7 @@ async function saveOccurrence(){
   const payload={
     plantao_id:currentPlantao.id,viatura_id:vId,numero:$('#occNumber').value.trim()||null,natureza:$('#occNature').value.trim()||null,
     bairro:$('#occBairro').value.trim()||null,destino:$('#occDestino').value.trim()||null,endereco:$('#occEndereco').value.trim()||null,
-    observacao:$('#occObs').value.trim()||null,status:vId?'EM OCORRENCIA':'FINALIZADA',acionada_em:now,saida_em:now,
+    observacao:(importedRegulation?formatImportedObservation(importedRegulation,$('#occObs').value):$('#occObs').value.trim())||null,status:vId?'EM OCORRENCIA':'FINALIZADA',acionada_em:now,saida_em:now,
     viatura_snapshot:v?.nome||null,base_snapshot:v?.bases?.nome||null,data_ocorrencia:currentPlantao.data_plantao,criado_por:profile?.nome||null,
     finalizado_em:vId?null:new Date().toISOString(),
     criterio_prioridade:vId?rotationCriterionDbValue(crit):null,
@@ -6137,7 +6228,12 @@ $('#teamReloadBtn').onclick=()=>{
   if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,action:'atualizar a equipe'}))return;
   autoFollowCurrentShift?synchronizeCurrentOperationalShift(true):loadAll(selectedDate());
 };
-$('#saveOcc').onclick=saveOccurrence;$('#occVehicleSelect').onchange=renderDispatchCrewPanel;$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
+$('#saveOcc').onclick=saveOccurrence;$('#occVehicleSelect').onchange=renderDispatchCrewPanel;
+$('#occImportRaw').addEventListener('input', importRegulationText);
+$('#occImportParseBtn').onclick=importRegulationText;
+$('#occImportClearBtn').onclick=resetRegulationImport;
+['occImportLogradouro','occImportComplemento','occImportReferencia'].forEach(id =>
+  $('#' + id).addEventListener('input',syncRegulationAddress));$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
 $('#occNumberCorrectForm').onsubmit=async e=>{e.preventDefault();await saveNumberCorrection()};
 $('#occCrewCorrectForm').onsubmit=async e=>{e.preventDefault();await saveOccurrenceCrewCorrection()};
 $('#victimDestinationChoice').onchange=refreshVictimDestinationChoice;
