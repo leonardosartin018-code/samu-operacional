@@ -49,7 +49,7 @@ test('não permite salvar quando viatura não está mais em ocorrência ou retor
 });
 
 test('retorno de outra ocorrência inconsistente não é liberado', () => {
-  assert.equal(canManageVictimDestination({occurrenceStatus:'EM OCORRENCIA',vehicleStatus:'returning'}),true);
+  assert.equal(canManageVictimDestination({occurrenceStatus:'EM OCORRENCIA',vehicleStatus:'returning'}),false);
   assert.equal(canManageVictimDestination({occurrenceStatus:'RETORNANDO',vehicleStatus:'occurrence',qthRecorded:false,qthNotInformed:false}),false);
 });
 
