@@ -3248,3 +3248,19 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 .occ-effort-reason.hidden{display:none!important}
 .occ-effort-reason input{min-height:44px;border:1px solid #cfa655;border-radius:8px;padding:10px 12px;font-size:.87rem;width:100%;box-sizing:border-box}
 .occ-effort-preview{font-size:.77rem;color:#6c542d;background:#fff8eb;border-radius:7px;padding:10px 11px;line-height:1.45}
+
+/* Prévia das equipes em atendimento antes da passagem de plantão. */
+.shift-handoff-review{
+  border:2px solid #f6c470;border-left:5px solid #b45309;background:#fffbeb;
+  padding:12px;border-radius:10px;margin:15px 0
+}
+.shift-handoff-review h3{font-size:.85rem;color:#7c2d12;margin:0 0 8px}
+.shift-handoff-review>p{font-size:.8rem;line-height:1.5;color:#854d0e}
+.shift-handoff-item{
+  border:1px solid #e7c79b;background:#fff;border-radius:8px;margin-top:8px;padding:10px 11px
+}
+.shift-handoff-item>div{display:flex;justify-content:space-between;gap:7px;flex-wrap:wrap;align-items:center}
+.shift-handoff-item strong{font-size:.88rem;color:#713f12}
+.shift-handoff-item>div span{font-size:.7rem;font-weight:900;color:#9a3412}
+.shift-handoff-item p{font-size:.78rem;line-height:1.5;margin:6px 0 0;color:#344d63}
+.shift-handoff-review .shift-handoff-warning{font-weight:850;color:#9a3412}
