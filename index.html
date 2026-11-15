@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261111-74-corrigir-guarnicao-empenhada">
+  <link rel="stylesheet" href="./styles.css?v=20261114-71-aviso-equipe">
 </head>
 <body>
 
@@ -68,7 +68,7 @@
 
   <nav class="tabs" aria-label="Navegação principal">
     <button class="tab active" data-page="base">PAINEL OPERACIONAL</button>
-    <button class="tab" data-page="team" data-team-view="edit">MONTAR OU ALTERAR EQUIPE DO DIA</button>
+    <button class="tab" data-page="team" data-team-view="edit">MONTAR OU ALTERAR EQUIPE DO DIA <span id="teamUnassigned" class="team-unassigned" hidden>NÃO ESCALADO</span></button>
     <button class="tab book-tab" data-page="book">LIVRO</button>
     <button class="tab" data-page="team" data-team-view="roster">RESUMO DA EQUIPE</button>
     <button class="tab" data-page="history">HISTÓRICO</button>
@@ -851,6 +851,6 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261114-70-equipe-titular"></script>
+<script type="module" src="./app.js?v=20261114-71-aviso-equipe"></script>
 </body>
 </html>

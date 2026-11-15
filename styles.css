@@ -2268,3 +2268,20 @@ nav.tabs .tab.book-tab.active{
 .occ-crew-correct-btn{width:100%;min-height:36px;font-size:.69rem}
 @media(max-width:600px){.occ-crew-correct-fields{grid-template-columns:1fr}
   .occ-crew-correct-dialog{padding:13px}}
+
+.tabs .tab:has(.team-unassigned:not([hidden])) {
+  background-color: #fff1cf;
+  border-color: #b45309;
+  color: #713f12;
+  animation: team-unassigned-pulse 1.8s ease-in-out infinite alternate;
+}
+.team-unassigned {
+  margin-inline-start: .4em;
+  font-size: .72em;
+}
+@keyframes team-unassigned-pulse {
+  to { background-color: #ffdc8a; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .tabs .tab:has(.team-unassigned:not([hidden])) { animation: none; }
+}

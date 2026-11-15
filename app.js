@@ -14,6 +14,7 @@ let profile = null;
 let currentPlantao = null;
 let vehicles = [];
 let team = [];
+let teamLoaded = false;
 let occurrences = [];
 let occurrenceTeam = [];
 let rotation = [];
@@ -681,7 +682,7 @@ async function loadAll(preferredDate=null,preferredTurno=null){
   setSync('Identificando plantão atual e pré-carregando escalas...','warn');
 
   currentPlantao=null;
-  vehicles=[];team=[];occurrences=[];rotation=[];manualRotation=[];occurrenceTeam=[];
+  vehicles=[];team=[];teamLoaded=false;occurrences=[];rotation=[];manualRotation=[];occurrenceTeam=[];
   const warnings=[];
 
   try{
@@ -736,7 +737,10 @@ async function loadAll(preferredDate=null,preferredTurno=null){
       ]);
 
       if(tr.error){console.warn(tr.error);warnings.push('equipe')}
-      else team=(tr.data||[]).map(m=>({...m,profissionais:profMap.get(m.profissional_id)||null}));
+      else{
+        team=(tr.data||[]).map(m=>({...m,profissionais:profMap.get(m.profissional_id)||null}));
+        teamLoaded=true;
+      }
 
       if(or.error){console.warn(or.error);warnings.push('ocorrências')}
       else occurrences=or.data||[];
@@ -777,6 +781,7 @@ async function loadAll(preferredDate=null,preferredTurno=null){
 }
 
 function renderAll(){
+  $('#teamUnassigned').hidden=!(teamLoaded&&norm(currentPlantao?.status)==='ABERTO'&&activeTeamRows().length===0);
   renderSummary();
   renderFleet();
   renderRotation();
