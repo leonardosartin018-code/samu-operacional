@@ -1,4 +1,4 @@
-import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js';
+import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const supabase = createClient(

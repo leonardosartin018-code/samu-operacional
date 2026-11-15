@@ -36,36 +36,76 @@ function fieldOnLine(line) {
   return {key, inline: colon < 0 ? '' : clean.slice(colon + 1).trim()};
 }
 function parseMedicalTable(lines) {
-  const i = lines.findIndex(line => {
-    const s = fold(line);
-    return s.includes('historico') && s.includes('medico regulador') && s.includes('data/hora');
+  const i = lines.findIndex((line, index) => {
+    const value = fold(line).replace(/\s+/g, ' ').trim();
+    return (value.includes('historico') && value.includes('medico regulador') && value.includes('data/hora')) ||
+      (value === 'historico' &&
+        fold(lines[index + 1]).trim() === 'medico regulador' &&
+        fold(lines[index + 2]).trim() === 'data/hora');
   });
   if (i < 0) return null;
-  let end = lines.findIndex((line, j) => j > i && fold(line).includes('localizacao da ocorrencia'));
-  if (end < 0) end = lines.length;
-  const rows = lines.slice(i + 1, end).filter(Boolean);
-  if (!rows.length) return null;
-  const first = rows[0].split(/\t+/).map(x => x.trim()).filter(Boolean);
-  let cols = first.length >= 3 ? first : [];
-  if (!cols.length && rows.length === 1) {
-    const spaced = rows[0].split(/ {2,}/).map(x => x.trim()).filter(Boolean);
-    if (spaced.length >= 3) cols = spaced;
+  const separateHeader = fold(lines[i]).trim() === 'historico';
+  const start = i + (separateHeader ? 3 : 1);
+  // Algumas telas adicionam os controles de cancelamento/redirect entre
+  // a avaliação médica e o endereço. Esses controles não são históricos.
+  const stop = lines.findIndex((line, j) => j >= start &&
+    /^(?:localizacao da ocorrencia|motivo cancelamento|nova ocorrencia a ser atendida|observacao)$/.test(
+      fold(line).replace(/\s+/g, ' ').trim()));
+  const rawRows = lines.slice(start, stop < 0 ? lines.length : stop);
+  if (!rawRows.length) return {entries: [], ambiguous: true};
+
+  const entries = [];
+  const pending = [];
+  let ambiguous = false;
+  const insertEntry = (historico, medicoRegulador, dataHoraAvaliacao) => {
+    const date = String(dataHoraAvaliacao || '').match(CLINICAL_DATE)?.[0];
+    if (!historico?.trim() || !medicoRegulador?.trim() || !date) return false;
+    entries.push({
+      historico: historico.trim(),
+      medicoRegulador: medicoRegulador.trim(),
+      dataHoraAvaliacao: date
+    });
+    return true;
+  };
+
+  for (const line of rawRows) {
+    // O navegador normalmente copia a tabela HTML em três colunas, por TAB.
+    const tabular = line.split(/\t+/).map(value => value.trim()).filter(Boolean);
+    // Alguns sistemas usam múltiplos espaços em vez de TAB.
+    const spaced = tabular.length >= 3 ? tabular :
+      line.split(/ {2,}/).map(value => value.trim()).filter(Boolean);
+    if (spaced.length >= 3 && CLINICAL_DATE.test(spaced[spaced.length - 1])) {
+      if (pending.length) {
+        // Preserva linhas anteriores no diagnóstico de conteúdo ambíguo.
+        ambiguous = true;
+        pending.length = 0;
+      }
+      if (!insertEntry(spaced.slice(0, -2).join(' '),
+        spaced[spaced.length - 2], spaced[spaced.length - 1])) ambiguous = true;
+      continue;
+    }
+
+    // Também aceita a cópia de células em linhas sucessivas:
+    // histórico / médico / data, repetidas N vezes.
+    const isolatedDate = line.match(CLINICAL_DATE)?.[0];
+    if (isolatedDate && line.replace(isolatedDate, '').trim() === '') {
+      if (pending.length >= 2) {
+        const medico = pending.pop();
+        if (!insertEntry(pending.join(' '), medico, isolatedDate)) ambiguous = true;
+      } else ambiguous = true;
+      pending.length = 0;
+      continue;
+    }
+    pending.push(line);
   }
-  if (cols.length >= 3 && CLINICAL_DATE.test(cols[cols.length - 1])) {
-    return {
-      historico: cols.slice(0, -2).join(' ').trim(),
-      medicoRegulador: cols[cols.length - 2],
-      dataHoraAvaliacao: cols[cols.length - 1].match(CLINICAL_DATE)[0]
-    };
-  }
-  if (rows.length >= 3 && CLINICAL_DATE.test(rows[rows.length - 1])) {
-    return {
-      historico: rows.slice(0, -2).join('\n'),
-      medicoRegulador: rows[rows.length - 2],
-      dataHoraAvaliacao: rows[rows.length - 1].match(CLINICAL_DATE)[0]
-    };
-  }
-  return {ambiguous: true};
+  if (pending.length) ambiguous = true;
+  return {entries, ambiguous};
+}
+
+function formatClinicalValues(entries, key) {
+  if (!entries.length) return '';
+  if (entries.length === 1) return entries[0][key];
+  return entries.map((entry, index) => (index + 1) + '. ' + entry[key]).join('\n');
 }
 
 export function parseRegulationClipboard(input) {
@@ -96,12 +136,17 @@ export function parseRegulationClipboard(input) {
   }
 
   const table = parseMedicalTable(lines);
-  if (table?.ambiguous) {
-    warnings.push('A linha do histórico e médico não ficou separada na cópia. Preencha esses campos manualmente.');
-  } else if (table) {
+  if (table?.entries?.length) {
+    // Nunca utilizar apenas a primeira linha: cada avaliação é preservada
+    // na mesma posição em histórico, médico e data/hora (1, 2, 3...).
     for (const key of ['historico', 'medicoRegulador', 'dataHoraAvaliacao']) {
-      if (table[key]) data[key] = table[key];
+      data[key] = formatClinicalValues(table.entries, key);
     }
+    if (table.ambiguous) {
+      warnings.push('Algumas linhas da avaliação médica não puderam ser separadas. Confira a cópia original e ajuste manualmente.');
+    }
+  } else if (table?.ambiguous) {
+    warnings.push('A linha do histórico e médico não ficou separada na cópia. Preencha esses campos manualmente.');
   }
 
   const recognized = TRACKED_KEYS.filter(key => data[key].trim()).length;
