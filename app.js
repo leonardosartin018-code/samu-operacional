@@ -2169,8 +2169,10 @@ function destinationCard(o){
 function renderDestinations(){
   const active=occurrences.filter(o=>norm(o.status)!=='CANCELADA');
   const anIds=new Set(vehicles.filter(isAnapolisVehicle).map(v=>v.id));
-  const an=active.filter(o=>o.viatura_id&&anIds.has(o.viatura_id));
-  const rg=active.filter(o=>o.viatura_id&&!anIds.has(o.viatura_id));
+  const isAnOccurrence=o=>o.viatura_id&&(anIds.has(o.viatura_id)||
+    (!vehicleById(o.viatura_id)&&norm(o.base_snapshot)==='ANAPOLIS'));
+  const an=active.filter(isAnOccurrence);
+  const rg=active.filter(o=>o.viatura_id&&!isAnOccurrence(o));
   const un=active.filter(o=>!o.viatura_id);
   const make=list=>list.length?[...list].sort((a,b)=>
     String(b.acionada_em||b.criado_em||'').localeCompare(String(a.acionada_em||a.criado_em||'')))
@@ -2405,8 +2407,10 @@ function renderHistory(){
   }
   const anIds=new Set(vehicles.filter(isAnapolisVehicle).map(v=>v.id));
   const groups=[
-    ['ANÁPOLIS',o=>o.viatura_id&&anIds.has(o.viatura_id)],
-    ['BASES DESCENTRALIZADAS',o=>o.viatura_id&&!anIds.has(o.viatura_id)],
+    ['ANÁPOLIS',o=>o.viatura_id&&(anIds.has(o.viatura_id)||
+      (!vehicleById(o.viatura_id)&&norm(o.base_snapshot)==='ANAPOLIS'))],
+    ['BASES DESCENTRALIZADAS',o=>o.viatura_id&&!anIds.has(o.viatura_id)&&
+      norm(o.base_snapshot)!=='ANAPOLIS'],
     ['SEM VIATURA INFORMADA',o=>!o.viatura_id]
   ];
   const ordered=[...occurrences].sort((a,b)=>
@@ -5805,7 +5809,7 @@ async function samuOfficialBookPdf(shift,model,libs){
     if(typeof html2canvas!=='function')throw new Error('Renderizador do Livro indisponível');
     isolated=document.createElement('div');
     isolated.className='book-workspace';
-    isolated.style.cssText='position:fixed;left:-10000px;top:0;width:795px;background:white;z-index:-1;pointer-events:none';
+    isolated.style.cssText='position:fixed;left:0;top:0;width:795px;background:white;z-index:-1;pointer-events:none';
     const clone=$('#bookDocument').cloneNode(true);
     clone.style.cssText='display:block;width:795px;max-width:none;background:white';
     isolated.appendChild(clone);
@@ -5817,7 +5821,7 @@ async function samuOfficialBookPdf(shift,model,libs){
     for(let i=0;i<pages.length;i++){
       if(i)doc.addPage();
       const canvas=await html2canvas(pages[i],{
-        backgroundColor:'#ffffff',scale:2,useCORS:true,logging:false,
+        backgroundColor:'#ffffff',scale:2,useCORS:true,logging:false,windowWidth:1100,windowHeight:1500,
         width:Math.ceil(pages[i].scrollWidth),height:Math.ceil(pages[i].scrollHeight)
       });
       if(!canvas.width||!canvas.height)throw new Error('Página oficial sem conteúdo');
