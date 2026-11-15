@@ -1,5 +1,7 @@
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
+import { createSamuPdfArchive, downloadSamuFile } from './samu-report-download.js?v=20261115-90-pdf-equipes-relatorio';
+import { buildSamuCompleteReport } from './samu-report-structure.js?v=20261115-90-pdf-equipes-relatorio';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const supabase = createClient(
@@ -1051,7 +1053,6 @@ function occurrenceInfoHtml(v,o){
     (canCorrectNumber?'<button type="button" class="occ-number-correct-btn" data-act="correct-occ-number" data-o="'+esc(o.id)+'" title="Corrigir apenas o número desta ocorrência">✎ EDITAR Nº</button>':'')+
     '</div>'+
     '<div class="occ-address">'+esc([o.bairro,o.endereco,o.destino].filter(Boolean).join(' • '))+'</div>'+
-    (o.observacao?'<details class="occ-regulation-detail"><summary>AVALIAÇÃO / OBSERVAÇÕES DO ATENDIMENTO</summary><div class="occ-regulation-text">'+esc(o.observacao)+'</div></details>':'')+
     '<div class="occ-timeline">'+
       '<div class="occ-time-chip"><span>INÍCIO / SAÍDA</span><b>'+fmtTime(inicio)+'</b></div>'+
       '<div class="occ-time-chip"><span>CHEGADA QTH</span><b>'+esc(qthDisplayTime(o))+'</b></div>'+
@@ -5733,8 +5734,21 @@ async function fetchSamuReportData(shift){
     const ids=events.slice(i,i+100).map(o=>o.id);
     links.push(...await reportRows(()=>supabase.from('equipe_ocorrencia').select('*').in('ocorrencia_id',ids)));
   }
+  // Complementa nomes da escala e da guarnição, inclusive profissionais que
+  // saíram do cadastro ativo. Snapshots registrados prevalecem no relatório.
+  let profList=[];
+  try{
+    profList=await reportRows(()=>supabase.from('profissionais')
+      .select('id,nome_completo,nome_de_guerra'));
+  }catch(error){
+    console.warn('Cadastro de profissionais indisponível na exportação; usando nomes do plantão.',error);
+    profList=professionals;
+  }
+  const profMap=new Map(profList.map(p=>[p.id,p]));
+  const associate=rows=>rows.map(m=>({...m,profissionais:profMap.get(m.profissional_id)||null}));
   // Situação da frota: retrato do instante de emissão, NÃO registro histórico.
-  return {events,links,members,internal,book:bookResult.data,vehicleSnapshot:[...vehicles]};
+  return {events,links:associate(links),members:associate(members),
+    internal:associate(internal),book:bookResult.data,vehicleSnapshot:[...vehicles]};
 }
 const SAMU_REPORT_TIME_DISCLAIMER='ATENÇÃO: Horários e durações são registros operacionais, sujeitos a atraso, omissão e inexatidão. Falhas de rádio, comunicação, rede ou lançamento tardio podem impedir o registro no momento exato. "Não informado" não significa que o atendimento não ocorreu. Conferir com as equipes antes de auditoria ou avaliação de desempenho.';
 function samuPdfReportModel(shift,record){
@@ -5843,7 +5857,7 @@ function samuPdfFinish(st,filename){
     doc.text('SAMU • Gerado em '+new Date().toLocaleString('pt-BR'),12,doc.internal.pageSize.getHeight()-8);
     doc.text('Página '+i+' / '+total,w-12,doc.internal.pageSize.getHeight()-8,{align:'right'});
   }
-  doc.save(filename);
+  return doc;
 }
 function samuReportFilename(prefix,shift){
   return prefix+'_'+String(shift.data_plantao||'').replace(/[^0-9-]/g,'')+'_'+norm(shift.turno||'PLANTAO')+'.pdf';
@@ -5892,7 +5906,7 @@ function samuBookPdf(shift,model,libs){
   samuPdfSection(st,'PERMUTAS',['Função','Substituto','Substituído'],permutas);
   samuPdfParagraph(st,'OBSERVAÇÕES DO LIVRO: '+(record.book?.observacoes||'Sem observações registradas.'));
   samuPdfParagraph(st,'Faço ao meu substituto legal a quem transmito todas as ordens em vigor, bem como todas as alterações verificadas no decorrer do serviço.');
-  samuPdfFinish(st,samuReportFilename('SAMU_LIVRO_OFICIAL',shift));
+  return samuPdfFinish(st,samuReportFilename('SAMU_LIVRO_OFICIAL',shift)).output('blob');
 }
 
 /* Captura o Livro já diagramado no sistema quando o plantão está carregado.
@@ -5932,91 +5946,102 @@ async function samuOfficialBookPdf(shift,model,libs){
       doc.addImage(canvas.toDataURL('image/jpeg',0.94),'JPEG',
         (210-width)/2,Math.max(10,(297-height)/2),width,height);
     }
-    doc.save(samuReportFilename('SAMU_LIVRO_OFICIAL',shift));
+    return doc.output('blob');
   }catch(error){
     console.warn('Captura visual do Livro não disponível; usando composição tabular.',error);
-    samuBookPdf(shift,model,libs);
+    return samuBookPdf(shift,model,libs);
   }finally{
     isolated?.remove();
   }
 }
 function samuCompletePdf(shift,model,libs){
-  const {record,completed,activeMembers,perPerson,perVehicle,memberName,memberBase,occurrenceBase,
-    crew,numbers,clock,qth,toQth,total,averageQth,averageReturn}=model;
-  const st=samuPdfLayout(libs.jsPDF,libs.autoTable,true,'RELATÓRIO OPERACIONAL COMPLETO',
-    shiftTitle(shift)+' | Situação: '+(shift.status||'—')+
-    ' | Parte Diária '+(record.book?.parte_diaria||'—'));
-  const totalOcc=record.events.length;
-  const pending=record.events.filter(o=>!['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status))).length;
-  const qta=record.events.filter(o=>norm(o.status)==='QTA').length;
-  const cancelled=record.events.filter(o=>norm(o.status)==='CANCELADA').length;
-  const counts=[...perVehicle.values()];
-  const unavailable=counts.filter(v=>['asepsis','mechanical','noCrew','noStretcher'].includes(v.stateKey));
-  samuPdfParagraph(st,'Total de registros: '+totalOcc+' | Finalizadas: '+completed.length+
-    ' | Em andamento: '+pending+' | QTA: '+qta+' | Canceladas: '+cancelled+
-    ' | Profissionais ativos na escala: '+activeMembers.length);
-  samuPdfParagraph(st,'Deslocamento médio até QTH: '+averageQth+' | Retorno médio: '+averageReturn+'. '+
-    'Médias usam somente durações completas e válidas; não representam todos os atendimentos.');
-  samuPdfParagraph(st,'Viaturas indisponíveis na emissão: '+unavailable.length+
-    (unavailable.length?' | '+unavailable.map(v=>v.name+' ('+v.state+')').join(', '):'')+
-    '. O status da frota é consultado no momento da geração, não representa o estado histórico durante todo o plantão.');
+  const {record}=model;
+  const st=samuPdfLayout(libs.jsPDF,libs.autoTable,true,'RELATÓRIO OPERACIONAL DO PLANTÃO',
+    shiftTitle(shift)+'  |  Situação: '+(shift.status||'—')+
+    '  |  Parte Diária Nº '+(record.book?.parte_diaria||'—'));
+  const report=buildSamuCompleteReport(model,victimDestinationDisplay);
+  const c=report.counts;
+  const summary='REGISTROS DO PLANTÃO: '+c.total+
+    '  |  Finalizadas: '+c.finalizadas+'  |  Em atendimento/retorno: '+c.andamento+
+    '  |  QTA: '+c.qta+'  |  Canceladas: '+c.canceladas+
+    '  |  Escalados: '+c.escalados+'  |  Viaturas: '+c.viaturas+'.';
+  for(const section of report.sections){
+    samuPdfSection(st,section.title,section.headers,section.rows);
+    // Os indicadores vêm APÓS a escala e a situação da frota.
+    if(section.title.startsWith('02') && section.title.includes('BASES DESCENTRALIZADAS')){
+      samuPdfParagraph(st,summary,{size:9});
+      samuPdfParagraph(st,'A situação das viaturas corresponde ao momento de emissão, não ao histórico de cada viatura.',{size:8});
+    }
+  }
+  samuPdfParagraph(st,'TEMPOS MÉDIOS: deslocamento até QTH: '+c.mediaQth+
+    '  |  Retorno à base: '+c.mediaRetorno+'. Médias incluem somente registros com horários suficientes.',{size:8});
+  samuPdfParagraph(st,'CRITÉRIOS: Apenas ocorrências FINALIZADAS entram nas contagens de produtividade. '+
+    'QTA, canceladas e em andamento continuam visíveis, sem crédito de atendimento finalizado.',{size:8});
   samuPdfParagraph(st,SAMU_REPORT_TIME_DISCLAIMER,{size:8,warning:true});
-  const areas=[
-    ['ANÁPOLIS',v=>norm(v.base)==='ANAPOLIS'],
-    ['BASES DESCENTRALIZADAS',v=>norm(v.base)!=='ANAPOLIS']
-  ];
-  for(const [title,filter] of areas){
-    const fleet=counts.filter(filter).sort((a,b)=>a.base.localeCompare(b.base,'pt-BR')||a.name.localeCompare(b.name,'pt-BR'));
-    samuPdfSection(st,'FROTA E EQUIPE ESCALADA — '+title,
-      ['Base','Viatura','Situação na emissão','Profissionais escalados','Ocorrências finalizadas','Números'],
-      fleet.map(v=>[v.base,v.name,v.state,v.members.map(m=>memberName(m)+' ('+(m.funcao||'—')+')').join(' / ')||'Sem equipe fixa',
-        String(v.events.length),numbers(v.events)]));
-  }
-  samuPdfSection(st,'PROFISSIONAIS — PARTICIPAÇÃO NAS OCORRÊNCIAS',
-    ['Profissional','Função','Base / vinculação','Participações finalizadas','Números das ocorrências'],
-    [...perPerson.values()].sort((a,b)=>a.name.localeCompare(b.name,'pt-BR')).map(p=>[
-      p.name,p.role,p.base,String(p.events.size),numbers([...p.events.values()])
-    ]));
-  const activeInternal=record.internal.filter(m=>norm(m.status)==='ATIVO');
-  samuPdfSection(st,'SERVIÇO INTERNO — ANÁPOLIS',['Posição','Função','Nome','Alteração'],
-    activeInternal.map(m=>[m.codigo_posicao,m.funcao,memberName(m),m.tipo_alteracao||'—']));
-  for(const [title,test] of [
-    ['OCORRÊNCIAS — ANÁPOLIS',o=>norm(occurrenceBase(o))==='ANAPOLIS'],
-    ['OCORRÊNCIAS — BASES DESCENTRALIZADAS',o=>norm(occurrenceBase(o))!=='ANAPOLIS']]){
-    const rows=record.events.filter(test).sort((a,b)=>String(a.acionada_em||a.criado_em||'').localeCompare(String(b.acionada_em||b.criado_em||'')));
-    samuPdfSection(st,title+' / DADOS DO ATENDIMENTO',
-      ['Nº','Viatura','Natureza','Situação','Local / endereço','Destino / resultado da vítima','Equipe','Observações'],
-      rows.map(o=>[o.numero||'—',o.viatura_snapshot||o.viaturas?.nome||'Sem viatura',
-        o.natureza||'—',o.status||'—',[o.bairro,o.endereco].filter(Boolean).join(' / ')||'—',
-        victimDestinationDisplay(o.destino),crew(o),o.observacao||'—']));
-    samuPdfSection(st,title+' / TEMPOS OPERACIONAIS',
-      ['Nº','Viatura','Acionamento','Saída','Chegada QTH','Até QTH','Início retorno','Chegada base','Tempo retorno','Tempo total'],
-      rows.map(o=>[o.numero||'—',o.viatura_snapshot||o.viaturas?.nome||'—',clock(o.acionada_em),
-        clock(o.saida_em),qth(o),fmtMinutes(toQth(o)),clock(o.inicio_retorno_em),
-        clock(o.retorno_base_em),fmtMinutes(minutesBetween(o.inicio_retorno_em,o.retorno_base_em)),
-        fmtMinutes(total(o))]));
-  }
-  samuPdfParagraph(st,'LEITURA DOS DADOS: ocorrências finalizadas compõem as contagens de produtividade. QTA, canceladas e em andamento aparecem na listagem de atendimentos, mas não contam como finalizadas. Horários não informados não geram tempo estimado.');
-  samuPdfFinish(st,samuReportFilename('SAMU_RELATORIO_COMPLETO',shift));
+  return samuPdfFinish(st,samuReportFilename('SAMU_RELATORIO_COMPLETO',shift)).output('blob');
+}
+
+let samuPdfReadyFile=null;
+function setSamuPdfExportStatus(text,isError=false){
+  const element=$('#samuPdfExportStatus');
+  if(!element)return;
+  element.textContent=text||'';
+  element.className='samu-pdf-export-status'+(isError?' error':'')+(text?'':' hidden');
+}
+function clearSamuPdfReadyFile(){
+  samuPdfReadyFile=null;
+  $('#samuPdfRetryBtn')?.classList.add('hidden');
+  setSamuPdfExportStatus('');
+}
+function downloadReadySamuPdf(){
+  if(!isOperator()||!samuPdfReadyFile)return;
+  downloadSamuFile(samuPdfReadyFile.blob,samuPdfReadyFile.filename);
+  setSamuPdfExportStatus('Download solicitado. Confira a pasta Downloads do navegador; se necessário, clique novamente em BAIXAR ARQUIVO PRONTO.');
 }
 async function exportClosingReport(shift=currentPlantao,{includeBook=true}={}){
   if(!isOperator()||!shift?.id)return;
   if(samuPdfExportInProgress)return;
   samuPdfExportInProgress=true;
+  clearSamuPdfReadyFile();
   const button=$('#closingReportBtn'),pdfButton=$('#exportBtn');
+  const originalButton=button?.textContent,originalPdfButton=pdfButton?.textContent;
   if(button)button.disabled=true;
   if(pdfButton)pdfButton.disabled=true;
   try{
+    setSamuPdfExportStatus('Preparando os dados do plantão…');
+    if(includeBook && button)button.textContent='GERANDO DOCUMENTOS...';
+    if(!includeBook && pdfButton)pdfButton.textContent='GERANDO PDF...';
     const record=await fetchSamuReportData(shift);
     const model=samuPdfReportModel(shift,record);
     const libs=await loadSamuPdfLibraries();
-    // Dois arquivos independentes, gerados com a MESMA consulta de dados.
-    if(includeBook)await samuOfficialBookPdf(shift,model,libs);
-    samuCompletePdf(shift,model,libs);
+    let blob,filename;
+    if(includeBook){
+      setSamuPdfExportStatus('Gerando Livro oficial e relatório em um único download…');
+      // Os dois PDFs permanecem independentes dentro do ZIP:
+      // o navegador só precisa autorizar UM download.
+      const officialBook=await samuOfficialBookPdf(shift,model,libs);
+      const completeReport=samuCompletePdf(shift,model,libs);
+      blob=await createSamuPdfArchive([
+        {name:samuReportFilename('SAMU_LIVRO_OFICIAL',shift),blob:officialBook},
+        {name:samuReportFilename('SAMU_RELATORIO_COMPLETO',shift),blob:completeReport}
+      ]);
+      filename=samuReportFilename('SAMU_LIVRO_E_RELATORIO',shift).replace(/\.pdf$/i,'.zip');
+    }else{
+      setSamuPdfExportStatus('Montando as páginas do relatório…');
+      blob=samuCompletePdf(shift,model,libs);
+      filename=samuReportFilename('SAMU_RELATORIO_COMPLETO',shift);
+    }
+    if(!blob?.size)throw new Error('O arquivo foi gerado vazio.');
+    samuPdfReadyFile={blob,filename,shiftId:shift.id};
+    $('#samuPdfRetryBtn')?.classList.remove('hidden');
+    downloadReadySamuPdf();
+  }catch(error){
+    setSamuPdfExportStatus('Falha ao gerar o arquivo: '+(error.message||error),true);
+    throw error;
   }finally{
     samuPdfExportInProgress=false;
-    if(button)button.disabled=!isOperator()||!currentPlantao;
-    if(pdfButton)pdfButton.disabled=!isOperator()||!currentPlantao;
+    if(button){button.disabled=!isOperator()||!currentPlantao;button.textContent=originalButton}
+    if(pdfButton){pdfButton.disabled=!isOperator()||!currentPlantao;pdfButton.textContent=originalPdfButton}
   }
 }
 
@@ -6193,6 +6218,7 @@ $('#signupForm').onsubmit=async e=>{
 $('#logoutBtn').onclick=()=>{
   if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,includeBook:true,action:'sair do sistema'}))return;
   if(anyDraftModalOpen()&&!confirm('Há uma janela com dados não salvos. Sair mesmo assim?'))return;
+  clearSamuPdfReadyFile();
   supabase.auth.signOut();
 };
 $$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page,{teamView:b.dataset.teamView}));
@@ -6221,7 +6247,7 @@ $('#shiftDate').onchange=async()=>{
   }
 };
 $('#exportBtn').onclick=()=>exportClosingReport(currentPlantao,{includeBook:false}).catch(error=>alert('Não foi possível gerar o PDF: '+(error.message||error)));
-$('#closingReportBtn').onclick=()=>exportClosingReport().catch(error=>alert('Não foi possível gerar o relatório: '+(error.message||error)));$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
+$('#closingReportBtn').onclick=()=>exportClosingReport().catch(error=>alert('Não foi possível gerar o relatório: '+(error.message||error)));$('#samuPdfRetryBtn').onclick=downloadReadySamuPdf;$('#endShiftBtn').onclick=endShift;$('#manualOccBtn').onclick=()=>openOccurrenceModal(null);
 $('#shiftTransitionAcknowledge').onchange=updateShiftTransitionButtons;
 $('#shiftEndOnlyBtn').onclick=()=>executeShiftTransition('end');
 $('#shiftEndStartBtn').onclick=()=>executeShiftTransition('end_start');
