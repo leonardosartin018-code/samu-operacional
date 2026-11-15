@@ -3146,3 +3146,32 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 .history-advanced>summary{cursor:pointer;padding:9px 8px;font-size:.8rem;color:#075985;font-weight:950}
 .history-advanced .history-table-wrap{margin-top:12px}
 @media(max-width:600px){.history-record-primary{grid-template-columns:1fr}.history-timeline{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Na aba "Resumo da equipe" a visão é por viatura, sem formulários de edição. */
+#teamOperationalPanel:not(.roster-only) .roster-quick-dashboard{display:none}
+#teamOperationalPanel.roster-only .roster-region{display:none}
+.roster-quick-dashboard{display:grid;gap:15px;margin:0 0 12px}
+.roster-quick-intro{padding:11px 13px;background:#eaf4fb;border:1px solid #bcd7e9;color:#235573;font-size:.79rem;font-weight:800;line-height:1.4;border-radius:9px}
+.roster-quick-area{border:1px solid #c7dbe8;border-radius:11px;padding:11px;background:#f7fbff;min-width:0}
+.roster-quick-area>header{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.roster-quick-area>header b{color:#075985;font-size:.94rem;font-weight:1000}
+.roster-quick-area>header span{color:#56738a;font-size:.72rem;font-weight:850}
+.roster-quick-vehicles{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,295px),1fr));gap:12px}
+.roster-quick-vehicle{background:white;min-width:0;border:1px solid #cbdbe8;border-radius:10px;overflow:hidden}
+.roster-quick-vtr-head{display:flex;justify-content:space-between;align-items:center;gap:9px;padding:11px;border-bottom:1px solid #e1ebf3;background:#eaf4fa}
+.roster-quick-vtr-head b{font-size:.97rem;color:#0a456c;font-weight:1000}
+.roster-quick-vtr-head span{font-size:.7rem;color:#3d627b;font-weight:900}
+.roster-quick-vtr-stats{display:flex;align-items:center;gap:9px;padding:11px 11px 5px}
+.roster-quick-vtr-stats strong{display:inline-grid;place-items:center;min-width:30px;height:30px;background:#0c6b9f;color:#fff;border-radius:8px;font-size:1rem}
+.roster-quick-vtr-stats span{font-size:.73rem;color:#415e73;font-weight:800}
+.roster-quick-vtr-occ{margin:0 11px 9px;font-size:.7rem;color:#536c80;line-height:1.4}
+.roster-quick-members{border-top:1px solid #e6eef4;padding:8px 10px;display:grid;gap:8px}
+.roster-quick-member{padding:9px 10px;border:1px solid #e0e9f0;border-radius:8px;background:#fbfdff;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:5px 9px}
+.roster-quick-member>div{display:grid;gap:3px;min-width:0}
+.roster-quick-member small{font-size:.62rem;color:#65798a;font-weight:850}
+.roster-quick-member b{font-size:.83rem;color:#174362;overflow-wrap:anywhere}
+.roster-quick-member>strong{color:#0e6492;font-size:.73rem;align-self:center;white-space:nowrap}
+.roster-quick-member>span{grid-column:1/-1;color:#60778b;font-size:.7rem;line-height:1.45;overflow-wrap:anywhere}
+.roster-quick-vacant{font-size:.76rem;color:#63788a;line-height:1.4}
+.roster-quick-shared{display:grid;grid-template-columns:repeat(auto-fill,minmax(min(100%,300px),1fr));gap:9px}
