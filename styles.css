@@ -2912,3 +2912,61 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
   line-height:1.35;
   overflow-wrap:anywhere;
 }
+
+/* USB da vez: nome só no título; funções em resumo compacto.
+   Pulso de borda/sombra discreto para leitura confortável no rádio. */
+.cockpit-rotation .rotation-panel-usb .rotation-next-vehicle.rotation-usb-next-active{
+  border-left:4px solid #2563eb;
+  background:linear-gradient(180deg,#fff 0%,#f7fbff 100%);
+  animation:samuUsbNextSoftPulse 4.2s ease-in-out infinite;
+}
+@keyframes samuUsbNextSoftPulse{
+  0%,100%{
+    border-left-color:#2563eb;
+    box-shadow:0 2px 8px rgba(37,99,235,.055);
+  }
+  50%{
+    border-left-color:#60a5fa;
+    box-shadow:0 0 0 3px rgba(37,99,235,.10),0 5px 12px rgba(37,99,235,.075);
+  }
+}
+.cockpit-rotation .rotation-panel-usb .rotation-next-vehicle .rotation-vehicle-prefix{
+  margin:7px 0 0;
+  color:#123d67;
+  font-size:1.1rem;
+  line-height:1.32;
+  font-weight:1000;
+  overflow-wrap:anywhere;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-usb-crew-summary{
+  display:flex;
+  flex-wrap:wrap;
+  align-items:center;
+  gap:5px 10px;
+  margin-top:9px;
+  padding:8px 10px;
+  border:1px solid #c7ddf4;
+  border-radius:8px;
+  background:#f0f7ff;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-usb-crew-summary b{
+  color:#1e40af;
+  font-size:.69rem;
+  font-weight:950;
+  letter-spacing:.015em;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-usb-crew-summary span{
+  color:#49677d;
+  font-size:.71rem;
+  font-weight:750;
+  line-height:1.35;
+}
+.cockpit-rotation .rotation-panel-usb .rotation-next-vehicle .rotation-wait-metrics{
+  line-height:1.4;
+}
+@media(prefers-reduced-motion:reduce){
+  .cockpit-rotation .rotation-panel-usb .rotation-next-vehicle.rotation-usb-next-active{
+    animation:none;
+    box-shadow:0 0 0 2px rgba(37,99,235,.09);
+  }
+}
