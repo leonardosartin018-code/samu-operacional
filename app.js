@@ -5839,8 +5839,9 @@ function samuPdfSection(st,title,headers,rows){
     head:[headers],
     body:(rows.length?rows:[headers.map((_,i)=>i===0?'Sem registros':'—')]),
     margin:{left:margin,right:margin,top:14,bottom:15},
-    styles:{font:'helvetica',fontSize:7.6,cellPadding:2.5,overflow:'linebreak',valign:'top',lineColor:[220,230,238],lineWidth:0.15},
-    headStyles:{fillColor:[10,83,130],textColor:255,fontStyle:'bold'},
+    styles:{font:'helvetica',fontSize:8.4,cellPadding:2.8,overflow:'linebreak',valign:'top',lineColor:[220,230,238],lineWidth:0.15},
+    headStyles:{fillColor:[10,83,130],textColor:255,fontStyle:'bold',fontSize:8.8},
+    rowPageBreak:'auto',
     alternateRowStyles:{fillColor:[246,249,252]},
     showHead:'everyPage',
     theme:'grid'
@@ -5996,7 +5997,7 @@ function clearSamuPdfReadyFile(){
 function downloadReadySamuPdf(){
   if(!isOperator()||!samuPdfReadyFile)return;
   downloadSamuFile(samuPdfReadyFile.blob,samuPdfReadyFile.filename);
-  setSamuPdfExportStatus('Download solicitado. Confira a pasta Downloads do navegador; se necessário, clique novamente em BAIXAR ARQUIVO PRONTO.');
+  setSamuPdfExportStatus('Arquivo '+samuPdfReadyFile.filename+' pronto. Confira a pasta Downloads ou use BAIXAR ARQUIVO PRONTO novamente.');
 }
 async function exportClosingReport(shift=currentPlantao,{includeBook=true}={}){
   if(!isOperator()||!shift?.id)return;
@@ -6233,6 +6234,7 @@ $('#shiftDate').onchange=async()=>{
   }
   const ctx=operationalShiftContext();
   const date=$('#shiftDate').value;
+  clearSamuPdfReadyFile();
   // Mudança deliberada de data/plantão restaura as referências automáticas.
   manualScaleReference=null;
   pendingScaleReference=null;
