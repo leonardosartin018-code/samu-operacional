@@ -1809,7 +1809,13 @@ function nextVehicleRotationCard(type,hasRotation){
       first.tech?'Condutor escolhido no acionamento':'Técnico/enfermeiro escolhido no acionamento';
     html+='<div class="rotation-usb-crew-summary"><b>'+esc(role)+'</b>'+
       '<span>'+esc(note)+'</span></div>';
-  }else if(hasRotation){
+  }
+
+  html+=(manualRankVehicle(first.v)!==null?
+    '<span class="manual-order-active">ORDEM MANUAL TEMPORÁRIA</span>':
+    (initial?'<span class="rotation-default-order">SEQUÊNCIA INICIAL POR PREFIXO</span>':''));
+  html+=rotationWaitMetrics(first.base,first.occ);
+  if(type==='USA'&&hasRotation){
     // Mantém sem alterações o detalhamento da USA.
     const roles=[['Condutor',first.driver],['Enfermeiro',first.nurse]];
     const fixed=roles.filter(([,m])=>
@@ -1822,12 +1828,7 @@ function nextVehicleRotationCard(type,hasRotation){
         rotationWaitMetrics(personBaseMinutes(m,type),personOccurrenceCount(m))+'</div>'
       ).join('')+'</div>';
     }
-  }
-
-  html+=(manualRankVehicle(first.v)!==null?
-    '<span class="manual-order-active">ORDEM MANUAL TEMPORÁRIA</span>':
-    (initial?'<span class="rotation-default-order">SEQUÊNCIA INICIAL POR PREFIXO</span>':''));
-  html+=rotationWaitMetrics(first.base,first.occ);
+    }
 
   if(list.length>1){
     html+='<div class="rotation-vehicle-order">'+
