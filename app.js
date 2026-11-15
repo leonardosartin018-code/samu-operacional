@@ -3525,21 +3525,76 @@ async function creditOccurrence(occ){
   }
   await supabase.from('ocorrencias').update({creditou_revezamento:true}).eq('id',occ.id);
 }
-async function setArrived(oid,vid){
-  if(!isOperator()||!confirm('Confirmar CHEGADA À BASE e finalizar o atendimento?'))return;
-  const now=new Date().toISOString();
-  const o=occurrences.find(x=>x.id===oid);
-  if(oid){
-    const r=await supabase.from('ocorrencias').update({status:'FINALIZADA',retorno_base_em:now,finalizado_em:now,finalizado_por:profile?.nome||null})
-      .eq('id',oid).eq('status','RETORNANDO').select('id').maybeSingle();
-    if(r.error)return alert(r.error.message);
-    if(!r.data)return alert('A ocorrência já mudou de situação. Atualize o painel.');
-    await creditOccurrence(o);
-    await clearManualOnReturn(oid,vid);
-  }
-  if(vid)await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid);
-  await loadAll(selectedDate());
+/* Retorno à base com opção de peso especial. */
+let pendingEffortArrival=null;
+function refreshEffortArrival(){
+  const selected=document.querySelector('input[name="occEffortWeight"]:checked');
+  const weight=occurrenceEffortWeight(selected?.value);
+  $('#occEffortReasonWrap').classList.toggle('hidden',weight===1);
+  $('#occEffortPreview').textContent=weight===1
+    ?'Uma ocorrência real e um ponto na fila. Confirme para finalizar normalmente.'
+    :'Uma ocorrência real, '+weight+' pontos na fila e '+effortRestMinutes(weight)+
+      ' minutos de prioridade reduzida após o retorno. O rádio pode escolher a equipe manualmente se necessário.';
 }
+function openEffortArrivalModal(oid,vid){
+  if(!isOperator())return;
+  const occ=occurrences.find(o=>o.id===oid&&o.viatura_id===vid);
+  const vehicle=vehicleById(vid);
+  if(!occ||norm(occ.status)!=='RETORNANDO'||statusInfo(vehicle).key!=='returning'){
+    return alert('A situação da ocorrência mudou. Atualize o painel antes de finalizar.');
+  }
+  pendingEffortArrival={oid,vid};
+  $('#occEffortTitle').textContent='Finalizar '+(vehicle.nome||vehicle.codigo)+' • OC. '+(occ.numero||'—');
+  document.querySelector('input[name="occEffortWeight"][value="1"]').checked=true;
+  $('#occEffortReason').value='';
+  refreshEffortArrival();
+  openModal('occEffortModal');
+}
+async function confirmEffortArrival(){
+  if(!pendingEffortArrival||!isOperator())return;
+  const weight=occurrenceEffortWeight(document.querySelector('input[name="occEffortWeight"]:checked')?.value);
+  const reason=$('#occEffortReason').value.trim();
+  if(weight>1&&!reason)return alert('Informe o motivo do peso especial para registrar no histórico.');
+  const btn=$('#confirmOccEffortBtn');
+  if(btn.disabled)return;
+  btn.disabled=true;
+  try{
+    const {oid,vid}=pendingEffortArrival;
+    await setArrived(oid,vid,weight,reason);
+    pendingEffortArrival=null;
+    closeModal('occEffortModal');
+  }catch(e){alert('Não foi possível finalizar o atendimento: '+(e.message||e))}
+  finally{btn.disabled=false}
+}
+async function setArrived(oid,vid,weight=1,reason=''){
+  if(!isOperator()||!currentPlantao)return;
+  const current=occurrences.find(o=>o.id===oid&&o.viatura_id===vid);
+  if(!current||norm(current.status)!=='RETORNANDO')throw new Error('A ocorrência não está retornando. Atualize o painel.');
+  const now=new Date().toISOString();
+  const peso=occurrenceEffortWeight(weight);
+  const justification=effortAdjustmentNote({
+    weight:peso,reason,operator:profile?.nome||session?.user?.email||'operador',
+    time:new Date(now).toLocaleString('pt-BR')
+  });
+  const notes=[String(current.observacao||'').trim(),justification].filter(Boolean).join('\n\n')||null;
+  const {data,error}=await supabase.from('ocorrencias')
+    .update({status:'FINALIZADA',retorno_base_em:now,finalizado_em:now,
+      finalizado_por:profile?.nome||null,peso_ocorrencia:peso,observacao:notes})
+    .eq('id',oid).eq('status','RETORNANDO').select('id').maybeSingle();
+  if(error)throw error;
+  if(!data)throw new Error('A ocorrência foi alterada por outro operador. Atualize o painel.');
+  // Crédito físico continua sendo 1. Somente a pontuação do revezamento recebe o peso.
+  await creditOccurrence({...current,peso_ocorrencia:peso});
+  await clearManualOnReturn(oid,vid);
+  if(vid){
+    const vr=await supabase.from('viaturas').update({status_atual:'BASE'}).eq('id',vid);
+    if(vr.error)throw vr.error;
+  }
+  await loadAll(selectedDate());
+  if(peso>1)setSync('Peso '+peso+' aplicado à ocorrência '+(current.numero||'—')+
+    '. Descanso sugerido de '+effortRestMinutes(peso)+' minutos.','warn');
+}
+
 async function setVehicleStatus(vId,key){
   if(!isOperator())return;
   const v=vehicleById(vId);
@@ -6304,6 +6359,8 @@ $('#occImportClearBtn').onclick=resetRegulationImport;
   $('#' + id).addEventListener('input',syncRegulationAddress));$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
 $('#occNumberCorrectForm').onsubmit=async e=>{e.preventDefault();await saveNumberCorrection()};
 $('#occCrewCorrectForm').onsubmit=async e=>{e.preventDefault();await saveOccurrenceCrewCorrection()};
+$('input[name="occEffortWeight"]').forEach(r=>r.onchange=refreshEffortArrival);
+$('#confirmOccEffortBtn').onclick=confirmEffortArrival;
 $('#victimDestinationChoice').onchange=refreshVictimDestinationChoice;
 $('#saveVictimDestinationBtn').onclick=saveVictimDestination;
 $('#loadScaleBtn').onclick=askToApplyScaleReference;
