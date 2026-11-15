@@ -2302,7 +2302,52 @@ function renderTeamPreview(){
           '<div class="roster-list">'+displayPersons(people)+'</div></div>';
       }).join('')+'</div></div>').join('')+
     (!rg.length?'<div class="priority-empty">Sem profissionais escalados.</div>':'')+'</section>';
-  $('#teamPreview').innerHTML=anHtml+regionalHtml;
+  const quickVehicles=(title,items)=>'<section class="roster-quick-area">'+
+    '<header><b>'+esc(title)+'</b><span>'+items.length+' viatura(s)</span></header>'+
+    '<div class="roster-quick-vehicles">'+items.map(v=>{
+      const members=active.filter(m=>m.viatura_id===v.id);
+      const finished=occurrences.filter(o=>o.viatura_id===v.id&&norm(o.status)==='FINALIZADA');
+      const oNums=finished.map(o=>'Nº '+esc(o.numero||'não informado')).join(' · ')||'Nenhuma finalizada';
+      return '<article class="roster-quick-vehicle">'+
+        '<div class="roster-quick-vtr-head"><b>'+esc(v.nome||v.codigo||'—')+'</b>'+
+          '<span>'+esc(statusInfo(v).label)+'</span></div>'+
+        '<div class="roster-quick-vtr-stats"><strong>'+finished.length+'</strong>'+
+          '<span>ocorrência(s) finalizada(s) pela viatura</span></div>'+
+        '<div class="roster-quick-vtr-occ">'+oNums+'</div>'+
+        '<div class="roster-quick-members">'+(members.length?members.map(m=>{
+          const attendance=completedOccurrencesForMember(m);
+          const numbers=attendance.map(o=>'Nº '+esc(o.numero||'não informado')).join(' · ')||'Sem participação finalizada registrada';
+          return '<div class="roster-quick-member"><div><small>'+esc(m.funcao||'EQUIPE')+'</small>'+
+            '<b>'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</b></div>'+
+            '<strong>'+attendance.length+' ocorrência(s)</strong>'+
+            '<span>'+numbers+'</span></div>';
+        }).join(''):'<div class="roster-quick-vacant">Nenhum profissional fixo vinculado. Confira a fila de revezamento ou a escala.</div>')+
+        '</div></article>';
+    }).join('')+'</div></section>';
+  const anVehicles=vehicles.filter(isAnapolisVehicle).sort((a,b)=>
+    (vehicleType(a)==='USA'?0:vehicleType(a)==='USB'?1:2)-
+    (vehicleType(b)==='USA'?0:vehicleType(b)==='USB'?1:2)||
+    String(a.nome).localeCompare(String(b.nome),'pt-BR',{numeric:true}));
+  const regionalVehicles=vehicles.filter(v=>!isAnapolisVehicle(v)).sort((a,b)=>
+    String(a.bases?.nome||'').localeCompare(String(b.bases?.nome||''),'pt-BR')||
+    String(a.nome).localeCompare(String(b.nome),'pt-BR',{numeric:true}));
+  const shared=an.filter(m=>!m.viatura_id);
+  const sharedBlock=shared.length?
+    '<section class="roster-quick-area"><header><b>PROFISSIONAIS EM REVEZAMENTO — ANÁPOLIS</b>'+
+    '<span>'+shared.length+' escalado(s)</span></header><div class="roster-quick-shared">'+
+      shared.map(m=>{
+        const participation=completedOccurrencesForMember(m);
+        return '<div class="roster-quick-member"><div><small>'+esc(m.funcao||'PROFISSIONAL')+'</small>'+
+          '<b>'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</b></div>'+
+          '<strong>'+participation.length+' ocorrência(s)</strong>'+
+          '<span>'+(participation.length?participation.map(o=>'Nº '+esc(o.numero||'não informado')).join(' · '):'Sem participação finalizada registrada')+'</span></div>';
+      }).join('')+'</div></section>':'';
+  const quick='<div class="roster-quick-dashboard">'+
+    '<div class="roster-quick-intro">RESUMO DO PLANTÃO • Profissionais em cada viatura e participações finalizadas registradas. '+
+    'Profissionais do revezamento aparecem separadamente; a equipe escolhida em cada ocorrência é registrada no histórico.</div>'+
+    quickVehicles('VIATURAS DE ANÁPOLIS',anVehicles)+sharedBlock+
+    quickVehicles('BASES DESCENTRALIZADAS',regionalVehicles)+'</div>';
+  $('#teamPreview').innerHTML=quick+anHtml+regionalHtml;
   $('#teamPreview').querySelectorAll('[data-individual-occ]').forEach(b=>b.onclick=()=>openIndividualOccurrence(b.dataset.individualOcc));
   $('#teamPreview').querySelectorAll('[data-edit-member]').forEach(b=>b.onclick=()=>openEditTeamMember(b.dataset.editMember));
   $('#teamPreview').querySelectorAll('[data-remove-member]').forEach(b=>b.onclick=()=>removeTeamMember(b.dataset.removeMember));
