@@ -2,6 +2,7 @@ import { parseRegulationClipboard, formatImportedAddress, formatImportedObservat
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
 import { createSamuPdfArchive, downloadSamuFile } from './samu-report-download.js?v=20261115-90-pdf-equipes-relatorio';
 import { buildSamuCompleteReport } from './samu-report-structure.js?v=20261115-90-pdf-equipes-relatorio';
+import { occurrenceEffortWeight, effortRestMinutes, weightedCompletedScore, restTimeRemaining, lastCompletedOccurrence, effortAdjustmentNote } from './rotation-weight-rules.js?v=20261115-91-peso-descanso';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const supabase = createClient(
@@ -1420,6 +1421,23 @@ function personOccurrenceCount(m){
 function vehicleOccurrenceCount(v){
   return occurrences.filter(o=>o.viatura_id===v.id&&!['QTA','CANCELADA'].includes(norm(o.status))).length;
 }
+/* Pontuação operacional distinta da contagem física de atendimentos. */
+function personWeightedCount(m){
+  const stored=Number(m?.pontuacao_revezamento);
+  return Number.isFinite(stored)?stored:personOccurrenceCount(m);
+}
+function vehicleWeightedCount(v){
+  const list=occurrences.filter(o=>o.viatura_id===v?.id&&!['QTA','CANCELADA'].includes(norm(o.status)));
+  return weightedCompletedScore(list)+list.filter(o=>norm(o.status)!=='FINALIZADA').length;
+}
+function lastPersonCompleted(m){
+  const ids=new Set(occurrenceTeam.filter(link=>link.profissional_id===m?.profissional_id).map(link=>link.ocorrencia_id));
+  return lastCompletedOccurrence(occurrences.filter(o=>ids.has(o.id)));
+}
+function personEffortRestMinutes(m){return restTimeRemaining(lastPersonCompleted(m))}
+function vehicleEffortRestMinutes(v){
+  return restTimeRemaining(lastCompletedOccurrence(occurrences.filter(o=>o.viatura_id===v?.id)));
+}
 function assignmentPriorityLabel(m,type){
   const fixed=fixedVehicleForMemberType(m,type);
   if(fixed)return 'FIXO — '+(fixed.nome||fixed.codigo);
@@ -1536,6 +1554,9 @@ function priorityPeopleForRole(role,type,{rotationOnly=false}={}){
   return candidates.sort((a,b)=>{
       const oneTime=compareManualRank(manualRankMember(a,role,type),manualRankMember(b,role,type));
       if(oneTime)return oneTime;
+      // Descanso reduz a prioridade automática; seleção manual continua possível.
+      const ar=personEffortRestMinutes(a),br=personEffortRestMinutes(b);
+      if(Boolean(ar)!==Boolean(br))return ar?1:-1;
       if(isFirstRound){
         const ar=Number(a.ordem_inicial),br=Number(b.ordem_inicial);
         if(a.ordem_inicial!=null&&b.ordem_inicial!=null&&Number.isFinite(ar)&&Number.isFinite(br)&&ar!==br)
@@ -1548,8 +1569,8 @@ function priorityPeopleForRole(role,type,{rotationOnly=false}={}){
       // Quem está realmente à frente por tempo/ocorrências mantém vantagem.
       const ab=personBaseMinutes(a,type)+earlyExitPriorityBonus(a).base;
       const bb=personBaseMinutes(b,type)+earlyExitPriorityBonus(b).base;
-      const ao=personOccurrenceCount(a)-earlyExitPriorityBonus(a).occ;
-      const bo=personOccurrenceCount(b)-earlyExitPriorityBonus(b).occ;
+      const ao=personWeightedCount(a)-earlyExitPriorityBonus(a).occ;
+      const bo=personWeightedCount(b)-earlyExitPriorityBonus(b).occ;
       if(crit==='occurrences'){
         if(ao!==bo)return ao-bo;
         if(ab!==bb)return bb-ab;
@@ -1562,7 +1583,9 @@ function priorityPeopleForRole(role,type,{rotationOnly=false}={}){
     });
 }
 function priorityMetricText(m,type){
-  return fmtMinutes(personBaseMinutes(m,type))+' base • '+personOccurrenceCount(m)+' oc.';
+  const rest=personEffortRestMinutes(m);
+  return fmtMinutes(personBaseMinutes(m,type))+' base • '+personOccurrenceCount(m)+' ocorr. reais • '+
+    personWeightedCount(m)+' pontos'+(rest?' • descanso sugerido '+rest+' min':'');
 }
 function priorityReasonText(m,type){
   return currentRotationCriterion()==='occurrences'
@@ -1622,7 +1645,7 @@ function fixedCrewForVehicleRotation(v){
     teamRoleKey(m)==='nurse'&&norm(m.funcao).includes('TECN')))||null;
   const doctor=fixed.find(m=>teamRoleKey(m)==='doctor')||null;
   return {v,driver,nurse,tech,doctor,complete:true,
-    base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)};
+    base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v),score:vehicleWeightedCount(v),rest:vehicleEffortRestMinutes(v)};
 }
 function availableUsaTeams(){
   const crit=currentRotationCriterion();
@@ -1636,14 +1659,15 @@ function availableUsaTeams(){
   return eligible.sort((a,b)=>{
     const oneTime=compareManualRank(manualRankVehicle(a.v),manualRankVehicle(b.v));
     if(oneTime)return oneTime;
+    if(Boolean(a.rest)!==Boolean(b.rest))return a.rest?1:-1;
     if(firstRound)return String(a.v.nome||a.v.codigo).localeCompare(
       String(b.v.nome||b.v.codigo),'pt-BR',{numeric:true});
     if(crit==='occurrences'){
-      if(a.occ!==b.occ)return a.occ-b.occ;
+      if(a.score!==b.score)return a.score-b.score;
       if(a.base!==b.base)return b.base-a.base;
     }else{
       if(a.base!==b.base)return b.base-a.base;
-      if(a.occ!==b.occ)return a.occ-b.occ;
+      if(a.score!==b.score)return a.score-b.score;
     }
     return String(a.v.nome).localeCompare(String(b.v.nome),'pt-BR');
   });
@@ -1683,8 +1707,12 @@ function usbPairAvailable({driver,tech}){
 function usbAvailablePairs(pairs){
   const driverOrder=priorityPeopleForRole('driver','USB',{rotationOnly:true});
   const ranks=new Map(driverOrder.map((m,index)=>[m.id,index]));
-  return pairs.filter(usbPairAvailable).sort((a,b)=>
-    (ranks.get(a.driver.id)??Infinity)-(ranks.get(b.driver.id)??Infinity));
+  return pairs.filter(usbPairAvailable).sort((a,b)=>{
+    const ar=Math.max(personEffortRestMinutes(a.driver),personEffortRestMinutes(a.tech));
+    const br=Math.max(personEffortRestMinutes(b.driver),personEffortRestMinutes(b.tech));
+    if(Boolean(ar)!==Boolean(br))return ar?1:-1;
+    return (ranks.get(a.driver.id)??Infinity)-(ranks.get(b.driver.id)??Infinity);
+  });
 }
 function automaticDispatchCrew(v){
   const type=vehicleType(v);
@@ -1717,7 +1745,7 @@ function fixedUsbCrewForVehicleRotation(v){
   if(!driver&&!tech)return null;
   return {v,driver,tech,nurse:null,doctor:null,
     complete:requiredDispatchRoles(v).every(role=>crewHasRole(fixed,role)),
-    base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v)};
+    base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v),score:vehicleWeightedCount(v),rest:vehicleEffortRestMinutes(v)};
 }
 function usbFixedVehicleLabel(item){
   const prefix=item.v.nome||item.v.codigo;
@@ -1736,14 +1764,15 @@ function availableUsbTeams(){
   return eligible.sort((a,b)=>{
     const oneTime=compareManualRank(manualRankVehicle(a.v),manualRankVehicle(b.v));
     if(oneTime)return oneTime;
+    if(Boolean(a.rest)!==Boolean(b.rest))return a.rest?1:-1;
     if(firstRound)return String(a.v.nome||a.v.codigo).localeCompare(
       String(b.v.nome||b.v.codigo),'pt-BR',{numeric:true});
     if(crit==='occurrences'){
-      if(a.occ!==b.occ)return a.occ-b.occ;
+      if(a.score!==b.score)return a.score-b.score;
       if(a.base!==b.base)return b.base-a.base;
     }else{
       if(a.base!==b.base)return b.base-a.base;
-      if(a.occ!==b.occ)return a.occ-b.occ;
+      if(a.score!==b.score)return a.score-b.score;
     }
     return String(a.v.nome||a.v.codigo).localeCompare(String(b.v.nome||b.v.codigo),'pt-BR',{numeric:true});
   });
@@ -2506,7 +2535,7 @@ function bindVehicleActions(root){
   root.querySelectorAll('[data-act="qta"]').forEach(b=>b.onclick=()=>setOccurrenceQta(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="return"]').forEach(b=>b.onclick=()=>setReturning(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="undo-return"]').forEach(b=>b.onclick=()=>undoReturning(b));
-  root.querySelectorAll('[data-act="arrive"]').forEach(b=>b.onclick=()=>setArrived(b.dataset.o,b.dataset.v));
+  root.querySelectorAll('[data-act="arrive"]').forEach(b=>b.onclick=()=>openEffortArrivalModal(b.dataset.o,b.dataset.v));
   root.querySelectorAll('[data-act="edit-team"]').forEach(b=>b.onclick=()=>openOccurrenceCrewCorrection(b.dataset.o||activeOccurrence(vehicleById(b.dataset.v))?.id));
   root.querySelectorAll('[data-status]').forEach(b=>b.onclick=()=>setVehicleStatus(b.dataset.v,b.dataset.status));
   root.querySelectorAll('[data-status-select]').forEach(s=>s.onchange=()=>{if(s.value)setVehicleStatus(s.dataset.v,s.value)});
