@@ -1442,6 +1442,75 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
   border-color:#bfd9f7;
   color:#355e87;
 }
+
+/* USA retrátil: cabeçalho compacto, clicável e acessível por teclado. */
+.cockpit-rotation .rotation-panel-collapsible>.rotation-panel-toggle{
+  cursor:pointer;
+  list-style:none;
+  margin:0;
+  padding:2px 0;
+  gap:8px;
+  user-select:none;
+}
+.cockpit-rotation .rotation-panel-collapsible>.rotation-panel-toggle::marker{content:''}
+.cockpit-rotation .rotation-panel-collapsible>.rotation-panel-toggle::-webkit-details-marker{display:none}
+.cockpit-rotation .rotation-panel-collapsible>.rotation-panel-toggle:focus-visible{
+  outline:3px solid #2563eb;
+  outline-offset:4px;
+  border-radius:5px;
+}
+.cockpit-rotation .rotation-panel-collapsible[open]>.rotation-panel-toggle{
+  border-bottom:1px solid #edd9c3;
+  padding-bottom:10px;
+  margin-bottom:10px;
+}
+.cockpit-rotation .rotation-panel-toggle-label{
+  display:flex;
+  flex-direction:column;
+  gap:3px;
+  min-width:0;
+}
+.cockpit-rotation .rotation-panel-toggle-label small{
+  color:#8b6240;
+  font-size:.68rem;
+  font-weight:750;
+  line-height:1.25;
+}
+.cockpit-rotation .rotation-panel-toggle-actions{
+  display:flex;
+  align-items:center;
+  justify-content:flex-end;
+  gap:7px;
+  flex-wrap:wrap;
+  min-width:0;
+}
+.cockpit-rotation .rotation-toggle-verb{
+  color:#945317;
+  font-size:.67rem;
+  font-weight:950;
+  white-space:nowrap;
+}
+.cockpit-rotation .rotation-toggle-hide{display:none}
+.cockpit-rotation .rotation-panel-collapsible[open] .rotation-toggle-show{display:none}
+.cockpit-rotation .rotation-panel-collapsible[open] .rotation-toggle-hide{display:inline}
+.cockpit-rotation .rotation-toggle-chevron{
+  display:block;
+  width:9px;
+  height:9px;
+  flex:0 0 9px;
+  border-right:2px solid #9a571a;
+  border-bottom:2px solid #9a571a;
+  transform:rotate(45deg);
+  transition:transform .16s ease;
+  margin:-4px 3px 0 1px;
+}
+.cockpit-rotation .rotation-panel-collapsible[open] .rotation-toggle-chevron{
+  transform:rotate(225deg);
+  margin:4px 3px 0 1px;
+}
+@media(prefers-reduced-motion:reduce){
+  .cockpit-rotation .rotation-toggle-chevron{transition:none}
+}
 .cockpit-rotation .rotation-next-vehicle{
   padding:12px 13px;
   background:#fff;

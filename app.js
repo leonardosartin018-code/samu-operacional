@@ -1863,6 +1863,27 @@ function usbPairOccurrenceCount({driver,tech}){
     driverOccurrences.has(m.ocorrencia_id)).map(m=>m.ocorrencia_id));
   return occurrences.filter(o=>together.has(o.id)&&norm(o.status)==='FINALIZADA').length;
 }
+/* Preferência visual local: revezamento USA recolhido inicialmente.
+   Recolher não altera a escala, a ordem de despacho ou as sugestões. */
+const USA_ROTATION_STORAGE_KEY='samu_usa_rotation_expanded';
+let usaRotationExpanded=false;
+try{
+  usaRotationExpanded=window.localStorage.getItem(USA_ROTATION_STORAGE_KEY)==='1';
+}catch(e){
+  // O painel continua utilizável mesmo sem armazenamento local.
+}
+function bindUsaRotationToggle(root){
+  const details=root.querySelector('#usaRotationDetails');
+  if(!details)return;
+  details.addEventListener('toggle',()=>{
+    usaRotationExpanded=details.open;
+    try{
+      window.localStorage.setItem(USA_ROTATION_STORAGE_KEY,details.open?'1':'0');
+    }catch(e){
+      // Preserva o estado em memória quando o navegador bloqueia o armazenamento.
+    }
+  });
+}
 function rotationPanelGroup(type){
   if(type==='USB'){
     const pairs=usbRotationPairs();
@@ -1887,20 +1908,41 @@ function rotationPanelGroup(type){
   const hasPeopleQueues=queues.some(Boolean);
   // USA só aparece com guarnição fixa completa. USB aparece com pelo
   // menos um técnico/enfermeiro ou condutor fixo, seguido das filas individuais.
-  return '<section class="rotation-panel-group rotation-panel-'+type.toLowerCase()+'">'+
-    '<div class="rotation-panel-heading"><b>'+type+'</b>'+
-    '<span>'+(hasRotation?'ESCALA COM REVEZAMENTO':'EQUIPE FIXA')+'</span></div>'+
+  const content=
     (fixedRoleNotes.length?'<p class="rotation-mode-clarity">'+fixedRoleNotes.join(' • ')+'</p>':'')+
     (fixedTeams.length?nextVehicleRotationCard(type,hasRotation):'')+
     (hasPeopleQueues&&!fixedTeams.length?
       '<p class="rotation-person-only-note">FILA POR PROFISSIONAL • Sem viatura fixa da vez. '+
       'Selecione a viatura disponível no acionamento e confira os nomes sugeridos abaixo.</p>':'')+
-    queues.join('')+
+    queues.join('');
+  // Apenas a USA é retrátil; a USB permanece sempre visível.
+  if(type==='USA'){
+    return '<details id="usaRotationDetails" class="rotation-panel-group rotation-panel-usa rotation-panel-collapsible"'+
+      (usaRotationExpanded?' open':'')+'>'+
+      '<summary class="rotation-panel-heading rotation-panel-toggle">'+
+        '<div class="rotation-panel-toggle-label"><b>USA</b><small>Condutores e enfermeiros</small></div>'+
+        '<div class="rotation-panel-toggle-actions">'+
+          '<span>'+(hasRotation?'ESCALA COM REVEZAMENTO':'EQUIPE FIXA')+'</span>'+
+          '<strong class="rotation-toggle-verb rotation-toggle-show">ABRIR</strong>'+
+          '<strong class="rotation-toggle-verb rotation-toggle-hide">RECOLHER</strong>'+
+          '<i class="rotation-toggle-chevron" aria-hidden="true"></i>'+
+        '</div>'+
+      '</summary>'+
+      '<div class="rotation-panel-content">'+content+'</div>'+
+    '</details>';
+  }
+  return '<section class="rotation-panel-group rotation-panel-usb">'+
+    '<div class="rotation-panel-heading"><b>USB</b>'+
+    '<span>'+(hasRotation?'ESCALA COM REVEZAMENTO':'EQUIPE FIXA')+'</span></div>'+
+    content+
   '</section>';
 }
 function renderRotation(){
   const root=$('#priority');
   if(!root)return;
+  // Guarda a escolha mesmo durante as atualizações automáticas da fila.
+  const currentUsaDetails=root.querySelector('#usaRotationDetails');
+  if(currentUsaDetails)usaRotationExpanded=currentUsaDetails.open;
   // Renderiza USA e USB independentemente: um erro numa das filas jamais
   // deve apagar a outra, nem deixar o quadro operacional inteiro vazio.
   try{
@@ -1926,6 +1968,7 @@ function renderRotation(){
       sections.join('');
     bindEarlyExitButtons(root);
     bindManualQueueButtons(root);
+    bindUsaRotationToggle(root);
   }catch(e){
     console.error('Falha geral ao renderizar as próximas viaturas',e);
     root.innerHTML='<p class="rotation-render-error">Painel de revezamento indisponível. Não utilize esta indicação para empenho sem conferir a escala e a equipe.</p>';
