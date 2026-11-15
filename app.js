@@ -5505,7 +5505,7 @@ $('#confirmInternalBookBtn').onclick=()=>confirmInternalTeam('#internalScaleEdit
 $('#saveBookBtn').onclick=saveBook;$('#printBookBtn').onclick=()=>window.print();
 $('#bookObs').addEventListener('input',()=>{unsavedBook=true});
 $('#expressPermutaSearch').oninput=expressPermutaAutocomplete;
-$('#expressPermutaModeButtons [data-permuta-mode]').forEach(button=>{
+$$('#expressPermutaModeButtons [data-permuta-mode]').forEach(button=>{
   button.onclick=()=>setExpressPermutaMode(button.dataset.permutaMode);
 });
 $('#saveExpressPermutaBtn').onclick=saveExpressPermuta;
