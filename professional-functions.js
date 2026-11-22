@@ -16,6 +16,13 @@ function folded(value){
   return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
 }
 const canonical = new Map(PROFESSIONAL_FUNCTIONS.map(([value])=>[folded(value),value]));
+for (const [alias,role] of [
+  ['RADIO','Rádio-operador'],['RADIO OPERADOR','Rádio-operador'],
+  ['CONDUTOR USA','Condutor'],['CONDUTOR USB','Condutor'],
+  ['AMBULANCIA SANITARIA','Sanitária'],['SANITARIA','Sanitária'],
+  ['TECNICO','Técnico de Enfermagem'],['TECNICA','Técnico de Enfermagem'],
+  ['ENFERMEIRA','Enfermeiro'],['MEDICA','Médico']
+])canonical.set(folded(alias),role);
 export function canonicalProfessionalFunction(value){
   return canonical.get(folded(value))||null;
 }
