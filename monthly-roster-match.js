@@ -1,7 +1,7 @@
-import { hasProfessionalFunction, canonicalProfessionalFunction } from './professional-functions.js';
+import { hasProfessionalFunction, canonicalProfessionalFunction, isBombeiroProfessional } from './professional-functions.js';
 
-// Futuro importador de escala mensal: validação exata, SEM atribuição automática
-// quando houver homônimos, nomes parciais ou função não habilitada.
+// Resolver de nomes para a FUTURA importação mensal do PDF.
+// A função/viatura do turno vêm da escala, nunca do cadastro de nome de guerra.
 function foldName(value){
   return String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'')
     .toUpperCase().replace(/[^A-Z0-9 ]+/g,' ').replace(/\s+/g,' ').trim();
@@ -12,20 +12,37 @@ function matchingNames(p){
     ...(Array.isArray(p?.aliases)?p.aliases:[])];
   return new Set(all.map(foldName).filter(Boolean));
 }
-export function resolveMonthlyRosterEntry({name,position,professionals=[]}={}){
-  const query=foldName(name);
+export function canonicalDisplayName(p){
+  return String(p?.nome_exibicao||p?.nome_de_guerra||p?.nome_completo||'').trim();
+}
+export function resolveMonthlyRosterEntry({
+  name,position,professionalId=null,professionals=[]
+}={}){
+  const originalName=String(name||'').trim(),query=foldName(originalName);
   const category=canonicalProfessionalFunction(position);
   if(!query||!category)return {status:'INVALID_ENTRY',professional:null,candidates:[]};
-  const matches=professionals.filter(p=>p?.ativo!==false&&matchingNames(p).has(query));
-  if(matches.length===0)return {status:'NOT_FOUND',professional:null,candidates:[]};
-  const authorized=matches.filter(p=>hasProfessionalFunction(p,category));
-  if(authorized.length===1 && matches.length===1){
-    return {status:'MATCHED',professional:authorized[0],candidates:authorized};
+  // Um ID vindo de escala previamente vinculada é mais confiável do que um
+  // apelido, mas nunca aceita ID inexistente ou função clínica não habilitada.
+  let matches=[];
+  if(professionalId){
+    const selected=professionals.find(p=>p.id===professionalId&&p.ativo!==false);
+    if(!selected)return {status:'NOT_FOUND',professional:null,candidates:[]};
+    matches=[selected];
+  }else{
+    matches=professionals.filter(p=>p?.ativo!==false&&matchingNames(p).has(query));
   }
-  if(matches.length===1 && authorized.length===0){
+  if(!matches.length)return {status:'NOT_FOUND',professional:null,candidates:[]};
+  if(matches.length>1)return {status:'AMBIGUOUS',professional:null,candidates:matches};
+  const chosen=matches[0];
+  if(!hasProfessionalFunction(chosen,category)){
     return {status:'ROLE_MISMATCH',professional:null,candidates:matches};
   }
-  // Mesmo que um dos homônimos pareça ter a função certa, pede conferência
-  // humana antes de associar a escala: nunca confundir dois profissionais.
-  return {status:'AMBIGUOUS',professional:null,candidates:matches};
+  return {
+    status:'MATCHED',professional:chosen,candidates:[chosen],
+    profissional_id:chosen.id,
+    nome_referencia:canonicalDisplayName(chosen),
+    nome_importado:originalName,
+    funcao_escala:category,
+    isBombeiro:isBombeiroProfessional(chosen)
+  };
 }
