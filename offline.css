@@ -1,0 +1,32 @@
+.offline-status {
+  margin: 8px auto;
+  max-width: 1600px;
+  padding: 12px 16px;
+  border: 1px solid #83bbab;
+  border-left: 5px solid #168257;
+  border-radius: 8px;
+  background: #eefbf5;
+  color: #123d2c;
+  font-size: 14px;
+}
+.offline-status[hidden], .offline-status button[hidden] { display: none; }
+.offline-status[data-mode="pending"] { background: #fffbeb; border-color: #d7a844; color: #713f12; }
+.offline-status[data-mode="error"] { background: #fff3ed; border-color: #c46a34; color: #7c2d12; }
+.offline-status p { margin: 5px 0; font-size: 13px; line-height: 1.4; }
+.offline-status summary { margin-top: 6px; cursor: pointer; }
+.offline-status .btn { margin: 6px 4px 6px 0; min-height: 40px; }
+.offline-saving { pointer-events: none; }
+body:has(.offline-saving)::after {
+  content: "Gravando neste computador…";
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 999999;
+  border: 1px solid #75a8bd;
+  border-radius: 8px;
+  background: #075985;
+  color: #fff;
+  padding: 12px 20px;
+}
+@media print { .offline-status, body:has(.offline-saving)::after { display: none; } }

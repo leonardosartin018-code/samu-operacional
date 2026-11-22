@@ -5,7 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261115-91-peso-descanso">
+  <link rel="stylesheet" href="./styles.css?v=20261122-offline-2">
+  <link rel="stylesheet" href="./offline.css?v=20261122-offline-2">
 </head>
 <body>
 
@@ -44,6 +45,17 @@
   </div>
 </section>
 
+<section id="offlineStatus" class="offline-status" hidden aria-live="polite">
+  <div><strong id="offlineStatusText"></strong><p id="offlineStatusDetail"></p></div>
+  <details><summary>Sincronização</summary>
+    <p>As ações pendentes ficam neste navegador até o banco confirmar o recebimento.</p>
+    <button id="offlineRetry" class="btn" type="button">Tentar sincronizar</button>
+    <button id="offlineLogin" class="btn" type="button">Entrar novamente</button>
+    <button id="offlineExport" class="btn" type="button">Baixar cópia das pendências</button>
+    <button id="offlineArchive" class="btn danger" type="button" hidden>Arquivar pendências e conferir servidor</button>
+    <p>A cópia de pendências contém dados do plantão. Guarde-a em local restrito.</p>
+  </details>
+</section>
 <div id="app" class="app hidden">
   <header class="top">
     <div class="top-brand">
@@ -867,6 +879,7 @@
     <div class="team-modal-note">O Livro só registra a permuta quando o titular está fora de serviço no plantão.</div>
     <div class="modal-actions">
       <button class="btn" data-close-modal="expressPermutaModal">Cancelar</button>
+      <button id="removeExpressDriverBtn" class="btn danger hidden" type="button">DESESCALAR CONDUTOR</button>
       <button id="saveExpressPermutaBtn" class="btn primary">SALVAR PERMUTA</button>
     </div>
   </div>
@@ -929,6 +942,10 @@
   </div>
 </div>
 
-<script type="module" src="./app.js?v=20261115-91-peso-descanso"></script>
+<script src="./vendor/supabase-2.119.2.js"></script>
+<script src="./vendor/jspdf-2.5.2.js"></script>
+<script src="./vendor/jspdf-autotable-3.8.4.js"></script>
+<script src="./vendor/html2canvas-1.4.1.js"></script>
+<script type="module" src="./app.js?v=20261122-offline-2"></script>
 </body>
 </html>

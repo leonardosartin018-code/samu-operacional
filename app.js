@@ -3,17 +3,57 @@ import { canManageVictimDestination } from './victim-destination-rules.js?v=2026
 import { createSamuPdfArchive, downloadSamuFile } from './samu-report-download.js?v=20261115-90-pdf-equipes-relatorio';
 import { buildSamuCompleteReport } from './samu-report-structure.js?v=20261115-90-pdf-equipes-relatorio';
 import { occurrenceEffortWeight, effortRestMinutes, weightedCompletedScore, restTimeRemaining, lastCompletedOccurrence, effortAdjustmentNote } from './rotation-weight-rules.js?v=20261115-91-peso-descanso';
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createOfflineClient } from './offline-client.js';
+import { prepareOfflineShell } from './offline-shell.js';
+import { renderOfflineStatus } from './offline-ui.js';
 
-const supabase = createClient(
+const remoteSupabase = window.supabase.createClient(
   'https://bcdxgfcmhedlaswiylud.supabase.co',
   'sb_publishable_3rOX2Q23kZm_SyCh9k-VKA_9OxDg_AR'
 );
+
+const offline = createOfflineClient(remoteSupabase, {
+  beforeAction: async () => {
+    clearTimeout(reloadTimer);
+    await Promise.all([...activeLoads]);
+  },
+  onStatus: renderOfflineStatus,
+  onChange: () => {
+    if (session && !anyDraftModalOpen() && !offline.status().busy) scheduleReload();
+  },
+  onRollback: async (message,{alreadyNotified,changed}={}) => {
+    if(!alreadyNotified)window.alert(message);
+    if(!changed)return;
+    professionals=[];
+    if (session) {
+      await loadAll(selectedDate(), currentPlantao?.turno, true);
+      await loadExpressScale();
+    }
+  }
+});
+const supabase = new Proxy(remoteSupabase, {
+  get(target, key) {
+    if (key === 'from') return table => offline.from(table);
+    if (key === 'rpc') return (name, params) => offline.rpc(name, params);
+    const value = Reflect.get(target, key);
+    return typeof value === 'function' ? value.bind(target) : value;
+  }
+});
+const alert = message => {
+  if (offline.status().busy) offline.fail(message,true);
+  window.alert(message);
+};
+const confirm = message => {
+  const approved = window.confirm(message);
+  if (!approved) offline.cancel();
+  return approved;
+};
 
 const $ = s => document.querySelector(s);
 const $$ = s => [...document.querySelectorAll(s)];
 
 let session = null;
+let requestedLogout = false;
 let passwordRecoveryMode = new URLSearchParams(window.location.hash.slice(1)).get('type')==='recovery' || new URLSearchParams(window.location.search).get('type')==='recovery';
 let profile = null;
 let currentPlantao = null;
@@ -47,6 +87,7 @@ let expressDriverEdit = null;
 let pendingQuickRegistration = null;
 let realtimeChannel = null;
 let reloadTimer = null;
+const activeLoads = new Set();
 let operationalShiftTimer = null;
 let operationalShiftSyncBusy = false;
 let autoFollowCurrentShift = true;
@@ -136,6 +177,11 @@ function canEditOpenShift(){
   return true;
 }
 function setSync(text,type='ok'){
+  const local=offline.status();
+  if(type==='ok'&&(!local.connected||local.pending)){
+    text=local.pending?'Salvo neste computador • '+local.pending+' ação(ões) pendente(s) de envio':'Operando com a cópia local do plantão';
+    type='warn';
+  }
   const el=$('#syncStatus');
   el.className='sync-strip'+(type==='ok'?'':' '+type);
   el.innerHTML='<span class="sync-dot"></span><span>'+esc(text)+'</span>';
@@ -496,6 +542,11 @@ async function restoreAutomaticScaleReference(){
 }
 async function synchronizeCurrentOperationalShift(force=false){
   if(!session||operationalShiftSyncBusy||(!autoFollowCurrentShift&&!force))return;
+  if(offline.status().busy&&!force)return;
+  if(currentPlantao&&(!offline.status().connected||offline.status().pending)){
+    if(force)await loadAll(currentPlantao.data_plantao,currentPlantao.turno);
+    return;
+  }
   operationalShiftSyncBusy=true;
   try{
     const clockKey=operationalShiftKey();
@@ -622,6 +673,7 @@ function openModal(id){
   }
 }
 function closeModal(id){
+  if(offline.afterCommit(()=>closeModal(id)))return;
   $('#'+id)?.classList.remove('show');
   modalDraftSnapshots.delete(id);
 }
@@ -678,7 +730,14 @@ async function ensureOperationalPlantao(date,turno,ala){
   return data;
 }
 
-async function loadAll(preferredDate=null,preferredTurno=null){
+async function loadAll(...args){
+  let complete;
+  const pending=new Promise(resolve=>{complete=resolve});
+  activeLoads.add(pending);
+  try{return await loadAllContents(...args)}
+  finally{activeLoads.delete(pending);complete()}
+}
+async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCreate=false){
   const ctx=operationalShiftContext();
   const previous=currentPlantao;
   const date=preferredDate||selectedDate()||ctx.date;
@@ -695,7 +754,7 @@ async function loadAll(preferredDate=null,preferredTurno=null){
   try{
     try{
       currentPlantao=await choosePlantao(date,turno,ala);
-      if(!currentPlantao&&isCurrentShift&&date===ctx.date&&turno===ctx.turno){
+      if(!skipAutoCreate&&!currentPlantao&&isCurrentShift&&date===ctx.date&&turno===ctx.turno){
         currentPlantao=await ensureOperationalPlantao(date,turno,ala);
       }
       syncDateAndAla(date,currentPlantao?.turno||turno);
@@ -992,7 +1051,10 @@ function openVictimDestination(occId){
   refreshVictimDestinationChoice();
   openModal('victimDestinationModal');
 }
-async function saveVictimDestination(){
+async function saveVictimDestination(...args){
+  return offline.userAction('Registrar destino da vítima',()=>saveVictimDestinationLocal(...args));
+}
+async function saveVictimDestinationLocal(){
   if(!isOperator()||!selectedVictimOccurrenceId)return;
   const oid=selectedVictimOccurrenceId;
   const selected=$('#victimDestinationChoice').value;
@@ -1016,7 +1078,7 @@ async function saveVictimDestination(){
       throw new Error('A ocorrência mudou de situação. O destino só pode ser registrado com QTH informado, QTH não informado ou durante o retorno. Atualize o painel.');
     }
     if(dest==='QTA'){
-      const saved=await setOccurrenceQta(oid,record.viatura_id);
+      const saved=await setOccurrenceQtaLocal(oid,record.viatura_id);
       if(!saved)return;
     }else{
       const {data:updated,error}=await supabase.from('ocorrencias')
@@ -1168,7 +1230,10 @@ function renderRotationRuleHelp(){
     ? 'Critério ativo: menor pontuação ponderada de ocorrências. Em empate, passa na frente quem está há mais tempo na base.'
     : 'Critério padrão: mais tempo disponível na base. Se houver empate, passa na frente quem tem menos ocorrências.';
 }
-async function persistRotationCriterion(value){
+async function persistRotationCriterion(...args){
+  return offline.userAction('Alterar critério do revezamento',()=>persistRotationCriterionLocal(...args));
+}
+async function persistRotationCriterionLocal(value){
   renderRotationRuleHelp();
   renderRotation();
   if(!currentPlantao||!isOperator())return;
@@ -1324,7 +1389,10 @@ function updateEarlyExitPreview(){
   }
   $('#earlyExitPreview').textContent=note;
 }
-async function saveEarlyExit(){
+async function saveEarlyExit(...args){
+  return offline.userAction('Programar saída antecipada',()=>saveEarlyExitLocal(...args));
+}
+async function saveEarlyExitLocal(){
   if(!canEditOpenShift()||!currentPlantao||!selectedEarlyExitMemberId)return;
   const m=activeTeamRows().find(x=>x.id===selectedEarlyExitMemberId);
   if(!m||!isRotationMember(m))return alert('O profissional não está mais no revezamento. Atualize a escala.');
@@ -1349,7 +1417,10 @@ async function saveEarlyExit(){
   }catch(e){alert('Erro ao programar saída: '+(e.message||e))}
   finally{button.disabled=false}
 }
-async function removeEarlyExit(){
+async function removeEarlyExit(...args){
+  return offline.userAction('Cancelar saída antecipada',()=>removeEarlyExitLocal(...args));
+}
+async function removeEarlyExitLocal(){
   if(!canEditOpenShift()||!currentPlantao||!selectedEarlyExitMemberId)return;
   const m=activeTeamRows().find(x=>x.id===selectedEarlyExitMemberId);
   if(!m||!confirm('Cancelar a saída antecipada de '+priorityPersonName(m)+'? Ele voltará à prioridade normal do revezamento.'))return;
@@ -1506,7 +1577,10 @@ function renderManualQueueDraft(){
  $('#manualRotationNotice').textContent='Prioridade temporária: após cada retorno à base, a pessoa ou viatura volta à classificação automática. A saída antecipada e os impedimentos continuam prevalecendo.';
  $('#manualRotationReset').classList.toggle('hidden',!manualRotation.some(x=>x.grupo===draft.group));
 }
-async function persistManualQueue(reset=false){
+async function persistManualQueue(...args){
+  return offline.userAction('Alterar prioridade da fila',()=>persistManualQueueLocal(...args));
+}
+async function persistManualQueueLocal(reset=false){
  const draft=manualRotationDraft;
  if(!draft||!isOperator()||!currentPlantao)return;
  if(norm(currentPlantao.status)!=='ABERTO'||draft.plantaoId!==currentPlantao.id)return alert('O plantão mudou. Atualize a fila.');
@@ -2852,7 +2926,10 @@ async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPID
   markOperationalDirty();
   return true;
 }
-async function saveQuickTeam(){
+async function saveQuickTeam(...args){
+  return offline.userAction('Salvar equipe da viatura',()=>saveQuickTeamLocal(...args));
+}
+async function saveQuickTeamLocal(){
   if(!canEditOpenShift()||!currentPlantao||!selectedTeamVehicle)return;
   if($('#saveTeam').disabled)return;
   const v=vehicleById(selectedTeamVehicle);
@@ -3286,7 +3363,10 @@ function openOccurrenceModal(vId=null){
   renderDispatchCrewPanel();
   openModal('occModal');
 }
-async function saveOccurrence(){
+async function saveOccurrence(...args){
+  return offline.userAction('Acionar ocorrência',()=>saveOccurrenceLocal(...args));
+}
+async function saveOccurrenceLocal(){
   if(!canEditOpenShift()||!currentPlantao)return;
   if ($('#occImportRaw').value.trim() && !regulationImportLoaded) {
     return alert('O texto colado ainda não foi reconhecido. Confira os dados da importação ou limpe o campo antes de acionar.');
@@ -3421,7 +3501,10 @@ async function saveOccurrence(){
   }catch(e){alert('Erro ao lançar ocorrência: '+(e.message||e))}
   finally{$('#saveOcc').disabled=false}
 }
-async function setOccurrenceQth(id){
+async function setOccurrenceQth(...args){
+  return offline.userAction('Registrar chegada ao QTH',()=>setOccurrenceQthLocal(...args));
+}
+async function setOccurrenceQthLocal(id){
   if(!isOperator())return;
   const o=occurrences.find(x=>x.id===id);
   if(!o)return alert('Ocorrência não encontrada.');
@@ -3445,7 +3528,10 @@ async function setOccurrenceQth(id){
   if(!data)return alert('A ocorrência mudou. Atualize o painel.');
   await loadAll(selectedDate());
 }
-async function setOccurrenceQthNotInformed(id){
+async function setOccurrenceQthNotInformed(...args){
+  return offline.userAction('Marcar QTH não informado',()=>setOccurrenceQthNotInformedLocal(...args));
+}
+async function setOccurrenceQthNotInformedLocal(id){
   if(!isOperator())return;
   const o=occurrences.find(x=>x.id===id);
   if(!o)return alert('Ocorrência não encontrada.');
@@ -3463,7 +3549,10 @@ async function setOccurrenceQthNotInformed(id){
   if(!data)return alert('A ocorrência mudou ou outro operador registrou o QTH. Atualize o painel.');
   await loadAll(selectedDate());
 }
-async function setOccurrenceQta(oid,vid){
+async function setOccurrenceQta(...args){
+  return offline.userAction('Registrar QTA',()=>setOccurrenceQtaLocal(...args));
+}
+async function setOccurrenceQtaLocal(oid,vid){
   if(!isOperator()||!confirm('CONFIRMAR QTA?\n\nA ocorrência não será contabilizada no revezamento e a viatura volta para BASE.'))return false;
   const now=new Date().toISOString();
   const r=await supabase.from('ocorrencias').update({status:'QTA',destino:'QTA',qta_em:now,finalizado_em:now,finalizado_por:profile?.nome||null,creditou_revezamento:false}).eq('id',oid);
@@ -3481,14 +3570,20 @@ async function setOccurrenceQta(oid,vid){
   await loadAll(selectedDate());
   return true;
 }
-async function setReturning(oid,vid){
+async function setReturning(...args){
+  return offline.userAction('Registrar retorno à base',()=>setReturningLocal(...args));
+}
+async function setReturningLocal(oid,vid){
   if(!isOperator())return;
   const now=new Date().toISOString();
   if(oid){const r=await supabase.from('ocorrencias').update({status:'RETORNANDO',inicio_retorno_em:now}).eq('id',oid);if(r.error)return alert(r.error.message)}
   if(vid){const r=await supabase.from('viaturas').update({status_atual:'RETORNANDO'}).eq('id',vid);if(r.error)return alert(r.error.message)}
   await loadAll(selectedDate());
 }
-async function undoReturning(button){
+async function undoReturning(...args){
+  return offline.userAction('Corrigir retorno à base',()=>undoReturningLocal(...args));
+}
+async function undoReturningLocal(button){
   if(!isOperator()||button.disabled)return;
   const {o:occurrenceId,v:vehicleId}=button.dataset;
   const occurrence=occurrences.find(o=>o.id===occurrenceId&&o.viatura_id===vehicleId);
@@ -3552,7 +3647,10 @@ function openEffortArrivalModal(oid,vid){
   refreshEffortArrival();
   openModal('occEffortModal');
 }
-async function confirmEffortArrival(){
+async function confirmEffortArrival(...args){
+  return offline.userAction('Finalizar atendimento',()=>confirmEffortArrivalLocal(...args));
+}
+async function confirmEffortArrivalLocal(){
   if(!pendingEffortArrival||!isOperator())return;
   const weight=occurrenceEffortWeight(document.querySelector('input[name="occEffortWeight"]:checked')?.value);
   const reason=$('#occEffortReason').value.trim();
@@ -3597,7 +3695,10 @@ async function setArrived(oid,vid,weight=1,reason=''){
     '. Descanso sugerido de '+effortRestMinutes(peso)+' minutos.','warn');
 }
 
-async function setVehicleStatus(vId,key){
+async function setVehicleStatus(...args){
+  return offline.userAction('Alterar situação da viatura',()=>setVehicleStatusLocal(...args));
+}
+async function setVehicleStatusLocal(vId,key){
   if(!isOperator())return;
   const v=vehicleById(vId);
   if(!v)return alert('Viatura não encontrada.');
@@ -3712,7 +3813,10 @@ async function openOccurrenceCrewCorrection(occurrenceId){
   $('#occCrewCorrectStatus').textContent='Confira os nomes e salve apenas a equipe desta ocorrência.';
   openModal('occCrewCorrectModal');
 }
-async function saveOccurrenceCrewCorrection(){
+async function saveOccurrenceCrewCorrection(...args){
+  return offline.userAction('Corrigir equipe da ocorrência',()=>saveOccurrenceCrewCorrectionLocal(...args));
+}
+async function saveOccurrenceCrewCorrectionLocal(){
   const draft=selectedCrewCorrection;
   if(!draft||!canEditOpenShift()||!currentPlantao||currentPlantao.id!==draft.plantaoId){
     alert('O plantão mudou. Reabra a correção e confira os dados.');
@@ -3823,7 +3927,10 @@ function openNumberCorrection(id){
   $('#occNumberCorrectInput').focus();
   $('#occNumberCorrectInput').select();
 }
-async function saveNumberCorrection(){
+async function saveNumberCorrection(...args){
+  return offline.userAction('Corrigir número da ocorrência',()=>saveNumberCorrectionLocal(...args));
+}
+async function saveNumberCorrectionLocal(){
   const draft=selectedNumberCorrection;
   if(!draft||!canEditOpenShift()||!currentPlantao||currentPlantao.id!==draft.plantaoId){
     alert('O plantão mudou. Reabra a correção e confira os dados.');
@@ -3889,14 +3996,20 @@ function openOccurrenceEdit(id){
   $('#editOccNumber').value=o.numero||'';$('#editOccNature').value=o.natureza||'';$('#editOccBairro').value=o.bairro||'';$('#editOccDestino').value=o.destino||'';$('#editOccEndereco').value=o.endereco||'';$('#editOccObs').value=o.observacao||'';
   openModal('occEditModal');
 }
-async function saveOccurrenceEdit(){
+async function saveOccurrenceEdit(...args){
+  return offline.userAction('Editar ocorrência',()=>saveOccurrenceEditLocal(...args));
+}
+async function saveOccurrenceEditLocal(){
   if(!isOperator()||!selectedEditOccurrence)return;
   const payload={numero:$('#editOccNumber').value.trim()||null,natureza:$('#editOccNature').value.trim()||null,bairro:$('#editOccBairro').value.trim()||null,destino:$('#editOccDestino').value.trim()||null,endereco:$('#editOccEndereco').value.trim()||null,observacao:$('#editOccObs').value.trim()||null};
   const {error}=await supabase.from('ocorrencias').update(payload).eq('id',selectedEditOccurrence.id);
   if(error)return alert(error.message);
   closeModal('occEditModal');selectedEditOccurrence=null;await loadAll(selectedDate());
 }
-async function deleteOccurrence(id){
+async function deleteOccurrence(...args){
+  return offline.userAction('Excluir ocorrência',()=>deleteOccurrenceLocal(...args));
+}
+async function deleteOccurrenceLocal(id){
   if(!isOperator())return;
   const o=occurrences.find(x=>x.id===id);if(!o)return;
   if(!confirm('EXCLUIR A OCORRÊNCIA #'+(o.numero||'—')+'?\n\nEla será removida do histórico e esta ação não pode ser desfeita.'))return;
@@ -4034,7 +4147,10 @@ function renderExpressDrivers(){
   $('#expressDriverGrid').querySelectorAll('[data-exp-swap]').forEach(b=>b.onclick=()=>expressSwap(b.dataset.expSwap));
   $('#expressDriverGrid').querySelectorAll('[data-exp-absent]').forEach(b=>b.onclick=()=>expressAbsent(b.dataset.expAbsent));
 }
-async function expressUseFixed(rowId){
+async function expressUseFixed(...args){
+  return offline.userAction('Escalar condutor fixo',()=>expressUseFixedLocal(...args));
+}
+async function expressUseFixedLocal(rowId){
   if(!canEditOpenShift())return;
   if(!currentPlantao)await ensurePlantaoForBook();
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
@@ -4096,7 +4212,9 @@ function expressSwap(rowId,editing=false){
   if(!canEditOpenShift())return;
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
   if(!r||!v)return alert('Viatura não encontrada.');
-  const current=editing?expressRowState(r).current:null;
+  const state=expressRowState(r);
+  const current=(editing||state.state==='permuta')?state.current:null;
+  editing=editing||!!current;
   if(editing&&!current)return alert('A escala mudou. Atualize a equipe e tente novamente.');
   selectedExpressPermutaRow=r;
   expressDriverEdit=current?{memberId:current.id,plantaoId:currentPlantao.id}:null;
@@ -4105,6 +4223,7 @@ function expressSwap(rowId,editing=false){
   $('#expressPermutaKicker').textContent=editing?'ESCALA DE CONDUTORES':'PERMUTA DE CONDUTOR';
   $('#expressPermutaPersonLabel').textContent=editing?'Condutor em serviço':'Quem está substituindo';
   $('#saveExpressPermutaBtn').textContent=editing?'SALVAR ALTERAÇÕES':'SALVAR PERMUTA';
+  $('#removeExpressDriverBtn').classList.toggle('hidden',!current);
   $('#expressPermutaTitular').innerHTML='<b>Titular:</b> '+esc(r.nome_referencia||displayName(r.profissionais)||'—');
   $('#expressPermutaSearch').value=pro?professionalLabel(pro,'driver'):(current?.nome_snapshot||'');
   $('#expressPermutaProId').value=current?.profissional_id||'';
@@ -4134,7 +4253,10 @@ function expressPermutaAutocomplete(){
   const add=box.querySelector('[data-register-new]');
   if(add)add.onclick=()=>openQuickRegistration($('#expressPermutaSearch').value,'driver',$('#expressPermutaSearch'),$('#expressPermutaProId'));
 }
-async function saveExpressPermuta(){
+async function saveExpressPermuta(...args){
+  return offline.userAction('Salvar condutor e permuta',()=>saveExpressPermutaLocal(...args));
+}
+async function saveExpressPermutaLocal(){
   const saveButton=$('#saveExpressPermutaBtn');
   if(saveButton.disabled||!canEditOpenShift()||!selectedExpressPermutaRow)return;
   if(!currentPlantao)await ensurePlantaoForBook();
@@ -4205,7 +4327,43 @@ async function saveExpressPermuta(){
   }catch(e){alert(e.message||e)}
   finally{saveButton.disabled=false}
 }
-async function expressToggleRotation(rowId){
+async function removeExpressDriver(...args){
+  return offline.userAction('Desescalar condutor',()=>removeExpressDriverLocal(...args));
+}
+async function removeExpressDriverLocal(){
+  const button=$('#removeExpressDriverBtn'),saveButton=$('#saveExpressPermutaBtn');
+  if(button.disabled||saveButton.disabled||!canEditOpenShift()||!selectedExpressPermutaRow||!expressDriverEdit)return;
+  const row=selectedExpressPermutaRow;
+  const vehicle=vehicleByCode(row.codigo_viatura);
+  const current=expressRowState(row).current;
+  if(currentPlantao?.id!==expressDriverEdit.plantaoId||current?.id!==expressDriverEdit.memberId||
+    !expressMemberOwnsSeat(row,vehicle,current)){
+    return alert('A escala mudou. Reabra o cartão antes de desescalar.');
+  }
+  if(memberIsBusy(current))return alert('O condutor está empenhado. Aguarde o fim da ocorrência.');
+  const name=professionalNameById(current.profissional_id)||current.nome_snapshot||'este condutor';
+  if(!confirm('Desescalar '+name+' desta posição? A posição ficará NÃO ESCALADO.'))return;
+  button.disabled=true;saveButton.disabled=true;
+  try{
+    const {data,error}=await supabase.from('equipe_plantao').update({
+      status:'INATIVO',saiu_em:new Date().toISOString(),tipo_alteracao_escala:'DESESCALADO'
+    }).eq('id',current.id).eq('plantao_id',currentPlantao.id).eq('status','ATIVO').select('id').maybeSingle();
+    if(error)throw error;
+    if(!data)throw new Error('A escala já foi alterada. Atualize e confira a posição.');
+    closeModal('expressPermutaModal');
+    selectedExpressPermutaRow=null;expressDriverEdit=null;
+    markOperationalDirty();
+    await loadAll(selectedDate());await loadExpressScale();
+    await refreshBookProjection();
+  }catch(error){alert('Não foi possível desescalar: '+error.message)}
+  finally{button.disabled=false;saveButton.disabled=false}
+}
+
+
+async function expressToggleRotation(...args){
+  return offline.userAction('Alterar revezamento do condutor',()=>expressToggleRotationLocal(...args));
+}
+async function expressToggleRotationLocal(rowId){
   if(!canEditOpenShift())return;
   if(!currentPlantao)await ensurePlantaoForBook();
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
@@ -4214,7 +4372,8 @@ async function expressToggleRotation(rowId){
     const st=expressRowState(r);
     const now=new Date().toISOString();
     if(st.state!=='rotation'){
-      const titularEmOutroPosto=activeTeamRows().find(m=>m.profissional_id===r.profissional_id);
+      const titularEmOutroPosto=activeTeamRows().find(m=>
+        m.profissional_id===r.profissional_id&&m.id!==st.current?.id);
       if(titularEmOutroPosto){
         const other=vehicleById(titularEmOutroPosto.viatura_id);
         throw new Error((r.nome_referencia||'O titular')+' já está escalado '+
@@ -4226,9 +4385,20 @@ async function expressToggleRotation(rowId){
       throw new Error('A escala pertence a outra posição. Nenhuma alteração realizada.');
 
     if(st.state==='rotation'&&st.current){
-      await supabase.from('equipe_plantao').update({
+      if(memberIsBusy(st.current))throw new Error('O condutor está empenhado. Aguarde o fim da ocorrência.');
+      const {error}=await supabase.from('equipe_plantao').update({
         status:'INATIVO',saiu_em:now,tipo_alteracao_escala:'DESESCALADO'
       }).eq('id',st.current.id);
+      if(error)throw error;
+    }else if(st.current?.profissional_id===r.profissional_id){
+      if(memberIsBusy(st.current))throw new Error('O condutor está empenhado. Aguarde o fim da ocorrência.');
+      const type=vehicleType(v).includes('USA')?'USA':'USB';
+      const {error}=await supabase.from('equipe_plantao').update({
+        tipo_escala:'REVEZAMENTO',viatura_id:null,viatura_snapshot:null,
+        grupo_revezamento:type+'_CONDUTOR',revezamento_tipo_viatura:type,
+        ...driverScaleMetadata({...r,...activeScaleReference()},'REVEZAMENTO')
+      }).eq('id',st.current.id).eq('status','ATIVO');
+      if(error)throw error;
     }else{
       if(st.current)await deactivateTeamRow(st.current,now);
       const existing=activeTeamRows().find(m=>m.profissional_id===r.profissional_id);
@@ -4261,7 +4431,10 @@ async function expressToggleRotation(rowId){
     await loadAll(selectedDate());await loadExpressScale();
   }catch(e){alert(e.message||e)}
 }
-async function expressAbsent(rowId){
+async function expressAbsent(...args){
+  return offline.userAction('Registrar ausência',()=>expressAbsentLocal(...args));
+}
+async function expressAbsentLocal(rowId){
   if(!canEditOpenShift())return;
   if(!currentPlantao)await ensurePlantaoForBook();
   const r=scaleRows.find(x=>x.id===rowId),v=vehicleByCode(r?.codigo_viatura);
@@ -4306,7 +4479,10 @@ function setAllDriversRotation(){
   openBulkRotationModal('CONDUTORES');
 }
 
-async function restoreFixedDrivers(){
+async function restoreFixedDrivers(...args){
+  return offline.userAction('Restaurar condutores fixos',()=>restoreFixedDriversLocal(...args));
+}
+async function restoreFixedDriversLocal(){
   if(!canEditOpenShift()||!scaleRows.length)return;
   if(!currentPlantao)await ensurePlantaoForBook();
   if(!confirm('Restaurar todos os condutores fixos desta Ala/turno? As exceções atuais de condutor serão substituídas.'))return;
@@ -4473,7 +4649,10 @@ async function putProfessionalInRotation(pro,group,funcao,driverMetadata=null){
   if(error)throw error;
   markOperationalDirty();
 }
-async function confirmExpress(){
+async function confirmExpress(...args){
+  return offline.userAction('Confirmar escala operacional',()=>confirmExpressLocal(...args));
+}
+async function confirmExpressLocal(){
   if(!canEditOpenShift())return;
   const prepared=preparedExpressSelections();
   try{
@@ -4618,7 +4797,10 @@ function renderBulkRotationPreview(){
   $('#bulkRotationApplyBtn').disabled=true;
   $('#bulkRotationApplyBtn').textContent='CONFIRMAR '+total+' ALTERAÇÃO(ÕES)';
 }
-async function applyBulkRotation(){
+async function applyBulkRotation(...args){
+  return offline.userAction('Converter equipe para revezamento',()=>applyBulkRotationLocal(...args));
+}
+async function applyBulkRotationLocal(){
   const draft=bulkRotationDraft;
   if(!draft||!draft.ids.length||!$('#bulkRotationAcknowledge').checked)return;
   if(!isOperator()||!isCurrentOperationalPlantao()||currentPlantao.id!==draft.plantaoId){
@@ -4765,7 +4947,10 @@ async function syncEditedMemberOccurrence(oldRow,newVehicle,funcao){
     }
   }
 }
-async function confirmAssign(){
+async function confirmAssign(...args){
+  return offline.userAction('Editar escala individual',()=>confirmAssignLocal(...args));
+}
+async function confirmAssignLocal(){
   const p=selectedAssignProfessional;if(!p||!currentPlantao)return;
   const mode=$('#assignMode').value;
   const editRow=selectedAssignTeamRow;
@@ -4866,7 +5051,10 @@ async function confirmAssign(){
     await loadAll(selectedDate());
   }catch(e){alert(e.message||e)}
 }
-async function removeTeamMember(id){
+async function removeTeamMember(...args){
+  return offline.userAction('Retirar profissional da escala',()=>removeTeamMemberLocal(...args));
+}
+async function removeTeamMemberLocal(id){
   if(!isOperator())return;
   const m=team.find(x=>x.id===id);if(!m)return;
   if(!confirm('Retirar '+displayName(m.profissionais)+' da escala atual?'))return;
@@ -4879,7 +5067,10 @@ function openIndividualOccurrence(teamId){
   selectedIndividualMember=m;$('#individualOccTitle').textContent='Ocorrência — '+displayName(m.profissionais);
   $('#individualOccNumber').value='';$('#individualOccNature').value='';$('#individualOccObs').value='';openModal('individualOccModal');
 }
-async function saveIndividualOccurrence(){
+async function saveIndividualOccurrence(...args){
+  return offline.userAction('Registrar ocorrência individual',()=>saveIndividualOccurrenceLocal(...args));
+}
+async function saveIndividualOccurrenceLocal(){
   const m=selectedIndividualMember;if(!m||!currentPlantao)return;
   const now=new Date().toISOString();
   const {data:o,error}=await supabase.from('ocorrencias').insert({
@@ -4906,7 +5097,10 @@ function renderRegistry(){
   $('#registryTable').innerHTML=rows.map(p=>'<tr><td>'+esc(p.nome_completo||'—')+'</td><td>'+esc(p.nome_de_guerra||'—')+'</td><td>'+esc(p.funcao_sistema||'—')+'</td><td>'+esc(p.topico_ntfy||'—')+'</td><td>ATIVO</td></tr>').join('');
   $('#regWarWrap').classList.remove('hidden');
 }
-async function registerProfessional(){
+async function registerProfessional(...args){
+  return offline.userAction('Cadastrar profissional',()=>registerProfessionalLocal(...args));
+}
+async function registerProfessionalLocal(){
   if(!isOperator())return;
   const nome=$('#regName').value.trim(),funcao=$('#regRole').value,war=$('#regWarName').value.trim(),topic=$('#regTopic').value.trim();
   if(!nome)return alert('Informe o nome completo.');
@@ -4922,7 +5116,10 @@ async function registerProfessional(){
 }
 
 
-async function saveQuickRegistration(){
+async function saveQuickRegistration(...args){
+  return offline.userAction('Cadastrar profissional na equipe',()=>saveQuickRegistrationLocal(...args));
+}
+async function saveQuickRegistrationLocal(){
   if(!isOperator())return;
   const nome=$('#quickRegName').value.trim();
   const war=$('#quickRegWar').value.trim();
@@ -5373,7 +5570,10 @@ function buildInternalPayloadFromCard(slot,root){
     atualizado_em:new Date().toISOString()
   };
 }
-async function confirmInternalTeam(rootSelector='#teamInternalEditor'){
+async function confirmInternalTeam(...args){
+  return offline.userAction('Confirmar serviço interno',()=>confirmInternalTeamLocal(...args));
+}
+async function confirmInternalTeamLocal(rootSelector='#teamInternalEditor'){
   if(!canEditOpenShift())return;
   await ensurePlantaoForBook();
   await ensureProfessionals();
@@ -5442,7 +5642,10 @@ async function refreshBookProjection(){
   await syncBookScaleMetadata();
   if($('#book')?.classList.contains('active'))renderBook();
 }
-async function saveInternalSlot(code,root=document){
+async function saveInternalSlot(...args){
+  return offline.userAction('Salvar posição do serviço interno',()=>saveInternalSlotLocal(...args));
+}
+async function saveInternalSlotLocal(code,root=document){
   if(!canEditOpenShift())return;
   await ensurePlantaoForBook();
   const slot=BOOK_INTERNAL_SLOTS.find(x=>x.code===code),fixed=fixedInternalRow(code);
@@ -5537,7 +5740,10 @@ function renderBook(){
   $('#bookPermutasBody').innerHTML=rows.map(p=>'<tr><th>'+esc(p.funcao)+'</th><td>'+esc(p.substituto)+'</td><td>'+esc(p.substituido)+'</td></tr>').join('');
   $('#bookObsPreview').textContent=bookMeta?.observacoes||'';
 }
-async function saveBook(){
+async function saveBook(...args){
+  return offline.userAction('Salvar Livro do plantão',()=>saveBookLocal(...args));
+}
+async function saveBookLocal(){
   if(!canEditOpenShift())return;
   const button=$('#saveBookBtn');
   if(button.disabled)return;
@@ -5561,7 +5767,7 @@ async function saveBook(){
     bookMeta=data;
     unsavedBook=observations.value!==draft;
     renderBook();
-    alert('Livro salvo.');
+    setSync('Livro salvo neste computador. Confira a sincronização no aviso superior.','warn');
   }catch(error){
     alert('Não foi possível salvar o Livro: '+(error.message||error));
   }finally{
@@ -5635,7 +5841,10 @@ function updateShiftTransitionButtons(){
   const allowed=$('#shiftTransitionAcknowledge').checked&&!shiftTransitionBusy;
   ['#shiftEndOnlyBtn','#shiftEndStartBtn','#shiftStartOnlyBtn','#shiftReopenBtn'].forEach(id=>$(id).disabled=!allowed);
 }
-async function executeShiftTransition(mode){
+async function executeShiftTransition(...args){
+  return offline.userAction('Realizar troca de plantão',()=>executeShiftTransitionLocal(...args));
+}
+async function executeShiftTransitionLocal(mode){
   if(!isOperator()||shiftTransitionBusy||!$('#shiftTransitionAcknowledge').checked)return;
   if(!currentPlantao||shiftTransitionPlantaoId!==currentPlantao.id){
     alert('O plantão mudou. Abra novamente a janela para conferir os dados.');
@@ -5680,7 +5889,7 @@ async function executeShiftTransition(mode){
       try{
         await exportClosingReport({...old,status:'ENCERRADO',encerrado_em:data.encerrado_em});
       }catch(reportError){
-        alert('Plantão encerrado. Não foi possível baixar o relatório: '+(reportError.message||reportError)+'. Você pode baixá-lo pelo botão Relatório do plantão.');
+        window.alert('Não foi possível baixar o relatório: '+(reportError.message||reportError)+'. Você pode baixá-lo pelo botão Relatório do plantão.');
       }
     }
     if(mode==='end'){
@@ -5709,7 +5918,7 @@ async function executeShiftTransition(mode){
     unsavedBook=false;
     closeModal('shiftTransitionModal');
     setSync('Novo plantão iniciado • '+shiftTitle(next));
-    alert('Próximo plantão iniciado. Confira a escala e confirme os profissionais em serviço.');
+    setSync('Próximo plantão preparado neste computador. Confira a sincronização e a equipe.','warn');
   }catch(error){
     console.error('Falha ao trocar plantão',error);
     if(closed){
@@ -5822,17 +6031,13 @@ function closingReportHtml(shift,records){
 let samuPdfExportInProgress=false;
 async function loadSamuPdfLibraries(){
   try{
-    const [jspdfModule,tableModule]=await Promise.all([
-      import('https://esm.sh/jspdf@2.5.2'),
-      import('https://esm.sh/jspdf-autotable@3.8.4')
-    ]);
-    const jsPDF=jspdfModule.jsPDF||jspdfModule.default?.jsPDF;
-    const autoTable=tableModule.autoTable||tableModule.default;
-    if(typeof jsPDF!=='function'||typeof autoTable!=='function')
+    const jsPDF=window.jspdf?.jsPDF;
+    const autoTable=(document,options)=>document.autoTable(options);
+    if(typeof jsPDF!=='function'||typeof jsPDF.API?.autoTable!=='function')
       throw new Error('bibliotecas incompletas');
     return {jsPDF,autoTable};
   }catch(error){
-    throw new Error('Não foi possível carregar o gerador de PDFs. Confira a conexão com a internet e tente novamente. '+(error.message||error));
+    throw new Error('Não foi possível carregar o gerador local de PDFs. '+(error.message||error));
   }
 }
 async function fetchSamuReportData(shift){
@@ -6036,8 +6241,7 @@ async function samuOfficialBookPdf(shift,model,libs){
   try{
     if(bookMeta?.plantao_id!==shift.id)await loadBookData();
     renderBook();
-    const canvasModule=await import('https://esm.sh/html2canvas@1.4.1');
-    const html2canvas=canvasModule.default||canvasModule.html2canvas;
+    const html2canvas=window.html2canvas;
     if(typeof html2canvas!=='function')throw new Error('Renderizador do Livro indisponível');
     isolated=document.createElement('div');
     isolated.className='book-workspace';
@@ -6110,6 +6314,7 @@ function clearSamuPdfReadyFile(){
   setSamuPdfExportStatus('');
 }
 function downloadReadySamuPdf(){
+  if(offline.afterCommit(()=>downloadReadySamuPdf()))return;
   if(!isOperator()||!samuPdfReadyFile)return;
   downloadSamuFile(samuPdfReadyFile.blob,samuPdfReadyFile.filename);
   setSamuPdfExportStatus('Arquivo '+samuPdfReadyFile.filename+' pronto. Confira a pasta Downloads ou use BAIXAR ARQUIVO PRONTO novamente.');
@@ -6175,10 +6380,10 @@ function exportCSV(){
 
 /* ---------- realtime ---------- */
 function scheduleReload(){
-  if(shiftTransitionBusy)return;
+  if(shiftTransitionBusy||offline.status().busy||anyDraftModalOpen())return;
   clearTimeout(reloadTimer);
   reloadTimer=setTimeout(()=>{
-    if(shiftTransitionBusy)return;
+    if(shiftTransitionBusy||offline.status().busy||anyDraftModalOpen())return;
     const refresh=autoFollowCurrentShift
       ? synchronizeCurrentOperationalShift(true)
       : loadAll(selectedDate(),currentPlantao?.turno);
@@ -6194,10 +6399,8 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'equipe_ocorrencia'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'revezamento_plantao'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'prioridade_manual_revezamento'},scheduleReload)
-    .on('postgres_changes',{event:'*',schema:'public',table:'livro_plantao'},()=>{if($('#book')?.classList.contains('active'))loadBookData().then(renderBook)})
-    .on('postgres_changes',{event:'*',schema:'public',table:'escala_interna_plantao'},()=>{
-      loadBookData().then(()=>{renderInternalEditors();if($('#book')?.classList.contains('active'))renderBook()}).catch(console.error);
-    })
+    .on('postgres_changes',{event:'*',schema:'public',table:'livro_plantao'},scheduleReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'escala_interna_plantao'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'plantoes'},scheduleReload)
     .subscribe(s=>{if(s==='SUBSCRIBED')setSync('Banco conectado • atualização em tempo real ativa')});
 }
@@ -6220,15 +6423,29 @@ async function applySession(s){
     return;
   }
   if(!s){
+    await offline.clearIdentity();
     stopOperationalShiftMonitor();
     lastOperationalShiftKey='';
     $('#auth').classList.remove('hidden');$('#app').classList.add('hidden');return;
   }
-  const {data:p}=await supabase.from('usuarios_perfis').select('*').eq('user_id',s.user.id).maybeSingle();
+  requestedLogout=false;
+  await offline.setUser(s.user.id,{offline:!!s.offline});
+  const {data:p,error:profileError}=await supabase.from('usuarios_perfis').select('*').eq('user_id',s.user.id).maybeSingle();
+  if(profileError||!p?.ativo){
+    $('#authMsg').textContent=profileError?.message||'Perfil não autorizado.';
+    $('#auth').classList.remove('hidden');$('#app').classList.add('hidden');
+    return;
+  }
   profile=p;
   $('#roleBadge').textContent=p?.papel||'CONSULTA';
   $('#auth').classList.add('hidden');$('#app').classList.remove('hidden');
   $('#endShiftBtn').disabled=!isOperator();$('#manualOccBtn').disabled=!isOperator();
+  if(!s.offline)await offline.prepare();
+  if(!offline.status().prepared){
+    $('#authMsg').textContent='A preparação local não terminou. Mantenha a conexão e tente entrar novamente.';
+    $('#auth').classList.remove('hidden');$('#app').classList.add('hidden');
+    return;
+  }
 
   // Segue automaticamente o plantão vigente. A virada 07:00/19:00
   // atualiza Escala Operacional e Serviço Interno juntos.
@@ -6239,6 +6456,7 @@ async function applySession(s){
   await synchronizeCurrentOperationalShift(true);
   subscribeRealtime();
   startOperationalShiftMonitor();
+  if(!s.offline)offline.synchronize();
 }
 
 /* ---------- events ---------- */
@@ -6311,7 +6529,7 @@ $('#passwordRecoveryForm').onsubmit=async e=>{
     $('#recoveryPasswordConfirm').value='';
     $('#passwordRecoveryForm').classList.add('hidden');
     $('.auth-tabs').classList.remove('hidden');
-    $('.auth-tab').forEach(b=>b.classList.toggle('on',b.dataset.auth==='login'));
+    $$('.auth-tab').forEach(b=>b.classList.toggle('on',b.dataset.auth==='login'));
     $('#signupForm').classList.add('hidden');
     $('#loginForm').classList.remove('hidden');
     $('#loginPass').value='';
@@ -6332,10 +6550,25 @@ $('#signupForm').onsubmit=async e=>{
   $('#authMsg').textContent=error?error.message:(data.session?'Conta criada.':'Conta criada. Confira seu e-mail para confirmar.');
 };
 $('#logoutBtn').onclick=()=>{
+  if(offline.status().pending&&!confirm('Existem alterações ainda guardadas neste computador. Ao sair, elas continuarão pendentes nesta conta. Deseja sair?'))return;
   if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,includeBook:true,action:'sair do sistema'}))return;
   if(anyDraftModalOpen()&&!confirm('Há uma janela com dados não salvos. Sair mesmo assim?'))return;
   clearSamuPdfReadyFile();
-  supabase.auth.signOut();
+  requestedLogout=true;
+  supabase.auth.signOut({scope:'local'});
+};
+$('#offlineRetry').onclick=()=>offline.synchronize();
+$('#offlineExport').onclick=()=>offline.exportPending();
+$('#offlineLogin').onclick=()=>{
+  $('#app').classList.add('hidden');
+  $('#auth').classList.remove('hidden');
+  $('#authMsg').textContent='Entre na mesma conta para sincronizar as alterações deste computador.';
+};
+$('#offlineArchive').onclick=async()=>{
+  if(!window.confirm('Arquivar TODAS as alterações pendentes deste computador e carregar os dados atuais do servidor? A cópia local será mantida no arquivo de pendências para conferência.'))return;
+  await offline.archivePending();
+  if(navigator.onLine)await offline.prepare();
+  await loadAll(selectedDate(),currentPlantao?.turno);
 };
 $$('.tab').forEach(b=>b.onclick=()=>openPage(b.dataset.page,{teamView:b.dataset.teamView}));
 $$('[data-open-page]').forEach(b=>b.onclick=()=>openPage(b.dataset.openPage));
@@ -6390,7 +6623,7 @@ $('#occImportClearBtn').onclick=resetRegulationImport;
   $('#' + id).addEventListener('input',syncRegulationAddress));$('#saveTeam').onclick=saveQuickTeam;$('#saveOccEdit').onclick=saveOccurrenceEdit;
 $('#occNumberCorrectForm').onsubmit=async e=>{e.preventDefault();await saveNumberCorrection()};
 $('#occCrewCorrectForm').onsubmit=async e=>{e.preventDefault();await saveOccurrenceCrewCorrection()};
-$('input[name="occEffortWeight"]').forEach(r=>r.onchange=refreshEffortArrival);
+$$('input[name="occEffortWeight"]').forEach(r=>r.onchange=refreshEffortArrival);
 $('#confirmOccEffortBtn').onclick=confirmEffortArrival;
 $('#victimDestinationChoice').onchange=refreshVictimDestinationChoice;
 $('#saveVictimDestinationBtn').onclick=saveVictimDestination;
@@ -6435,6 +6668,7 @@ $$('#expressPermutaModeButtons [data-permuta-mode]').forEach(button=>{
   button.onclick=()=>setExpressPermutaMode(button.dataset.permutaMode);
 });
 $('#saveExpressPermutaBtn').onclick=saveExpressPermuta;
+$('#removeExpressDriverBtn').onclick=removeExpressDriver;
 $('#saveQuickRegisterBtn').onclick=saveQuickRegistration;
 
 window.addEventListener('beforeunload',e=>{
@@ -6442,7 +6676,7 @@ window.addEventListener('beforeunload',e=>{
   const unconfirmedScalePage=page==='team'&&(
     activeTeamScope()==='operational' ? operationalNeedsConfirmation() : internalNeedsConfirmation()
   );
-  if(unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen()||unconfirmedScalePage){
+  if(offline.status().busy||unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen()||unconfirmedScalePage){
     e.preventDefault();
     e.returnValue='';
   }
@@ -6459,13 +6693,17 @@ document.addEventListener('visibilitychange',()=>{
 
 supabase.auth.onAuthStateChange((event,s)=>{
   // Consultas ao Supabase precisam ocorrer fora do callback de autenticação.
-  setTimeout(()=>{
+  setTimeout(async()=>{
     if(event==='PASSWORD_RECOVERY'){
       passwordRecoveryMode=true;
       showPasswordRecovery();
       return;
     }
     if(passwordRecoveryMode)return;
+    if(!s&&!requestedLogout&&(!navigator.onLine||!offline.status().connected)){
+      const cached=await offline.resumeIdentity();
+      if(cached){await applySession(cached);return;}
+    }
     if(session?.access_token===s?.access_token)return;
     applySession(s).catch(error=>{
       console.error('Falha ao carregar sessão',error);
@@ -6473,5 +6711,16 @@ supabase.auth.onAuthStateChange((event,s)=>{
     });
   },0);
 });
-const {data:{session:initialSession}}=await supabase.auth.getSession();
-await applySession(initialSession);
+prepareOfflineShell(value=>offline.setShellReady(value)).catch(error=>{
+  console.error('Preparação da abertura offline:',error);
+});
+const initialAuth=await Promise.race([
+  supabase.auth.getSession(),
+  new Promise(resolve=>setTimeout(()=>resolve({data:{session:null}}),5000))
+]);
+const initialSession=initialAuth.data?.session||await offline.resumeIdentity();
+await applySession(initialSession).catch(error=>{
+  $('#authMsg').textContent='Não foi possível preparar os dados locais: '+error.message;
+  $('#auth').classList.remove('hidden');
+  $('#app').classList.add('hidden');
+});
