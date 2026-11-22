@@ -5,7 +5,7 @@
  */
 import { hasProfessionalFunction } from './professional-functions.js';
 
-const ROLE_PATTERN=/\b(condutor(?:a)?|motorista|cond\.?|t[eé]cnic[oa]|t[eé]c\.?|enfermeir[oa]|enf\.?|m[eé]dic[oa]|m[eé]d\.?|doutor(?:a)?|dr\.?|dra\.?)\b\.?\s*(?:[:=\-–—]\s*|\s+(?=[A-Za-zÀ-ÿ]))/giu;
+const ROLE_PATTERN=/\b(condutor(?:a)?|motorista|cond\.?|t[eé]cnic[oa](?:\s+de\s+enfermagem)?|t[eé]c\.?|enfermeir[oa]|enf\.?|m[eé]dic[oa]|m[eé]d\.?|doutor(?:a)?|dr\.?|dra\.?)\b\.?\s*(?:[:=\-–—]\s*|\s+(?=[A-Za-zÀ-ÿ]))/giu;
 const MAX_LENGTH=12000;
 const CITIES=[
   ['ABADIANIA',/\bABADI[AÂ]NIA\b/i],
@@ -24,7 +24,7 @@ function fold(value){
 export function regionalRoleFromLabel(label){
   const value=fold(label).replace(/\s/g,'');
   if(/^(COND|CONDUTOR|CONDUTORA|MOTORISTA)$/.test(value))return 'driver';
-  if(/^(TEC|TECNICA|TECNICO)$/.test(value))return 'tech';
+  if(/^(TEC|TECNICA|TECNICO|TECNICADEENFERMAGEM|TECNICODEENFERMAGEM)$/.test(value))return 'tech';
   if(/^(ENF|ENFERMEIRO|ENFERMEIRA)$/.test(value))return 'nurse';
   if(/^(MED|MEDICO|MEDICA|DOUTOR|DOUTORA|DR|DRA)$/.test(value))return 'doctor';
   return null;
@@ -71,6 +71,8 @@ export function parseRegionalCrewClipboard(raw){
     // WhatsApp costuma trazer mais de uma função no mesmo parágrafo.
     const lines=normalized.split(/\s*[;|]\s*/);
     for(const line of lines){
+      // "Médico regulador" pertence ao relato da ocorrência, não à escala.
+      if(/^\s*m[eé]dic[oa]\s+regulad[oa]r/i.test(line))continue;
       ROLE_PATTERN.lastIndex=0;
       const labels=[...line.matchAll(ROLE_PATTERN)];
       if(!labels.length)continue;
