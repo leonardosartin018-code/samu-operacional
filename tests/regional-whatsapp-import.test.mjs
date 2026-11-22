@@ -88,3 +88,12 @@ test('Enfermeiro cadastrado pode cobrir campo técnico de USB, médico não',()=
   assert.ok(!regionalCanFillRole(person('b','MÉDICO','Médico'),'tech'));
   assert.deepEqual(regionalSlotsForVehicle('USB'),['driver','tech']);
 });
+
+test('técnico de enfermagem em texto e médico regulador não criam médicos falsos',()=>{
+  const out=parseRegionalCrewClipboard(
+    'Equipe de Alexânia\nTécnico de Enfermagem: Raíssa\nMédico regulador: Nome da Central\nCondutor: Jamerilson'
+  );
+  assert.equal(out.members.length,2);
+  assert.deepEqual(out.members.map(x=>x.key),['tech','driver']);
+  assert.equal(out.members[0].name,'Raíssa');
+});
