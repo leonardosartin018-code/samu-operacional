@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261122-offline-4">
-  <link rel="stylesheet" href="./offline.css?v=20261122-offline-4">
+  <link rel="stylesheet" href="./styles.css?v=20261122-offline-5">
+  <link rel="stylesheet" href="./offline.css?v=20261122-offline-5">
 </head>
 <body>
 
@@ -230,25 +230,27 @@
           <div id="expressDriverGrid"></div>
 
           <div class="express-quick-wrap">
-            <div class="express-quick-title">Equipe rápida — Técnicos e Enfermeiros</div>
-            <div class="express-quick-sub">Digite pelo menos 3 letras e adicione o profissional. Para cada nome, escolha REVEZAMENTO ou FIXO EM VIATURA. No modo FIXO, selecione a USB ou USA correspondente. Médicos não são alterados nesta etapa.</div>
+            <div class="express-quick-title">Escalar equipe de enfermagem</div>
+            <div class="express-quick-sub">Busque o profissional, escolha entre fixo na viatura ou revezamento e finalize em Confirmar escala.</div>
             <div class="express-quick-grid">
               <div class="express-quick-card">
-                <h3>TÉCNICOS / ENFERMEIROS NO USB <span id="expressTechCount">0</span></h3>
+                <div class="nursing-card-head"><span class="nursing-unit">USB</span><div><h3>Escalar técnico ou enfermeiro</h3><p>Unidades de Suporte Básico</p></div><span class="nursing-count"><strong id="expressTechCount">0</strong> selecionados</span></div>
+                <label class="nursing-search-label" for="expressTechSearch">Buscar profissional para escalar</label>
                 <div class="autocomplete-shell">
-                  <input id="expressTechSearch" placeholder="Digite nome do técnico ou enfermeiro..." autocomplete="off">
+                  <input id="expressTechSearch" placeholder="Digite pelo menos 3 letras do nome" autocomplete="off">
                   <div id="expressTechResults" class="autocomplete-results"></div>
                 </div>
-                <button id="expressTechAddBtn" type="button" class="express-register-btn">+ CADASTRAR TÉCNICO / ENFERMEIRO</button>
+                <button id="expressTechAddBtn" type="button" class="express-register-btn">+ Cadastrar novo técnico / enfermeiro</button>
                 <div id="expressTechSelected" class="selected-chips"></div>
               </div>
               <div class="express-quick-card">
-                <h3>ENFERMEIROS NO USA <span id="expressNurseCount">0</span></h3>
+                <div class="nursing-card-head"><span class="nursing-unit">USA</span><div><h3>Escalar enfermeiro</h3><p>Unidades de Suporte Avançado</p></div><span class="nursing-count"><strong id="expressNurseCount">0</strong> selecionados</span></div>
+                <label class="nursing-search-label" for="expressNurseSearch">Buscar enfermeiro para escalar</label>
                 <div class="autocomplete-shell">
-                  <input id="expressNurseSearch" placeholder="Digite nome do enfermeiro..." autocomplete="off">
+                  <input id="expressNurseSearch" placeholder="Digite pelo menos 3 letras do nome" autocomplete="off">
                   <div id="expressNurseResults" class="autocomplete-results"></div>
                 </div>
-                <button id="expressNurseAddBtn" type="button" class="express-register-btn">+ CADASTRAR ENFERMEIRO</button>
+                <button id="expressNurseAddBtn" type="button" class="express-register-btn">+ Cadastrar novo enfermeiro</button>
                 <div id="expressNurseSelected" class="selected-chips"></div>
               </div>
             </div>
@@ -691,7 +693,7 @@
         <label>TÉCNICO DE ENFERMAGEM</label>
         <input id="qtTech" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do técnico ou enfermeiro">
         <input id="qtTechId" type="hidden">
-        <button type="button" class="quick-register-inline" data-quick-register="tech">+ CADASTRAR TÉCNICO / ENFERMEIRO</button>
+        <button type="button" class="quick-register-inline" data-quick-register="tech">+ Cadastrar novo técnico / enfermeiro</button>
         <div id="qtTechResults" class="autocomplete-results floating"></div>
         <div class="quick-scale-placement" data-quick-placement="tech">
           <label for="qtTechMode">Como escalar</label>
@@ -709,7 +711,7 @@
         <label>ENFERMEIRO</label>
         <input id="qtNurse" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do enfermeiro">
         <input id="qtNurseId" type="hidden">
-        <button type="button" class="quick-register-inline" data-quick-register="nurse">+ CADASTRAR ENFERMEIRO</button>
+        <button type="button" class="quick-register-inline" data-quick-register="nurse">+ Cadastrar novo enfermeiro</button>
         <div id="qtNurseResults" class="autocomplete-results floating"></div>
         <div class="quick-scale-placement" data-quick-placement="nurse">
           <label for="qtNurseMode">Como escalar</label>
@@ -950,6 +952,6 @@
 <script src="./vendor/jspdf-2.5.2.js"></script>
 <script src="./vendor/jspdf-autotable-3.8.4.js"></script>
 <script src="./vendor/html2canvas-1.4.1.js"></script>
-<script type="module" src="./app.js?v=20261122-offline-4"></script>
+<script type="module" src="./app.js?v=20261122-offline-5"></script>
 </body>
 </html>

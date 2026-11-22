@@ -3296,3 +3296,32 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 @media (prefers-reduced-motion: no-preference) {
   #teamModal .quick-team-status.is-vacant { animation: unassigned-badge-blink 1.6s step-end infinite; }
 }
+
+/* Escala de enfermagem: destino e ação evidentes em cada card. */
+.express-quick-wrap{padding:18px;background:#f1f6fa;border:1px solid #cbdce7;box-shadow:none;border-radius:12px}
+.express-quick-wrap .express-quick-title{font-size:1rem;color:#123b53;line-height:1.35}
+.express-quick-wrap .express-quick-sub{font-size:.76rem;color:#526779;line-height:1.5;margin-top:4px}
+.express-quick-wrap .express-quick-grid{gap:16px;margin-top:16px;align-items:start}
+.express-quick-wrap .express-quick-card,
+.express-quick-wrap .express-quick-card:nth-child(2){--nursing-accent:#075985;padding:18px;background:#fff;border:1px solid #ccdce7;border-top:4px solid var(--nursing-accent);border-radius:10px;box-shadow:0 2px 5px #163b5210;min-width:0}
+.express-quick-wrap .express-quick-card:nth-child(2){--nursing-accent:#0f766e}
+.express-quick-wrap .nursing-card-head{display:flex;align-items:center;gap:10px;margin-bottom:18px;flex-wrap:wrap}
+.express-quick-wrap .nursing-unit{display:grid;place-items:center;min-width:46px;min-height:42px;padding:8px;border-radius:8px;background:#eaf4f9;color:var(--nursing-accent);font-size:.85rem;font-weight:900;letter-spacing:.04em}
+.express-quick-wrap .express-quick-card:nth-child(2) .nursing-unit{background:#eaf7f3}
+.express-quick-wrap .nursing-card-head h3{font-size:.88rem;line-height:1.35;color:#17394f;margin:0}
+.express-quick-wrap .nursing-card-head p{font-size:.7rem;color:#64748b;margin:3px 0 0;line-height:1.4}
+.express-quick-wrap .nursing-count{margin-left:auto;color:#526779;background:#f1f5f9;border-radius:6px;padding:5px 8px;font-size:.65rem;white-space:nowrap}
+.express-quick-wrap .nursing-count strong{font-weight:900;color:#17394f}
+.express-quick-wrap .nursing-search-label{display:block;font-size:.72rem;font-weight:800;color:#35536a;margin-bottom:7px}
+.express-quick-wrap .autocomplete-shell input{width:100%;min-height:44px;border:1px solid #a9c0d1;border-radius:7px;background:#fff;color:#17394f;font-size:.8rem;padding:11px 12px}
+.express-quick-wrap .autocomplete-shell input:focus{border-color:var(--nursing-accent);outline:2px solid #bae6fd;outline-offset:2px;box-shadow:none}
+.express-quick-wrap .express-register-btn{width:auto;min-height:40px;padding:9px 12px;margin-top:10px;background:#f7fafc;color:var(--nursing-accent);border:1px solid #ccdce7;font-size:.7rem;font-weight:800;text-transform:none}
+.express-quick-wrap .express-register-btn:hover{background:#eaf4f9;border-color:var(--nursing-accent)}
+.express-quick-wrap .selected-chips:empty{margin:14px 0 0;padding:12px 0 0;border-top:1px solid #e2e8f0;display:block}
+.express-quick-wrap .selected-chips:empty::before{content:'Nenhum profissional selecionado. Busque um nome acima para começar.';display:block;color:#64748b;font-size:.7rem;line-height:1.5}
+@media(max-width:700px){
+ .express-quick-wrap{padding:14px;margin:10px 8px}
+ .express-quick-wrap .express-quick-grid{grid-template-columns:1fr}
+ .express-quick-wrap .express-quick-card,.express-quick-wrap .express-quick-card:nth-child(2){padding:14px}
+ .express-quick-wrap .express-register-btn{width:100%}
+}
