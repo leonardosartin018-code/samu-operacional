@@ -1,4 +1,4 @@
-const CACHE_NAME = 'samu-shell-20261122-3';
+const CACHE_NAME = 'samu-shell-20261122-4';
 const SHELL = [
   './index.html', './styles.css', './offline.css', './app.js',
   './offline-store.js', './offline-query.js', './offline-schema.js',
@@ -15,8 +15,9 @@ self.addEventListener('install', event => {
   event.waitUntil((async () => {
     const cache = await caches.open(CACHE_NAME);
     await cache.addAll(SHELL.map(path => new Request(path, {cache: 'reload'})));
-    // Atualizações aguardam o fechamento das abas que usam a versão anterior.
-    if (!self.registration.active) await self.skipWaiting();
+    // O shell completo já está em cache. Ativar não recarrega as telas abertas
+    // nem altera o IndexedDB com os dados e ações pendentes do operador.
+    await self.skipWaiting();
   })());
 });
 self.addEventListener('activate', event => {
