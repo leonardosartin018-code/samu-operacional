@@ -4917,14 +4917,32 @@ function validateFixedAssignment(role,v){
   if(role==='moto'&&!type.includes('MOTO'))return 'Piloto de motolância deve ficar na Motolância.';
   return '';
 }
+function populateAssignRoles(p,selectedRole=null){
+  const select=$('#assignRole');
+  const choices=vehicleRoleChoices(p);
+  // Não perde o papel já registrado numa escala antiga; apenas sinaliza
+  // quando ele ainda não está entre as funções conferidas do cadastro.
+  const legacy=selectedRole&&!choices.includes(selectedRole)?[selectedRole]:[];
+  const roles=[...choices,...legacy];
+  select.innerHTML=roles.map(role=>
+    '<option value="'+esc(role)+'">'+esc(roleLabel(role))+
+    (legacy.includes(role)?' • ESCALA ATUAL (CONFERIR)':'')+'</option>').join('');
+  const primary=professionalRoleKey(p);
+  select.value=selectedRole|| (roles.includes(primary)?primary:roles[0]||'');
+  $('#assignRoleWrap').classList.toggle('hidden',roles.length<2);
+  select.disabled=roles.length<2;
+  configureAssignModes(select.value||primary);
+  return roles.length>0;
+}
 function openAssignModal(proId){
   if(!isOperator())return;
   selectedAssignTeamRow=null;
   selectedAssignProfessional=professionals.find(p=>p.id===proId);if(!selectedAssignProfessional)return;
-  const role=professionalRoleKey(selectedAssignProfessional);
-  configureAssignModes(role);
+  if(!populateAssignRoles(selectedAssignProfessional)){
+    return alert('Este profissional não possui função operacional habilitada para viatura. Confira o cadastro ou use a escala interna.');
+  }
   $('#assignTitle').textContent='Escalar '+displayName(selectedAssignProfessional);
-  $('#assignPersonInfo').textContent=selectedAssignProfessional.nome_completo+' • '+selectedAssignProfessional.funcao_sistema;
+  $('#assignPersonInfo').textContent=selectedAssignProfessional.nome_completo+' • Funções: '+professionalFunctions(selectedAssignProfessional).join(' / ');
   populateVehicleSelect($('#assignVehicle'),null,false);
   $('#assignMode').value='FIXO';
   $('#assignVehicleWrap').classList.remove('hidden');
@@ -4941,7 +4959,7 @@ function openEditTeamMember(teamId){
   selectedAssignTeamRow=m;
   selectedAssignProfessional=p;
   const role=assignmentRoleForMember(m,p);
-  configureAssignModes(role);
+  populateAssignRoles(p,role);
   populateVehicleSelect($('#assignVehicle'),m.viatura_id||null,false);
 
   const mode=assignmentModeForMember(m);
@@ -4988,7 +5006,10 @@ async function confirmAssignLocal(){
   const p=selectedAssignProfessional;if(!p||!currentPlantao)return;
   const mode=$('#assignMode').value;
   const editRow=selectedAssignTeamRow;
-  const role=assignmentRoleForMember(editRow,p);
+  const role=$('#assignRole').value||assignmentRoleForMember(editRow,p);
+  if(!vehicleRoleChoices(p).includes(role)&&!(editRow&&role===assignmentRoleForMember(editRow,p))){
+    return alert('A função selecionada não está habilitada neste cadastro. Abra Conferir / corrigir nomes das equipes.');
+  }
   try{
     if(editRow){
       const now=new Date().toISOString();
@@ -6678,6 +6699,7 @@ $('#applyExpressPreviewBtn').onclick=()=>{$('#expressStatus').className='express
 $('#confirmExpressBtn').onclick=confirmExpress;
 $('#confirmExpressTopBtn').onclick=confirmExpress;
 $('#teamSearch').oninput=e=>renderTeamSearch(e.target.value);$('#clearTeamSearchBtn').onclick=()=>{$('#teamSearch').value='';$('#teamSearchResults').classList.remove('show');$('#teamSearchResults').innerHTML=''};
+$('#assignRole').onchange=()=>{configureAssignModes($('#assignRole').value);$('#assignMode').value='FIXO';$('#assignVehicleWrap').classList.remove('hidden');};
 $('#assignMode').onchange=()=>$('#assignVehicleWrap').classList.toggle('hidden',$('#assignMode').value!=='FIXO');
 $('#confirmAssignBtn').onclick=confirmAssign;$('#saveIndividualOccBtn').onclick=saveIndividualOccurrence;
 $('#regRole').onchange=renderRegistry;$('#registerProfessionalBtn').onclick=registerProfessional;
