@@ -2564,22 +2564,22 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 
 /* 2. Papel em branco; profissional de fato escalado em amarelo sobre
    campo escuro. VAGA permanece discreta, sem realce amarelo. */
-:is(#vehicles,#regionalGrid) .vehicle-card .crew-grid{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-grid{
   gap:7px;
   margin:9px 0;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-slot{
   min-width:0;
   padding:8px 10px;
   border-radius:8px;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.has-professional{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-slot.has-professional{
   background:var(--samu-person-dark);
   border:1px solid rgba(191,219,254,.32);
   box-shadow:inset 3px 0 0 rgba(253,224,71,.73);
   color:#fff;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.has-professional .crew-role{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-slot.has-professional .crew-role{
   color:#f8fafc;
   opacity:1;
   font-size:.64rem;
@@ -2587,7 +2587,7 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
   line-height:1.3;
   letter-spacing:.045em;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.has-professional .crew-name.has-person{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-slot.has-professional .crew-name.has-person{
   color:var(--samu-person-yellow);
   font-size:.94rem;
   font-weight:1000;
@@ -2603,41 +2603,41 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 #regionalGrid .vehicle-card .crew-name.has-person{
   font-size:.9rem;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card.status-returning .crew-slot.has-professional{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card.status-returning .crew-slot.has-professional{
   background:#243342;
   border-color:#64748b;
   color:#fff;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.is-vacant{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-slot.is-vacant{
   background:rgba(15,23,42,.12);
   border:1px dashed rgba(226,232,240,.40);
   box-shadow:none;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.is-vacant .crew-name.is-empty{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-slot.is-vacant .crew-name.is-empty{
   color:#e2e8f0;
   font-weight:650;
   opacity:.8;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card.status-returning .crew-slot.is-vacant .crew-role,
-:is(#vehicles,#regionalGrid) .vehicle-card.status-returning .crew-slot.is-vacant .crew-name{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card.status-returning .crew-slot.is-vacant .crew-role,
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card.status-returning .crew-slot.is-vacant .crew-name{
   color:#50320a;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.rotation-preview.has-professional{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-slot.rotation-preview.has-professional{
   background:#6b3d10;
   border-color:#fbbf24;
   box-shadow:inset 3px 0 0 #fbbf24;
 }
-:is(#vehicles,#regionalGrid) .crew-slot.rotation-preview.has-professional .crew-preview-note{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .crew-slot.rotation-preview.has-professional .crew-preview-note{
   color:#fff7d6;
 }
 
 /* 3. Botões de status identificáveis mesmo sem abrir outro menu.
    O estado operacional continua sendo determinado pelo card e pelo banco. */
-:is(#vehicles,#regionalGrid) .vehicle-card .status-strip{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .status-strip{
   gap:5px;
   margin-top:8px;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .status-strip button{
   min-height:30px;
   font-size:.6rem;
   line-height:1.2;
@@ -2646,70 +2646,70 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
   white-space:normal;
   transition:filter .15s ease, box-shadow .15s ease;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button[data-status="base"]{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .status-strip button[data-status="base"]{
   background:#dcfce7;
   color:#14532d;
   border-color:#86efac;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button[data-status="asepsis"]{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .status-strip button[data-status="asepsis"]{
   background:#dbeafe;
   color:#1e40af;
   border-color:#93c5fd;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button[data-status="mechanical"]{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .status-strip button[data-status="mechanical"]{
   background:#fee2e2;
   color:#991b1b;
   border-color:#fca5a5;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button[data-status="noCrew"]{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .status-strip button[data-status="noCrew"]{
   background:#e2e8f0;
   color:#334155;
   border-color:#94a3b8;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button[data-status="noStretcher"]{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .status-strip button[data-status="noStretcher"]{
   background:#ede9fe;
   color:#5b21b6;
   border-color:#c4b5fd;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button.active{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .status-strip button.active{
   box-shadow:inset 0 0 0 2px currentColor;
   font-weight:1000;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .status-strip button:hover:not(:disabled){
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .status-strip button:hover:not(:disabled){
   filter:brightness(.94);
 }
-:is(#vehicles,#regionalGrid) .vehicle-card :is(button,.status-strip button):focus-visible{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card :is(button,.status-strip button):focus-visible{
   outline:3px solid #facc15;
   outline-offset:2px;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .dispatch-btn{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .dispatch-btn{
   background:#16a34a;
   border:1px solid #86efac;
   color:#fff;
   font-weight:1000;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .edit-team-btn{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .edit-team-btn{
   background:#dbeafe;
   border-color:#93c5fd;
   color:#1d4ed8;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .qta-btn{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .qta-btn{
   background:#ede9fe;
   border-color:#a78bfa;
   color:#5b21b6;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .return-btn{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .return-btn{
   background:#fde68a;
   border-color:#f59e0b;
   color:#78350f;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .arrive-btn{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .arrive-btn{
   background:#fef3c7;
   border-color:#eab308;
   color:#713f12;
 }
-:is(#vehicles,#regionalGrid) .vehicle-card .qta-btn,
-:is(#vehicles,#regionalGrid) .vehicle-card .return-btn{
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .qta-btn,
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .return-btn{
   animation:none;
 }
 
@@ -2793,8 +2793,8 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
 @media(max-width:720px){
   #regionalGrid .regional-card{padding:9px}
   #regionalGrid .regional-card-head{padding:8px}
-  :is(#vehicles,#regionalGrid) .vehicle-card .crew-slot{padding:7px 8px}
-  :is(#vehicles,#regionalGrid) .vehicle-card .crew-slot.has-professional .crew-name.has-person{font-size:.87rem}
+  :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-slot{padding:7px 8px}
+  :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-slot.has-professional .crew-name.has-person{font-size:.87rem}
 }
 
 /* Equipe rápida — pesquisa legível e cadastro sempre acessível.
@@ -3325,3 +3325,26 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
  .express-quick-wrap .express-quick-card,.express-quick-wrap .express-quick-card:nth-child(2){padding:14px}
  .express-quick-wrap .express-register-btn{width:100%}
 }
+
+/* Cabeçalhos da escala de enfermagem com leitura imediata. */
+.express-quick-wrap .nursing-card-head{margin:-4px -4px 16px;padding:13px 12px;border:1px solid #cce1ed;border-radius:9px;background:#edf6fc;gap:12px}
+.express-quick-wrap .express-quick-card:nth-child(2) .nursing-card-head{background:#edf8f5;border-color:#c5e4dc}
+.express-quick-wrap .nursing-card-head h3{font-size:1rem;font-weight:900;line-height:1.4}
+.express-quick-wrap .nursing-card-head p{font-size:.74rem;color:#496779}
+.express-quick-wrap .nursing-unit{min-height:46px;min-width:48px;background:#d6ebf7;font-size:.92rem}
+.express-quick-wrap .express-quick-card:nth-child(2) .nursing-unit{background:#d3eee5}
+.express-quick-wrap .nursing-count{background:#fff}
+/* Mesma estrutura de viatura do painel operacional na escala regional. */
+#regionalQuickScaleGrid .regional-quick-vehicles{grid-template-columns:repeat(auto-fit,minmax(min(100%,310px),1fr));align-items:start;gap:12px}
+#regionalQuickScaleGrid .vehicle-card{padding:13px;min-width:0}
+#regionalQuickScaleGrid .vehicle-top{flex-wrap:wrap;align-items:flex-start;gap:8px}
+#regionalQuickScaleGrid .vehicle-top>div{flex:1 1 150px;min-width:0}
+#regionalQuickScaleGrid .vehicle-name{font-size:1.12rem}
+#regionalQuickScaleGrid .vehicle-subhint{font-size:.6rem;line-height:1.5}
+#regionalQuickScaleGrid .regional-roster-count{font-size:.7rem;line-height:1.5;color:inherit;opacity:.9;margin:10px 0}
+#regionalQuickScaleGrid .regional-roster-edit{width:100%;min-height:40px;background:#f0f9ff;color:#075985;border:1px solid #bae6fd;border-radius:7px;padding:10px;font-size:.73rem;font-weight:900;cursor:pointer}
+#regionalQuickScaleGrid .regional-roster-edit:hover{background:#dbeefe}
+#regionalQuickScaleGrid .regional-roster-edit:focus-visible{outline:3px solid #facc15;outline-offset:2px}
+#regionalQuickScaleGrid .roster-unassigned{display:table;margin:10px 0 0;padding:4px 8px;background:#fff1cf;color:#713f12;border:1px solid #b45309;border-radius:99px;font-size:.65rem;font-weight:900}
+@media(prefers-reduced-motion:no-preference){#regionalQuickScaleGrid .roster-unassigned{animation:unassigned-badge-blink 1.6s step-end infinite}}
+@media(max-width:700px){.express-quick-wrap .nursing-count{margin-left:0}.express-quick-wrap .nursing-card-head h3{font-size:.94rem}}

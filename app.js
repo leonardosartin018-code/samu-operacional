@@ -1150,7 +1150,8 @@ function statusStripHtml(v){
     btn('noStretcher','S/MACA')+
   '</div>';
 }
-function vehicleCardHtml(v){
+function vehicleCardHtml(v,options={}){
+  const rosterOnly=options.rosterOnly===true;
   const st=statusInfo(v),o=activeOccurrence(v);
   let primary='';
   if(st.key==='base') primary='<button class="dispatch-btn" data-act="dispatch" data-v="'+v.id+'">ACIONAR VIATURA</button>';
@@ -1162,15 +1163,17 @@ function vehicleCardHtml(v){
         ?'<button type="button" class="edit-team-btn" data-act="undo-return" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">CORRIGIR RETORNO</button>':'')+
       '</div>';
   }
-  return '<article class="vehicle-card '+st.cls+'" data-team-card data-v="'+v.id+'">'+
+  return '<article class="vehicle-card '+st.cls+(rosterOnly?' roster-only-card':'')+'" data-team-card data-v="'+v.id+'">'+
     (st.key==='occurrence'
       ? '<div class="vehicle-giroflex" aria-hidden="true"><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span></div>'
       : '')+
-    '<div class="vehicle-top"><div><div class="vehicle-name">'+esc(v.nome||v.codigo)+'</div><div class="vehicle-subhint">'+(st.key==='occurrence'?'EQUIPE EMPENHADA • CLIQUE PARA EDITAR':'CLIQUE PARA EMPENHAR / EDITAR EQUIPE')+'</div></div><span class="status-badge">'+st.label+'</span></div>'+
+    '<div class="vehicle-top"><div><div class="vehicle-name">'+esc(v.nome||v.codigo)+'</div><div class="vehicle-subhint">'+(rosterOnly?'CLIQUE PARA ESCALAR / EDITAR EQUIPE':st.key==='occurrence'?'EQUIPE EMPENHADA • CLIQUE PARA EDITAR':'CLIQUE PARA EMPENHAR / EDITAR EQUIPE')+'</div></div><span class="status-badge">'+st.label+'</span></div>'+
+    (rosterOnly&&!crewRowsForCard(v).length?'<div class="roster-unassigned">NÃO ESCALADO</div>':'')+
     crewGridHtml(v)+
-    occurrenceInfoHtml(v,o)+
-    (primary?'<div style="margin-top:6px">'+primary+'</div>':'')+
-    statusStripHtml(v)+
+    (rosterOnly
+      ?'<div class="regional-roster-count">'+occurrences.filter(row=>row.viatura_id===v.id&&norm(row.status)==='FINALIZADA').length+' ocorrência(s) finalizada(s) no plantão</div>'+
+        (isOperator()?'<button type="button" class="regional-roster-edit" data-regional-team="'+esc(v.id)+'">ESCALAR / EDITAR EQUIPE</button>':'')
+      :occurrenceInfoHtml(v,o)+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+statusStripHtml(v))+
   '</article>';
 }
 function operationalGroup(title,subtitle,cls,list,extra=''){
@@ -2486,23 +2489,13 @@ function renderRegionalQuickScale(){
   });
   root.innerHTML=[...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR')).map(([base,list])=>
     '<div class="regional-quick-base"><h3>'+esc(base)+'</h3><div class="regional-quick-vehicles">'+
-    list.map(v=>{
-      const names=vehicleMembers(v).map(m=>'<div class="regional-quick-person"><small>'+esc(m.funcao||'Equipe')+'</small>'+
-        '<b>'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</b></div>').join('');
-      const st=statusInfo(v);
-      const finish=occurrences.filter(o=>o.viatura_id===v.id&&norm(o.status)==='FINALIZADA').length;
-      return '<article class="regional-quick-vehicle">'+
-        '<header><b>'+esc(v.nome||v.codigo)+'</b><span>'+esc(st.label)+'</span></header>'+
-        '<div class="regional-quick-count">'+finish+' ocorrência(s) finalizada(s) no plantão</div>'+
-        '<div class="regional-quick-crew">'+(names||'<span class="regional-quick-empty">Equipe não vinculada à viatura.</span>')+'</div>'+
-        '<div class="regional-quick-actions">'+
-          (isOperator()?'<button type="button" class="regional-edit-team" data-regional-team="'+v.id+'">ESCALAR / EDITAR EQUIPE</button>':'')+
-          (isOperator()&&st.key==='base'?'<button type="button" class="regional-dispatch" data-regional-dispatch="'+v.id+'">ACIONAR VIATURA</button>':'')+
-        '</div></article>';
-    }).join('')+'</div></div>'
+    list.map(v=>vehicleCardHtml(v,{rosterOnly:true})).join('')+'</div></div>'
   ).join('')||'<div class="priority-empty">Nenhuma viatura de base descentralizada cadastrada.</div>';
   root.querySelectorAll('[data-regional-team]').forEach(b=>b.onclick=()=>openTeamModal(b.dataset.regionalTeam));
-  root.querySelectorAll('[data-regional-dispatch]').forEach(b=>b.onclick=()=>openOccurrenceModal(b.dataset.regionalDispatch));
+  root.querySelectorAll('[data-team-card]').forEach(card=>card.onclick=event=>{
+    if(event.target.closest('button,select,input,textarea,a'))return;
+    if(isOperator())openTeamModal(card.dataset.v);
+  });
 }
 
 function renderHistory(){
