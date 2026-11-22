@@ -246,8 +246,12 @@ function firstTwoNames(name){
   return parts.slice(0,2).join(' ') || '—';
 }
 function displayName(p){
-  if(!p) return '—';
-  return (p.nome_exibicao || professionals.find(x=>x.id===p.id)?.nome_exibicao || p.nome_de_guerra || firstTwoNames(p.nome_completo)).toUpperCase();
+  if(!p)return '—';
+  // Se a escala carregou uma versão antiga do profissional, usar o cadastro
+  // atualizado da sessão antes de usar qualquer snapshot ou apelido legado.
+  const live=p.id?professionals.find(x=>x.id===p.id):null;
+  return (live?.nome_exibicao||live?.nome_de_guerra||
+    p.nome_exibicao||p.nome_de_guerra||firstTwoNames(live?.nome_completo||p.nome_completo)).toUpperCase();
 }
 function professionalRoleKey(p){
   const f=norm(p?.funcao_sistema);
@@ -2802,7 +2806,7 @@ function linkedRotationDriver(reference){
 function driverScaleMetadata(reference,type){
   return {
     titular_profissional_id:reference.profissional_id,
-    nome_titular_escala:reference.nome_referencia,
+    nome_titular_escala:fixedReferenceName(reference),
     tipo_alteracao_escala:type,
     ala_escala:reference.ala,
     turno_escala:reference.turno
@@ -4146,7 +4150,7 @@ function expressRowState(r){
 }
 function expressCard(r){
   const st=expressRowState(r),v=st.v,current=st.current;
-  const titular=r.profissionais?displayName(r.profissionais):r.nome_referencia;
+  const titular=fixedReferenceName(r);
   const currentName=current?displayName(current.profissionais):'—';
   const isFixed=st.state==='fixed';
   return '<article class="express-driver-card '+st.state+'">'+
@@ -4258,7 +4262,7 @@ function expressSwap(rowId,editing=false){
   $('#expressPermutaPersonLabel').textContent=editing?'Condutor em serviço':'Quem está substituindo';
   $('#saveExpressPermutaBtn').textContent=editing?'SALVAR ALTERAÇÕES':'SALVAR PERMUTA';
   $('#removeExpressDriverBtn').classList.toggle('hidden',!current);
-  $('#expressPermutaTitular').innerHTML='<b>Titular:</b> '+esc(r.nome_referencia||displayName(r.profissionais)||'—');
+  $('#expressPermutaTitular').innerHTML='<b>Titular:</b> '+esc(fixedReferenceName(r));
   $('#expressPermutaSearch').value=pro?professionalLabel(pro,'driver'):(current?.nome_snapshot||'');
   $('#expressPermutaProId').value=current?.profissional_id||'';
   setExpressPermutaMode(isRotationMember(current)?'REVEZAMENTO':'FIXO');
@@ -5272,7 +5276,7 @@ async function ensureOperationalScaleFromFixed(){
       const tipo=activeAtVehicle.profissional_id===fixed.profissional_id?'FIXO':'PERMUTA';
       const {error}=await supabase.from('equipe_plantao').update({
         titular_profissional_id:fixed.profissional_id,
-        nome_titular_escala:fixed.nome_referencia,
+        nome_titular_escala:fixedReferenceName(fixed),
         tipo_alteracao_escala:tipo,
         ala_escala:ala,turno_escala:turno
       }).eq('id',activeAtVehicle.id);
@@ -5284,7 +5288,7 @@ async function ensureOperationalScaleFromFixed(){
     if(activeTitular){
       const {error}=await supabase.from('equipe_plantao').update({
         titular_profissional_id:fixed.profissional_id,
-        nome_titular_escala:fixed.nome_referencia,
+        nome_titular_escala:fixedReferenceName(fixed),
         ala_escala:ala,turno_escala:turno
       }).eq('id',activeTitular.id);
       if(error)throw error;
@@ -5305,7 +5309,7 @@ async function ensureOperationalScaleFromFixed(){
       ocorrencias_validas:0,
       origem_escala:'AUTO_ESCALA_FIXA',
       titular_profissional_id:fixed.profissional_id,
-      nome_titular_escala:fixed.nome_referencia,
+      nome_titular_escala:fixedReferenceName(fixed),
       tipo_alteracao_escala:'FIXO',
       ala_escala:ala,
       turno_escala:turno
@@ -5344,8 +5348,17 @@ function internalStatusValue(row,fixed){
 function findProfessionalByReference(name){
   const n=norm(name);
   if(!n)return null;
-  const matches=professionals.filter(p=>[p.nome_completo,p.nome_de_guerra,p.nome_exibicao,...(p.nomes_anteriores||[])].some(alias=>alias&&norm(alias)===n));
+  const matches=professionals.filter(p=>[
+    p.nome_completo,p.nome_de_guerra,p.nome_exibicao,...(p.nomes_anteriores||[])
+  ].some(alias=>alias&&norm(alias)===n));
+  // Apelidos repetidos são ambíguos: nunca escalar o profissional errado.
   return matches.length===1?matches[0]:null;
+}
+function fixedReferenceName(reference){
+  if(!reference)return '—';
+  const person=professionals.find(p=>p.id===reference.profissional_id)||
+    findProfessionalByReference(reference.nome_referencia);
+  return person?displayName(person):(reference.nome_referencia||'—');
 }
 async function ensurePlantaoForBook(){
   if(currentPlantao&&norm(currentPlantao.status)==='ENCERRADO'){
@@ -5425,22 +5438,23 @@ function fixedInternalRow(code){return fixedInternalRows.find(x=>x.codigo_posica
 function professionalNameById(id){const p=professionals.find(x=>x.id===id);return p?displayName(p):''}
 function internalTitularName(code){
   const fixed=fixedInternalRow(code);
-  return fixed?.nome_referencia||professionalNameById(fixed?.profissional_id)||'';
+  return fixed?fixedReferenceName(fixed):'';
 }
 function internalDisplayNameByCode(code){
   const row=internalRow(code),fixed=fixedInternalRow(code),status=internalStatusValue(row,fixed);
   if(status==='AUSENTE')return 'AUSENTE';
   if(status==='VAGO')return '------';
   if(status==='PERMUTA'){
-    return row?.nome_snapshot||professionalNameById(row?.profissional_id)||'------';
+    return professionalNameById(row?.profissional_id)||row?.nome_snapshot||'------';
   }
-  return row?.nome_snapshot||professionalNameById(row?.profissional_id)||fixed?.nome_referencia||professionalNameById(fixed?.profissional_id)||'------';
+  return professionalNameById(row?.profissional_id)||row?.nome_snapshot||
+    (fixed?fixedReferenceName(fixed):'------');
 }
 function internalDisplayName(row){
   if(!row)return '------';
   if(norm(row.tipo_alteracao)==='AUSENTE')return 'AUSENTE';
   if(norm(row.tipo_alteracao)==='VAGO')return '------';
-  return row.nome_snapshot||professionalNameById(row.profissional_id)||'------';
+  return professionalNameById(row.profissional_id)||row.nome_snapshot||'------';
 }
 function bookDriverName(code,index=0){
   if(code==='MOTOLANCIA'){
@@ -5472,9 +5486,9 @@ const INTERNAL_BOOK_STATUS={
 };
 function internalSlotHtml(slot,bookLayout=false){
   const row=internalRow(slot.code),fixed=fixedInternalRow(slot.code);
-  const titular=fixed?.nome_referencia||professionalNameById(fixed?.profissional_id)||'SEM TITULAR PREVISTO';
+  const titular=fixed?fixedReferenceName(fixed):'SEM TITULAR PREVISTO';
   const status=internalStatusValue(row,fixed);
-  const substitute=status==='PERMUTA'?(row?.nome_snapshot||professionalNameById(row?.profissional_id)||''):'';
+  const substitute=status==='PERMUTA'?(professionalNameById(row?.profissional_id)||row?.nome_snapshot||''):'';
   const statusClass=status.toLowerCase();
   const badge=INTERNAL_BOOK_STATUS[status];
   const onDuty=['ESCALADO','PERMUTA'].includes(status)
