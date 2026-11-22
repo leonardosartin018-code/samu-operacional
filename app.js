@@ -2786,8 +2786,12 @@ async function saveRegionalWhatsappIntoTeam(){
     if(item.person&&!regionalCanFillRole(item.person,item.key))
       return alert('A função de '+displayName(item.person)+' não corresponde à informada na mensagem.');
     if(item.person){
-      const assigned=activeTeamRows().find(m=>m.profissional_id===item.person.id&&m.viatura_id!==v.id);
-      if(assigned)return alert(displayName(item.person)+' já está escalado em outra viatura. Confirme a movimentação manualmente.');
+      const assigned=activeTeamRows().find(m=>m.profissional_id===item.person.id);
+      if(assigned&&assigned.viatura_id!==v.id)
+        return alert(displayName(item.person)+' já está escalado em outra viatura. Confirme a movimentação manualmente.');
+      const currentRole=currentQuickMember(v.id,item.slot);
+      if(assigned&&assigned.viatura_id===v.id&&assigned.id!==currentRole?.id)
+        return alert(displayName(item.person)+' já está em outra função nesta viatura. Confira a distribuição de funções.');
     }
   }
   const plantaoId=currentPlantao.id;
