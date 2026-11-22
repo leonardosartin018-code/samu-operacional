@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261122-offline-2">
-  <link rel="stylesheet" href="./offline.css?v=20261122-offline-2">
+  <link rel="stylesheet" href="./styles.css?v=20261122-offline-3">
+  <link rel="stylesheet" href="./offline.css?v=20261122-offline-3">
 </head>
 <body>
 
@@ -665,9 +665,10 @@
     <div class="team-modal-note"><b>Não é obrigatório completar a guarnição.</b> Salve somente quem estiver disponível e complete depois. Digite 3 letras para pesquisar.</div>
     <div class="quick-team-grid">
       <div class="quick-team-field" data-role="driver">
+        <span class="quick-team-status is-vacant" data-quick-status="driver">NÃO ESCALADO</span>
         <label>CONDUTOR</label>
         <div id="qtDriverReference" class="quick-scale-placement hidden">
-          <p>Titular previsto: <strong id="qtDriverPredicted"></strong></p>
+          <p>Titular previsto: <button id="qtDriverPredicted" type="button" class="quick-predicted-person" aria-pressed="false" title="Clique para selecionar o titular"></button></p>
           <button id="qtDriverPermuta" type="button" class="btn secondary" aria-pressed="false">PERMUTA</button>
         </div>
         <input id="qtDriver" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do condutor">
@@ -686,6 +687,7 @@
         <div class="quick-current"><span id="qtDriverCurrent"></span><button id="qtDriverRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
       <div class="quick-team-field" data-role="tech">
+        <span class="quick-team-status is-vacant" data-quick-status="tech">NÃO ESCALADO</span>
         <label>TÉCNICO DE ENFERMAGEM</label>
         <input id="qtTech" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do técnico ou enfermeiro">
         <input id="qtTechId" type="hidden">
@@ -703,6 +705,7 @@
         <div class="quick-current"><span id="qtTechCurrent"></span><button id="qtTechRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
       <div class="quick-team-field" data-role="nurse">
+        <span class="quick-team-status is-vacant" data-quick-status="nurse">NÃO ESCALADO</span>
         <label>ENFERMEIRO</label>
         <input id="qtNurse" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do enfermeiro">
         <input id="qtNurseId" type="hidden">
@@ -720,6 +723,7 @@
         <div class="quick-current"><span id="qtNurseCurrent"></span><button id="qtNurseRemove" class="remove-mini" type="button">REMOVER</button></div>
       </div>
       <div class="quick-team-field" data-role="doctor">
+        <span class="quick-team-status is-vacant" data-quick-status="doctor">NÃO ESCALADO</span>
         <label>MÉDICO</label>
         <input id="qtDoctor" class="quick-team-input" autocomplete="off" placeholder="Digite o nome do médico">
         <input id="qtDoctorId" type="hidden">
@@ -946,6 +950,6 @@
 <script src="./vendor/jspdf-2.5.2.js"></script>
 <script src="./vendor/jspdf-autotable-3.8.4.js"></script>
 <script src="./vendor/html2canvas-1.4.1.js"></script>
-<script type="module" src="./app.js?v=20261122-offline-2"></script>
+<script type="module" src="./app.js?v=20261122-offline-3"></script>
 </body>
 </html>

@@ -2686,6 +2686,7 @@ function configureQuickTeamFields(v){
       if(hint)hint.textContent=select.value==='REVEZAMENTO'
         ? 'Compartilhado: entra na fila de '+mode.toUpperCase()+', sem ficar fixo nesta viatura.'
         : 'Fixo: profissional vinculado a esta viatura.';
+      updateQuickSelectionState(key);
     };
   }
   Object.entries(fields).forEach(([key,el])=>{
@@ -2735,6 +2736,7 @@ function showAutocomplete(box,list,key,input,hidden){
     const p=professionals.find(x=>x.id===b.dataset.prof);
     input.value=professionalLabel(p,key);
     hidden.value=p.id;
+    hidden.dispatchEvent(new Event('change',{bubbles:true}));
     box.classList.remove('show');
   });
 }
@@ -2742,6 +2744,7 @@ function quickAutocomplete(key){
   const cfg=quickCfg()[key],input=$(cfg.input),hidden=$(cfg.hidden),box=$(cfg.results),q=norm(input.value);
   const role=effectiveQuickRole(key);
   hidden.value='';
+  updateQuickSelectionState(key);
   if(q.length<3){box.classList.remove('show');box.innerHTML='';return}
   const list=professionals.filter(p=>allowedForField(p,role)&&teamSearchText(p).includes(q)).slice(0,15);
   showAutocomplete(box,list,role,input,hidden);
@@ -2759,6 +2762,7 @@ function bindQuickInputs(){
     if(!input.dataset.bound){
       input.dataset.bound='1';
       input.addEventListener('input',()=>quickAutocomplete(key));
+      $(cfg.hidden).addEventListener('change',()=>updateQuickSelectionState(key));
       input.addEventListener('keydown',e=>{if(e.key==='Escape')$(cfg.results).classList.remove('show')});
     }
     remove.onclick=()=>{
@@ -2767,9 +2771,28 @@ function bindQuickInputs(){
       $(cfg.current).textContent='Será removido ao salvar.';
       $(cfg.results).classList.remove('show');
       remove.classList.remove('show');
+      updateQuickSelectionState(key);
     };
   });
 }
+const quickTeamInitial=new Map();
+
+function updateQuickSelectionState(key){
+  const initial=quickTeamInitial.get(key);
+  if(!initial)return;
+  const cfg=quickCfg()[key],id=$(cfg.hidden).value;
+  const mode=$('#'+cfg.hidden.slice(1).replace(/Id$/,'Mode'))?.value||'FIXO';
+  const badge=$('#teamModal [data-quick-status="'+key+'"]');
+  const removing=id==='__REMOVE__';
+  const changed=!!id&&(id!==initial.id||mode!==initial.mode);
+  const assigned=!!initial.id&&!removing&&!changed;
+  badge.className='quick-team-status '+(removing?'is-pending':changed?'is-pending':assigned?'is-assigned':'is-vacant');
+  badge.textContent=removing?'SERÁ REMOVIDO':changed?'A CONFIRMAR':assigned?'JÁ ESCALADO':'NÃO ESCALADO';
+  if(key==='driver'&&quickDriverReference){
+    $('#qtDriverPredicted').setAttribute('aria-pressed',String(id===quickDriverReference.profissional_id));
+  }
+}
+
 let quickDriverReference=null;
 let quickDriverOriginal=null;
 
@@ -2813,6 +2836,7 @@ async function openTeamModal(vId){
   if(currentPlantao?.id!==plantao?.id||!canEditOpenShift())return;
   selectedTeamVehicle=vId;
   quickDriverReference=reference;
+  quickTeamInitial.clear();
   const permuta=$('#qtDriverPermuta');
   const driverInput=$('#qtDriver');
   const driverId=$('#qtDriverId');
@@ -2825,9 +2849,10 @@ async function openTeamModal(vId){
   configureQuickTeamFields(v);
   Object.entries(quickCfg()).forEach(([key,cfg])=>{
     const cur=key==='driver'?quickDriverOriginal:currentQuickMember(vId,key);
-    if(key==='driver'&&isRotationMember(cur)){
-      $('#qtDriverMode').value='REVEZAMENTO';
-      $('#qtDriverMode').onchange();
+    const placement=$('#'+cfg.hidden.slice(1).replace(/Id$/,'Mode'));
+    if(placement&&isRotationMember(cur)){
+      placement.value='REVEZAMENTO';
+      placement.onchange();
     }
     const pro=cur && (
       professionals.find(p=>p.id===cur.profissional_id) ||
@@ -2838,6 +2863,8 @@ async function openTeamModal(vId){
     // não é necessário escolher novamente condutor, técnico, enfermeiro ou médico.
     $(cfg.input).value=pro?professionalLabel(pro,effectiveQuickRole(key)):'';
     $(cfg.hidden).value=cur?.profissional_id||'';
+    quickTeamInitial.set(key,{id:cur?.profissional_id||'',mode:placement?.value||'FIXO'});
+    updateQuickSelectionState(key);
     $(cfg.results).innerHTML='';
     $(cfg.results).classList.remove('show');
     $(cfg.current).innerHTML=cur
@@ -2849,22 +2876,21 @@ async function openTeamModal(vId){
   });
   function setDriverPermuta(enabled){
     permuta.setAttribute('aria-pressed',String(enabled));
-    permuta.textContent=enabled?'USAR TITULAR PREVISTO':'PERMUTA';
-    driverInput.readOnly=!!reference&&!enabled;
-    if(reference)driverInput.placeholder=enabled?'Digite o nome de quem vai substituir o titular':'Digite o nome do condutor';
-    $('#teamModal [data-quick-register="driver"]').disabled=driverInput.readOnly;
+    permuta.textContent=enabled?'CANCELAR PERMUTA':'PERMUTA';
+    driverInput.readOnly=false;
+    if(reference)driverInput.placeholder=enabled?'Digite o nome de quem vai substituir o titular':'Digite ou selecione o condutor';
+    $('#teamModal [data-quick-register="driver"]').disabled=false;
   }
   const existingPermuta=!!reference&&quickDriverOriginal?.titular_profissional_id===reference.profissional_id&&
     quickDriverOriginal.profissional_id!==reference.profissional_id&&norm(quickDriverOriginal.tipo_alteracao_escala)==='PERMUTA';
   const useTitular=()=>{
     driverInput.value=titular?professionalLabel(titular,'driver'):reference.nome_referencia;
     driverId.value=reference.profissional_id;
+    setDriverPermuta(false);
+    updateQuickSelectionState('driver');
   };
   setDriverPermuta(existingPermuta);
-  if(reference&&!quickDriverOriginal){
-    useTitular();
-    $('#qtDriverCurrent').textContent='Titular previsto • será escalado ao salvar.';
-  }
+  $('#qtDriverPredicted').onclick=reference?useTitular:null;
   permuta.onclick=()=>{
     const enabled=permuta.getAttribute('aria-pressed')!=='true';
     setDriverPermuta(enabled);
@@ -2874,8 +2900,11 @@ async function openTeamModal(vId){
       driverId.value='';
       driverInput.focus();
     }else{
-      useTitular();
+      const original=professionals.find(p=>p.id===quickDriverOriginal?.profissional_id)||quickDriverOriginal?.profissionais;
+      driverInput.value=original?professionalLabel(original,'driver'):'';
+      driverId.value=quickDriverOriginal?.profissional_id||'';
     }
+    updateQuickSelectionState('driver');
   };
   openModal('teamModal');
   if(!driverInput.readOnly)setTimeout(()=>driverInput.focus(),30);
@@ -2957,28 +2986,36 @@ async function saveQuickTeamLocal(){
             ['doctor','#qtDoctorId','Médico','doctor']
           ];
   const reference=quickDriverReference;
-  const isPermuta=!!reference&&$('#qtDriverPermuta').getAttribute('aria-pressed')==='true';
+  const selectedDriver=$('#qtDriverId').value;
+  const isPermuta=!!reference&&!!selectedDriver&&selectedDriver!=='__REMOVE__'&&
+    selectedDriver!==reference.profissional_id&&
+    (selectedDriver!==quickDriverOriginal?.profissional_id||norm(quickDriverOriginal?.tipo_alteracao_escala)==='PERMUTA');
   if(reference&&(reference.plantaoId!==currentPlantao.id||reference.vehicleId!==selectedTeamVehicle||
     reference.ala!==activeScaleReference().ala||reference.turno!==activeScaleReference().turno)){
     return alert('A escala mudou. Reabra a Equipe rápida.');
   }
-  const selectedDriver=$('#qtDriverId').value;
-  if(isPermuta&&selectedDriver!=='__REMOVE__'&&(!selectedDriver||selectedDriver===reference.profissional_id)){
-    return alert('Selecione o condutor que vai substituir o titular.');
-  }
   $('#saveTeam').disabled=true;$('#saveTeam').textContent='SALVANDO...';
   try{
     for(const [key,idSel,funcao,allowedKey] of rows){
-      const value=$(idSel).value;
+      let value=$(idSel).value;
+      const cfg=quickCfg()[key];
+      const typed=$(cfg.input).value.trim();
+      if(!value&&typed){
+        const matching=professionals.filter(p=>allowedForField(p,allowedKey)&&
+          [p.nome_completo,p.nome_de_guerra,professionalLabel(p,allowedKey),displayName(p)].some(name=>name&&norm(name)===norm(typed)));
+        if(matching.length!==1)throw new Error('Selecione o nome de '+roleLabel(allowedKey)+' na lista antes de salvar.');
+        value=matching[0].id;
+        $(idSel).value=value;
+      }
       const placement=$('#'+idSel.slice(1).replace(/Id$/,'Mode'));
       const wantsRotation=(mode==='usa'||mode==='usb')&&placement?.value==='REVEZAMENTO';
-      if(!value){
-        if(wantsRotation)throw new Error('Selecione um profissional para o revezamento de '+roleLabel(allowedKey)+'.');
-        continue;
-      }
+      if(!value)continue;
+      const initial=quickTeamInitial.get(key);
+      if(value===initial?.id&&(placement?.value||'FIXO')===initial.mode)continue;
       const cur=key==='driver'?quickDriverOriginal:currentQuickMember(selectedTeamVehicle,key);
       const driverMetadata=key==='driver'&&reference?driverScaleMetadata(reference,
-        isPermuta?'PERMUTA':value===reference.profissional_id?(wantsRotation?'REVEZAMENTO':'FIXO'):'TROCA_VIATURA'):null;
+        (isPermuta||(value!==reference.profissional_id&&value!==quickDriverOriginal?.profissional_id))?'PERMUTA':
+          value===reference.profissional_id?(wantsRotation?'REVEZAMENTO':'FIXO'):'TROCA_VIATURA'):null;
       if(value==='__REMOVE__'){
         if(cur)await deactivateTeamRow(cur,new Date().toISOString());
         continue;
@@ -5174,6 +5211,7 @@ async function saveQuickRegistrationLocal(){
     }else{
       pending.input.value=professionalLabel(data,pending.key);
       pending.hidden.value=data.id;
+      pending.hidden.dispatchEvent(new Event('change',{bubbles:true}));
       const results=quickCfg()[Object.keys(quickCfg()).find(key=>$(quickCfg()[key].input)===pending.input)]?.results;
       if(results){
         $(results).classList.remove('show');
