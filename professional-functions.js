@@ -36,8 +36,20 @@ export function normalizeProfessionalFunctions(values, primary){
   if(Array.isArray(values))values.forEach(add);
   return result;
 }
+// Bombeiros militares podem cobrir diferentes postos OPERACIONAIS sem
+// classificação manual no cadastro de nomes. A origem do registro identifica
+// esse grupo; nunca presume habilitação de Médico, Enfermeiro ou Técnico.
+export const BOMBEIRO_OPERATIONAL_FUNCTIONS=[
+  'Condutor','Sanitária','TARM','Rádio-operador','Lavador','Motolância'
+];
+export function isBombeiroProfessional(p){
+  return folded(p?.categoria_origem)==='BOMBEIRO';
+}
 export function professionalFunctions(p){
-  return normalizeProfessionalFunctions(p?.funcoes_habilitadas,p?.funcao_sistema);
+  const registered=normalizeProfessionalFunctions(p?.funcoes_habilitadas,p?.funcao_sistema);
+  return isBombeiroProfessional(p)
+    ?normalizeProfessionalFunctions([...registered,...BOMBEIRO_OPERATIONAL_FUNCTIONS],p?.funcao_sistema)
+    :registered;
 }
 export function hasProfessionalFunction(p, role){
   return professionalFunctions(p).includes(canonicalProfessionalFunction(role));
