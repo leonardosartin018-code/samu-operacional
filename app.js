@@ -1,4 +1,5 @@
 import { openNamesReview } from './names-review.js';
+import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
 import { createSamuPdfArchive, downloadSamuFile } from './samu-report-download.js?v=20261115-90-pdf-equipes-relatorio';
@@ -258,8 +259,9 @@ function professionalRoleKey(p){
   return 'other';
 }
 function canDriveProfessional(p){
-  const f=norm(p?.funcao_sistema);
-  return ['CONDUTOR','MOTOL','TARM','RADIO','LAVADOR','SANITARIA','MOTORISTA'].some(x=>f.includes(x));
+  // A categoria Rádio/TARM/Lavador não atribui automaticamente habilidade
+  // de condução. Só a seleção explícita de Condutor habilita USB/USA.
+  return hasProfessionalFunction(p,'Condutor')||hasProfessionalFunction(p,'Motolância');
 }
 function teamRoleKey(m){
   const f=norm(m?.funcao);
@@ -695,7 +697,7 @@ function requestCloseModal(id){
 async function ensureProfessionals(){
   if(professionals.length) return professionals;
   const {data,error}=await supabase.from('profissionais')
-    .select('id,legacy_id,nome_completo,nome_de_guerra,nome_exibicao,nomes_anteriores,funcao_sistema,categoria_origem,topico_ntfy,ativo')
+    .select('id,legacy_id,nome_completo,nome_de_guerra,nome_exibicao,nomes_anteriores,funcao_sistema,funcoes_habilitadas,categoria_origem,topico_ntfy,ativo')
     .eq('ativo',true)
     .order('nome_completo');
   if(error) throw error;
@@ -2311,7 +2313,9 @@ function renderDestinations(){
 }
 
 function teamSearchText(p){
-  return norm((p.nome_completo||'')+' '+(p.nome_de_guerra||'')+' '+(p.nome_exibicao||'')+' '+(p.nomes_anteriores||[]).join(' ')+' '+(p.funcao_sistema||''));
+  return norm((p.nome_completo||'')+' '+(p.nome_de_guerra||'')+' '+
+    (p.nome_exibicao||'')+' '+(p.nomes_anteriores||[]).join(' ')+' '+
+    professionalFunctions(p).join(' '));
 }
 function renderTeamSearch(q){
   const box=$('#teamSearchResults');
@@ -2319,7 +2323,7 @@ function renderTeamSearch(q){
   if(n.length<3){box.classList.remove('show');box.innerHTML='';return}
   const list=professionals.filter(p=>teamSearchText(p).includes(n)).slice(0,20);
   box.innerHTML=list.length?list.map(p=>
-    '<div class="team-search-result"><div><div class="team-search-name">'+esc(displayName(p))+'</div><div class="team-search-meta">'+esc(p.nome_completo||'')+'</div></div><div class="team-search-meta">'+esc(p.funcao_sistema||'')+'</div><button class="btn primary" data-assign-prof="'+p.id+'">ESCALAR</button></div>'
+    '<div class="team-search-result"><div><div class="team-search-name">'+esc(displayName(p))+'</div><div class="team-search-meta">'+esc(p.nome_completo||'')+'</div></div><div class="team-search-meta">'+esc(professionalFunctions(p).join(' • '))+'</div><button class="btn primary" data-assign-prof="'+p.id+'">ESCALAR</button></div>'
   ).join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div><button type="button" class="autocomplete-register" data-register-new="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
   box.classList.add('show');
   box.querySelectorAll('[data-assign-prof]').forEach(b=>b.onclick=()=>openAssignModal(b.dataset.assignProf));
@@ -2617,12 +2621,11 @@ function bindOccurrenceActions(root){
 
 /* ---------- quick team ---------- */
 function allowedForField(p,key){
-  const r=professionalRoleKey(p);
-  if(key==='driver') return canDriveProfessional(p);
-  if(key==='tech') return r==='tech'||r==='nurse';
-  if(key==='nurse') return r==='nurse';
-  if(key==='doctor') return r==='doctor';
-  if(key==='moto') return canDriveProfessional(p);
+  if(key==='driver')return hasProfessionalFunction(p,'Condutor');
+  if(key==='tech')return hasProfessionalFunction(p,'Técnico de Enfermagem')||hasProfessionalFunction(p,'Enfermeiro');
+  if(key==='nurse')return hasProfessionalFunction(p,'Enfermeiro');
+  if(key==='doctor')return hasProfessionalFunction(p,'Médico');
+  if(key==='moto')return hasProfessionalFunction(p,'Motolância')||hasProfessionalFunction(p,'Condutor');
   return true;
 }
 function currentByRole(vId,key){
@@ -3125,7 +3128,7 @@ function dispatchCrewOptions(v,role){
   const appendDoctorsOutsideScale=()=>{
     if(role!=='doctor')return;
     const scheduledIds=new Set(activeTeamRows().map(m=>m.profissional_id));
-    professionals.filter(p=>p.ativo!==false&&professionalRoleKey(p)==='doctor'&&
+    professionals.filter(p=>p.ativo!==false&&hasProfessionalFunction(p,'Médico')&&
       !scheduledIds.has(p.id)).forEach(p=>append(dispatchAdhocDoctorRow(p)));
   };
   vehicleMembers(v).filter(m=>dispatchRoleMatch(m,role,v)).forEach(append);
@@ -3488,10 +3491,10 @@ async function saveOccurrenceLocal(){
       // à ocorrência. Não exige equipe_plantao nem soma revezamento.
       for(const m of dispatchAdhocDoctors){
         const {data:doctor,error:doctorError}=await supabase.from('profissionais')
-          .select('id,nome_completo,funcao_sistema,ativo')
+          .select('id,nome_completo,funcao_sistema,funcoes_habilitadas,ativo')
           .eq('id',m.profissional_id).maybeSingle();
         if(doctorError)throw doctorError;
-        if(!doctor||doctor.ativo!==true||professionalRoleKey(doctor)!=='doctor')
+        if(!doctor||doctor.ativo!==true||!hasProfessionalFunction(doctor,'Médico'))
           throw new Error('O cadastro do médico mudou. Escolha outro médico ou SEM MÉDICO.');
         const {data:links,error:linksError}=await supabase.from('equipe_ocorrencia')
           .select('ocorrencia_id').eq('profissional_id',doctor.id);
@@ -4296,7 +4299,7 @@ async function saveExpressPermutaLocal(){
   const mode=$('#expressPermutaMode').value;
   const pro=professionals.find(p=>p.id===proId);
   if(!pro)return alert('Selecione o condutor substituto.');
-  if(!allowedForField(pro,'driver'))return alert('Para este campo, selecione Condutor, Motolância, TARM, Rádio-operador, Lavador ou Sanitária.');
+  if(!allowedForField(pro,'driver'))return alert('Para dirigir USB/USA, marque Condutor nas funções habilitadas do cadastro permanente.');
 
   if(!v)return alert('Viatura não encontrada.');
   saveButton.disabled=true;
@@ -4529,7 +4532,7 @@ function expressSearch(role,q){
   const box=role==='tech'?$('#expressTechResults'):$('#expressNurseResults');
   const n=norm(q);
   if(n.length<3){box.classList.remove('show');box.innerHTML='';return}
-  const allowed=p=>role==='tech'?['tech','nurse'].includes(professionalRoleKey(p)):professionalRoleKey(p)==='nurse';
+  const allowed=p=>role==='tech'?allowedForField(p,'tech'):allowedForField(p,'nurse');
   const selected=role==='tech'?expressTechSelected:expressNurseSelected;
   const list=professionals.filter(p=>allowed(p)&&teamSearchText(p).includes(n)&&!selected.has(p.id)).slice(0,15);
   box.innerHTML=list.length?list.map(p=>'<button type="button" class="autocomplete-result" data-exp-prof="'+esc(p.id)+'"><b>'+esc(displayName(p))+'</b><small>'+esc(p.nome_completo)+' • '+esc(p.funcao_sistema)+'</small></button>').join(''):'<div class="autocomplete-empty">Nenhum profissional encontrado.</div><button type="button" class="autocomplete-register" data-exp-register="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
@@ -5176,7 +5179,7 @@ async function saveQuickRegistrationLocal(){
   const {data,error}=await supabase.from('profissionais').insert({
     nome_completo:nome,nome_de_guerra:war||null,funcao_sistema:funcao,
     notificar_padrao:false,ativo:true,data_cadastro:new Date().toISOString(),atualizado_em:new Date().toISOString()
-  }).select('id,legacy_id,nome_completo,nome_de_guerra,nome_exibicao,nomes_anteriores,funcao_sistema,categoria_origem,topico_ntfy,ativo').single();
+  }).select('id,legacy_id,nome_completo,nome_de_guerra,nome_exibicao,nomes_anteriores,funcao_sistema,funcoes_habilitadas,categoria_origem,topico_ntfy,ativo').single();
   if(error)return alert(error.message);
 
   professionals.push(data);
