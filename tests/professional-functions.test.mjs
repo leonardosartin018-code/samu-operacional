@@ -1,8 +1,21 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {professionalFunctions,hasProfessionalFunction,vehicleRoleChoices,professionalCanFillSlot,
- normalizeProfessionalFunctions} from '../professional-functions.js';
-import {resolveMonthlyRosterEntry} from '../monthly-roster-match.js';
+import {readFileSync} from 'node:fs';
+
+const functionsSource=readFileSync(new URL('../professional-functions.js',import.meta.url),'utf8');
+const helpers=new Function(
+  functionsSource.replace(/export (const|function) /g,'$1 ')+
+  ';return {professionalFunctions,hasProfessionalFunction,vehicleRoleChoices,'+
+  'professionalCanFillSlot,normalizeProfessionalFunctions,canonicalProfessionalFunction};'
+)();
+const {professionalFunctions,hasProfessionalFunction,vehicleRoleChoices,
+  professionalCanFillSlot,normalizeProfessionalFunctions}=helpers;
+const monthlySource=readFileSync(new URL('../monthly-roster-match.js',import.meta.url),'utf8');
+const {resolveMonthlyRosterEntry}=new Function(
+  'hasProfessionalFunction','canonicalProfessionalFunction',
+  monthlySource.replace(/^import[^\n]+\n/gm,'').replace(/export function /g,'function ')+
+  ';return {resolveMonthlyRosterEntry};'
+)(helpers.hasProfessionalFunction,helpers.canonicalProfessionalFunction);
 
 const person={
  id:'a',ativo:true,nome_completo:'PESSOA EXEMPLO',
