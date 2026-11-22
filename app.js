@@ -5571,14 +5571,20 @@ function internalAutocomplete(code,q,root=document){
   const hidden=root.querySelector('[data-int-id="'+code+'"]');
   if(hidden)hidden.value='';
   if(n.length<3){box.classList.remove('show');box.innerHTML='';return}
-  const list=professionals.filter(p=>teamSearchText(p).includes(n)).slice(0,15);
+  const list=professionals.filter(p=>teamSearchText(p).includes(n))
+    .sort((a,b)=>Number(professionalCanFillSlot(b,code))-Number(professionalCanFillSlot(a,code))||
+      String(a.nome_completo).localeCompare(String(b.nome_completo),'pt-BR')).slice(0,15);
   const input=root.querySelector('[data-int-search="'+code+'"]'),idEl=root.querySelector('[data-int-id="'+code+'"]');
   box.innerHTML=list.length
-    ? list.map(p=>'<button type="button" class="autocomplete-result" data-int-prof="'+p.id+'"><b>'+esc(professionalLabel(p,'other'))+'</b><small>'+esc(p.funcao_sistema||'')+' • '+esc(p.nome_completo)+'</small></button>').join('')
+    ? list.map(p=>'<button type="button" class="autocomplete-result" data-int-prof="'+p.id+'"><b>'+esc(professionalLabel(p,'other'))+'</b><small>'+esc(professionalCanFillSlot(p,code)?'HABILITADO':'FUNÇÃO A CONFERIR')+' • '+esc(professionalFunctions(p).join(' / '))+'</small></button>').join('')
     : '<div class="autocomplete-empty">Nenhum profissional encontrado.</div><button type="button" class="autocomplete-register" data-register-new="1">+ CADASTRAR NOVO PROFISSIONAL</button>';
   box.classList.add('show');
   box.querySelectorAll('[data-int-prof]').forEach(b=>b.onclick=()=>{
     const p=professionals.find(x=>x.id===b.dataset.intProf);
+    if(!p)return;
+    if(!professionalCanFillSlot(p,code)&&
+      !confirm(displayName(p)+' não tem a função '+(functionForInternalSlot(code)||code)+
+        ' confirmada no cadastro. Deseja escalá-lo como exceção manual?'))return;
     input.value=professionalLabel(p,'other');if(idEl)idEl.value=p.id;box.classList.remove('show');
     const selected=input.closest('.internal-permuta-box')?.querySelector('.internal-permuta-selected');
     if(selected)selected.textContent='Substituto: '+displayName(p);
