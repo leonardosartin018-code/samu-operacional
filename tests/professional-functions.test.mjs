@@ -6,16 +6,16 @@ const functionsSource=readFileSync(new URL('../professional-functions.js',import
 const helpers=new Function(
   functionsSource.replace(/export (const|function) /g,'$1 ')+
   ';return {professionalFunctions,hasProfessionalFunction,vehicleRoleChoices,'+
-  'professionalCanFillSlot,normalizeProfessionalFunctions,canonicalProfessionalFunction};'
+  'professionalCanFillSlot,normalizeProfessionalFunctions,canonicalProfessionalFunction,isBombeiroProfessional};'
 )();
 const {professionalFunctions,hasProfessionalFunction,vehicleRoleChoices,
   professionalCanFillSlot,normalizeProfessionalFunctions}=helpers;
 const monthlySource=readFileSync(new URL('../monthly-roster-match.js',import.meta.url),'utf8');
 const {resolveMonthlyRosterEntry}=new Function(
-  'hasProfessionalFunction','canonicalProfessionalFunction',
+  'hasProfessionalFunction','canonicalProfessionalFunction','isBombeiroProfessional',
   monthlySource.replace(/^import[^\n]+\n/gm,'').replace(/export function /g,'function ')+
   ';return {resolveMonthlyRosterEntry};'
-)(helpers.hasProfessionalFunction,helpers.canonicalProfessionalFunction);
+)(helpers.hasProfessionalFunction,helpers.canonicalProfessionalFunction,helpers.isBombeiroProfessional);
 
 const person={
  id:'a',ativo:true,nome_completo:'PESSOA EXEMPLO',
