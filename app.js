@@ -4953,7 +4953,7 @@ function openEditTeamMember(teamId){
   if(!isOperator())return;
   const m=team.find(x=>x.id===teamId&&norm(x.status||'ATIVO')==='ATIVO');
   if(!m)return alert('Esse profissional não está mais ativo nesta escala.');
-  const p=m.profissionais||professionals.find(x=>x.id===m.profissional_id);
+  const p=professionals.find(x=>x.id===m.profissional_id)||m.profissionais;
   if(!p)return alert('Profissional não encontrado no cadastro.');
 
   selectedAssignTeamRow=m;
