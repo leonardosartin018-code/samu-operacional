@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261122-offline-11">
-  <link rel="stylesheet" href="./offline.css?v=20261122-offline-11">
+  <link rel="stylesheet" href="./styles.css?v=20261122-offline-12">
+  <link rel="stylesheet" href="./offline.css?v=20261122-offline-12">
 </head>
 <body>
 
@@ -665,6 +665,21 @@
   <div class="dialog team-dialog">
     <div class="dialog-head"><div><div class="dialog-kicker">EQUIPE DIRETA / PARCIAL</div><h2 id="teamModalTitle">Equipe rápida</h2></div><button class="icon-close" data-close-modal="teamModal">×</button></div>
     <div class="team-modal-note"><b>Não é obrigatório completar a guarnição.</b> Salve somente quem estiver disponível e complete depois. Digite 3 letras para pesquisar.</div>
+    <section id="regionalWhatsappImporter" class="regional-wa-import hidden" aria-label="Importar guarnição regional do WhatsApp">
+      <div class="regional-wa-import-heading">
+        <div><b>IMPORTAR EQUIPE DO WHATSAPP</b><p>Copie a mensagem da base e cole aqui com Ctrl+V. Reconhece Condutor, Técnico, Enfermeiro e Médico.</p></div>
+        <button type="button" id="regionalWhatsappClear" class="btn secondary">LIMPAR</button>
+      </div>
+      <textarea id="regionalWhatsappRaw" rows="4" maxlength="12000" autocomplete="off"
+        placeholder="Ex.: Alexânia&#10;Condutor: Jamerilson&#10;Técnica: Raíssa"></textarea>
+      <p id="regionalWhatsappStatus" role="status" aria-live="polite" class="regional-wa-status">Cole a mensagem completa da equipe.</p>
+      <div id="regionalWhatsappReview" class="regional-wa-review hidden"></div>
+      <div class="regional-wa-actions">
+        <button id="regionalWhatsappParse" type="button" class="btn secondary">ORGANIZAR EQUIPE</button>
+        <button id="regionalWhatsappApply" type="button" class="btn primary hidden" disabled>CONFIRMAR, CADASTRAR NOVOS E ESCALAR</button>
+      </div>
+      <small>Novos nomes serão cadastrados apenas na confirmação. O cadastro provisório poderá ser conferido depois. Dados ambíguos não são cadastrados automaticamente.</small>
+    </section>
     <div class="quick-team-grid">
       <div class="quick-team-field" data-role="driver">
         <span class="quick-team-status is-vacant" data-quick-status="driver">NÃO ESCALADO</span>
@@ -955,6 +970,6 @@
 <script src="./vendor/jspdf-2.5.2.js"></script>
 <script src="./vendor/jspdf-autotable-3.8.4.js"></script>
 <script src="./vendor/html2canvas-1.4.1.js"></script>
-<script type="module" src="./app.js?v=20261122-offline-11"></script>
+<script type="module" src="./app.js?v=20261122-offline-12"></script>
 </body>
 </html>

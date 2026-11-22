@@ -1,4 +1,5 @@
 import { openNamesReview } from './names-review.js';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261122-offline-12';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -2498,9 +2499,14 @@ function renderRegionalQuickScale(){
   });
   root.innerHTML=[...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR')).map(([base,list])=>
     '<div class="regional-quick-base"><h3>'+esc(base)+'</h3><div class="regional-quick-vehicles">'+
-    list.map(v=>vehicleCardHtml(v,{rosterOnly:true})).join('')+'</div></div>'
+    list.map(v=>'<div class="regional-quick-unit">'+vehicleCardHtml(v,{rosterOnly:true})+
+      '<button type="button" class="regional-wa-open" data-regional-import="'+esc(v.id)+'">COLAR EQUIPE DO WHATSAPP</button></div>').join('')+'</div></div>'
   ).join('')||'<div class="priority-empty">Nenhuma viatura de base descentralizada cadastrada.</div>';
   root.querySelectorAll('[data-regional-team]').forEach(b=>b.onclick=()=>openTeamModal(b.dataset.regionalTeam));
+  root.querySelectorAll('[data-regional-import]').forEach(b=>b.onclick=async()=>{
+    await openTeamModal(b.dataset.regionalImport);
+    if($('#teamModal').classList.contains('show'))$('#regionalWhatsappRaw')?.focus();
+  });
   root.querySelectorAll('[data-team-card]').forEach(card=>card.onclick=event=>{
     if(event.target.closest('button,select,input,textarea,a'))return;
     if(isOperator())openTeamModal(card.dataset.v);
@@ -2621,6 +2627,237 @@ function bindVehicleActions(root){
 function bindOccurrenceActions(root){
   root.querySelectorAll('[data-edit-occ]').forEach(b=>b.onclick=()=>openOccurrenceEdit(b.dataset.editOcc));
   root.querySelectorAll('[data-delete-occ]').forEach(b=>b.onclick=()=>deleteOccurrence(b.dataset.deleteOcc));
+}
+
+/* ---------- Escala regional por texto copiado do WhatsApp ---------- */
+// Todo reconhecimento é local. Não criar cadastros antes da confirmação.
+let regionalWhatsappDraft=null;
+function regionalWhatsappStatus(message,invalid=false){
+  const el=$('#regionalWhatsappStatus');
+  if(!el)return;
+  el.textContent=message||'';
+  el.classList.toggle('invalid',invalid);
+}
+function clearRegionalWhatsappDraft(){
+  regionalWhatsappDraft=null;
+  const review=$('#regionalWhatsappReview');
+  if(review){review.innerHTML='';review.classList.add('hidden')}
+  $('#regionalWhatsappApply')?.classList.add('hidden');
+  if($('#regionalWhatsappApply'))$('#regionalWhatsappApply').disabled=true;
+  if($('#saveTeam'))$('#saveTeam').disabled=false;
+}
+function resetRegionalWhatsappImporter(v){
+  clearRegionalWhatsappDraft();
+  const panel=$('#regionalWhatsappImporter');
+  panel?.classList.toggle('hidden',!v||isAnapolisVehicle(v));
+  $('#regionalWhatsappRaw').value='';
+  regionalWhatsappStatus('Cole a mensagem da base para preencher a equipe. Cadastro de nomes novos somente ao confirmar.');
+}
+function regionalWhatsappSlot(key,v){
+  const type=quickModalMode(v);
+  if(type==='usb' && key==='nurse')return 'tech';
+  return key;
+}
+function regionalWhatsappRoleForSlot(slot){
+  return {driver:'Condutor',tech:'Técnico de Enfermagem',nurse:'Enfermeiro',doctor:'Médico'}[slot];
+}
+function regionalWhatsappCurrentCandidates(){
+  if(!regionalWhatsappDraft)return [];
+  return regionalWhatsappDraft.items.map(item=>{
+    const resolution=resolveRegionalCrewName(item.name,item.key,professionals);
+    const selected=item.selectedId
+      ?professionals.find(p=>p.id===item.selectedId && p.ativo!==false):null;
+    return {...item,resolution,selected};
+  });
+}
+function renderRegionalWhatsappReview(){
+  const draft=regionalWhatsappDraft,review=$('#regionalWhatsappReview');
+  if(!draft||!review)return;
+  const v=vehicleById(draft.vehicleId);
+  if(!v){regionalWhatsappStatus('Viatura não encontrada. Reabra a equipe.',true);return}
+  const slots=regionalSlotsForVehicle(vehicleType(v));
+  const rows=regionalWhatsappCurrentCandidates();
+  const repeatedSlots=rows.filter((item,i)=>
+    rows.findIndex(other=>other.slot===item.slot)!==i).map(item=>item.slot);
+  const repeatedNames=rows.filter((item,i)=>
+    rows.findIndex(other=>norm(other.name)===norm(item.name))!==i);
+  const baseMismatch=draft.base&&coverageCityKey(v.bases?.nome)!==draft.base;
+  const blocked=!!draft.warnings.length||!!repeatedSlots.length||!!repeatedNames.length||
+    !!baseMismatch||!!activeOccurrence(v)||rows.some(item=>
+      !slots.includes(item.slot) || item.resolution.status==='INVALID' ||
+      (item.resolution.status!=='MATCHED' && item.resolution.status!=='NEW' && !item.selected) ||
+      (item.selected&&!regionalCanFillRole(item.selected,item.key)) ||
+      (item.resolution.status==='ROLE_REVIEW'&&!item.selected)
+    );
+  let newCount=0;
+  const lines=rows.map((item,index)=>{
+    const resolution=item.resolution,existing=item.selected||resolution.professional;
+    const needsChoice=['POSSIBLE_DUPLICATE','AMBIGUOUS','ROLE_REVIEW'].includes(resolution.status);
+    const pool=resolution.candidates;
+    const status=existing
+      ?regionalCanFillRole(existing,item.key)?'CADASTRADO • '+displayName(existing):'FUNÇÃO NÃO HABILITADA: conferir no cadastro'
+      :resolution.status==='NEW'
+        ?(newCount++,'NOVO • será cadastrado na confirmação')
+        :resolution.status==='INVALID'?'NOME INVÁLIDO':'VERIFICAR POSSÍVEL DUPLICIDADE';
+    const choices=needsChoice
+      ?'<select data-regional-candidate="'+index+'" aria-label="Vincular nome já cadastrado">'+
+        '<option value="">ESCOLHER CADASTRO EXISTENTE</option>'+
+        pool.map(p=>'<option value="'+esc(p.id)+'"'+(item.selectedId===p.id?' selected':'')+'>'+
+          esc(displayName(p))+' — '+esc(p.nome_completo)+'</option>').join('')+'</select>'
+      :'';
+    return '<div class="regional-wa-person '+(existing&&regionalCanFillRole(existing,item.key)?'matched':resolution.status==='NEW'?'new':'needs-review')+'">'+
+      '<div class="regional-wa-person-top"><b>'+esc(REGIONAL_ROLE[item.key]?.label||item.key)+'</b>'+
+        '<span>'+esc(status)+'</span></div>'+
+      '<input data-regional-name="'+index+'" maxlength="120" autocomplete="off" value="'+esc(item.name)+'" aria-label="Nome de '+esc(REGIONAL_ROLE[item.key]?.label||item.key)+'">'+
+      choices+'</div>';
+  });
+  review.innerHTML=lines.join('')+
+    (draft.warnings.length?'<p class="regional-wa-warning">'+esc(draft.warnings.join(' • '))+'</p>':'');
+  review.classList.remove('hidden');
+  review.querySelectorAll('[data-regional-name]').forEach(input=>{
+    input.onchange=()=>{
+      const item=draft.items[Number(input.dataset.regionalName)];
+      item.name=input.value.trim();item.selectedId=null;
+      renderRegionalWhatsappReview();
+    };
+  });
+  review.querySelectorAll('[data-regional-candidate]').forEach(select=>{
+    select.onchange=()=>{
+      draft.items[Number(select.dataset.regionalCandidate)].selectedId=select.value||null;
+      renderRegionalWhatsappReview();
+    };
+  });
+  if(baseMismatch)regionalWhatsappStatus('A mensagem indica '+draft.base+
+    ', mas a viatura pertence à base '+(v.bases?.nome||'desconhecida')+'. Confira antes de importar.',true);
+  else if(activeOccurrence(v))regionalWhatsappStatus('A viatura está em ocorrência. Não altere a guarnição enquanto estiver empenhada.',true);
+  else if(repeatedSlots.length||repeatedNames.length)regionalWhatsappStatus('A mensagem possui função ou nome repetido. Ajuste antes de salvar.',true);
+  else if(blocked)regionalWhatsappStatus('Confira as funções, possíveis duplicidades e selecione o profissional existente quando indicado.',true);
+  else regionalWhatsappStatus(rows.length+' profissional(is) reconhecido(s). '+newCount+
+    ' será(ão) cadastrado(s) automaticamente ao confirmar. Os demais serão vinculados ao cadastro existente.');
+  $('#regionalWhatsappApply').classList.remove('hidden');
+  $('#regionalWhatsappApply').disabled=blocked;
+  // Não permitir salvar a tela comum sem antes resolver os nomes novos.
+  $('#saveTeam').disabled=true;
+}
+function parseRegionalWhatsappIntoTeam(){
+  const v=vehicleById(selectedTeamVehicle);
+  if(!v||isAnapolisVehicle(v))return;
+  const parsed=parseRegionalCrewClipboard($('#regionalWhatsappRaw').value);
+  if(parsed.error){
+    clearRegionalWhatsappDraft();
+    regionalWhatsappStatus(parsed.error,true);return;
+  }
+  const supported=regionalSlotsForVehicle(vehicleType(v));
+  const items=parsed.members.map(m=>({...m,slot:regionalWhatsappSlot(m.key,v),selectedId:null}));
+  regionalWhatsappDraft={vehicleId:v.id,base:parsed.base,warnings:[...parsed.warnings],
+    items,raw:$('#regionalWhatsappRaw').value};
+  for(const item of items){
+    if(!supported.includes(item.slot))regionalWhatsappDraft.warnings.push(
+      'A função '+(REGIONAL_ROLE[item.key]?.label||item.key)+' não corresponde à equipe da '+(v.nome||v.codigo)+'.'
+    );
+    const cfg=quickCfg()[item.slot];
+    if(cfg){
+      $(cfg.input).value=item.name;
+      $(cfg.hidden).value='';
+      updateQuickSelectionState(item.slot);
+    }
+  }
+  renderRegionalWhatsappReview();
+}
+async function saveRegionalWhatsappIntoTeam(){
+  const draft=regionalWhatsappDraft,v=vehicleById(draft?.vehicleId);
+  if(!isOperator()||!canEditOpenShift()||!v||isAnapolisVehicle(v)||!currentPlantao)return;
+  if(draft.vehicleId!==selectedTeamVehicle||$('#regionalWhatsappApply').disabled)return;
+  // Reavaliar diretamente antes de gravar. Nunca confiar só no HTML da prévia.
+  const rows=regionalWhatsappCurrentCandidates();
+  const allowed=regionalSlotsForVehicle(vehicleType(v));
+  if(!rows.length||draft.warnings.length||
+    rows.some(r=>!allowed.includes(r.slot)||!r.name.trim()||
+      (!r.selected&&r.resolution.status!=='MATCHED'&&r.resolution.status!=='NEW'))||
+    new Set(rows.map(r=>r.slot)).size!==rows.length||
+    new Set(rows.map(r=>norm(r.name))).size!==rows.length){
+    return alert('Revise os nomes e as funções antes de confirmar a importação.');
+  }
+  if(activeOccurrence(v))return alert('A viatura está em ocorrência. Não é permitido substituir a guarnição.');
+  const prepared=rows.map(r=>({...r,person:r.selected||r.resolution.professional||null}));
+  const ids=prepared.filter(r=>r.person).map(r=>r.person.id);
+  if(new Set(ids).size!==ids.length)return alert('O mesmo profissional aparece em mais de uma posição.');
+  for(const item of prepared){
+    if(item.person&&!regionalCanFillRole(item.person,item.key))
+      return alert('A função de '+displayName(item.person)+' não corresponde à informada na mensagem.');
+    if(item.person){
+      const assigned=activeTeamRows().find(m=>m.profissional_id===item.person.id);
+      if(assigned&&assigned.viatura_id!==v.id)
+        return alert(displayName(item.person)+' já está escalado em outra viatura. Confirme a movimentação manualmente.');
+      const currentRole=currentQuickMember(v.id,item.slot);
+      if(assigned&&assigned.viatura_id===v.id&&assigned.id!==currentRole?.id)
+        return alert(displayName(item.person)+' já está em outra função nesta viatura. Confira a distribuição de funções.');
+    }
+  }
+  const plantaoId=currentPlantao.id;
+  const button=$('#regionalWhatsappApply'),original=button.textContent;
+  button.disabled=true;button.textContent='CADASTRANDO E SALVANDO...';
+  try{
+    const result=await offline.userAction('Importar equipe da base '+(v.bases?.nome||''),async()=>{
+      if(currentPlantao?.id!==plantaoId||norm(currentPlantao.status)!=='ABERTO')
+        throw new Error('O plantão mudou. Reabra a janela da equipe.');
+      let created=0,linked=0;
+      for(const item of prepared){
+        let id=item.person?.id;
+        if(!id){
+          const now=new Date().toISOString();
+          const role=REGIONAL_ROLE[item.key].databaseRole;
+          const newName=item.name.trim();
+          const payload={
+            nome_completo:newName,nome_de_guerra:newName,nome_exibicao:newName,
+            funcao_sistema:role,funcoes_habilitadas:[role],
+            categoria_origem:'WHATSAPP REGIONAL',ativo:true,notificar_padrao:false,
+            observacao:'Cadastro provisório por escala regional colada do WhatsApp; conferir nome completo.',
+            data_cadastro:now,atualizado_em:now
+          };
+          const response=await supabase.from('profissionais').insert(payload).select('id').single();
+          if(response.error)throw response.error;
+          id=response.data?.id;
+          if(!id)throw new Error('Não foi possível cadastrar '+newName+'.');
+          created++;
+        }
+        const current=currentQuickMember(v.id,item.slot);
+        if(current?.profissional_id===id)continue; // manter sem recriar
+        if(current){
+          const ended=await supabase.from('equipe_plantao').update({
+            status:'INATIVO',saiu_em:new Date().toISOString()
+          }).eq('id',current.id);
+          if(ended.error)throw ended.error;
+        }
+        const save=await supabase.from('equipe_plantao').insert({
+          plantao_id:plantaoId,profissional_id:id,nome_snapshot:item.person?.nome_completo||item.name,
+          funcao:regionalWhatsappRoleForSlot(item.slot),tipo_escala:'FIXO EM VIATURA',
+          viatura_id:v.id,viatura_snapshot:v.nome,status:'ATIVO',
+          entrou_em:new Date().toISOString(),origem_escala:'WHATSAPP_REGIONAL'
+        }).select('id').single();
+        if(save.error)throw save.error;
+        linked++;
+      }
+      if(created||linked)markOperationalDirty();
+      return {created,linked};
+    });
+    if(result?.error)throw new Error(result.error.message||String(result.error));
+    if(!result||typeof result.created!=='number')throw new Error('A confirmação não retornou o resultado esperado.');
+    clearRegionalWhatsappDraft();
+    selectedTeamVehicle=null;quickDriverReference=null;quickDriverOriginal=null;
+    closeModal('teamModal');
+    professionals=[];
+    await loadAll(selectedDate());
+    setSync('Equipe regional registrada: '+result.linked+' vínculo(s) e '+result.created+
+      ' novo(s) cadastro(s) provisório(s).','ok');
+  }catch(error){
+    regionalWhatsappStatus('Falha ao importar a equipe: '+(error.message||error)+
+      '. Revise os dados; a operação local será cancelada se não foi concluída.',true);
+    console.error('Falha ao salvar equipe importada',error);
+  }finally{
+    button.textContent=original;
+    button.disabled=!regionalWhatsappDraft;
+  }
 }
 
 /* ---------- quick team ---------- */
@@ -2836,6 +3073,7 @@ async function openTeamModal(vId){
   catch(error){return alert('Não foi possível consultar o titular previsto: '+(error.message||error))}
   if(currentPlantao?.id!==plantao?.id||!canEditOpenShift())return;
   selectedTeamVehicle=vId;
+  resetRegionalWhatsappImporter(v);
   quickDriverReference=reference;
   quickTeamInitial.clear();
   const permuta=$('#qtDriverPermuta');
@@ -3056,6 +3294,7 @@ async function saveQuickTeamLocal(){
         }
       }
     }
+    clearRegionalWhatsappDraft();
     closeModal('teamModal');
     selectedTeamVehicle=null;
     quickDriverReference=null;
@@ -6738,6 +6977,16 @@ $$('#expressPermutaModeButtons [data-permuta-mode]').forEach(button=>{
 });
 $('#saveExpressPermutaBtn').onclick=saveExpressPermuta;
 $('#removeExpressDriverBtn').onclick=removeExpressDriver;
+$('#regionalWhatsappParse').onclick=parseRegionalWhatsappIntoTeam;
+$('#regionalWhatsappApply').onclick=saveRegionalWhatsappIntoTeam;
+$('#regionalWhatsappClear').onclick=()=>{
+  const v=vehicleById(selectedTeamVehicle);
+  resetRegionalWhatsappImporter(v);
+  if(v)openTeamModal(v.id).catch(error=>console.error(error));
+};
+$('#regionalWhatsappRaw').addEventListener('paste',()=>{
+  setTimeout(parseRegionalWhatsappIntoTeam,0);
+});
 $('#saveQuickRegisterBtn').onclick=saveQuickRegistration;
 
 window.addEventListener('beforeunload',e=>{
