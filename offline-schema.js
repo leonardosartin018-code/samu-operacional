@@ -220,6 +220,7 @@ export const OFFLINE_SCHEMA = {
       "nome_exibicao",
       "nomes_anteriores",
       "funcao_sistema",
+      "funcoes_habilitadas",
       "categoria_origem",
       "topico_ntfy",
       "telegram_chat_id",
@@ -233,6 +234,7 @@ export const OFFLINE_SCHEMA = {
       "alterado_em"
     ],
     "defaults": {
+      "funcoes_habilitadas": [],
       "notificar_padrao": false,
       "ativo": true,
       "criado_em": "$now",
