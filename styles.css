@@ -3408,3 +3408,23 @@ h1,h2,h3,p{margin-top:0}.small{font-size:.82rem}.mut{color:var(--muted)}
   #namesReview .names-functions-grid{grid-template-columns:1fr}
   #namesReview table{min-width:920px}
 }
+
+/* Conferência exclusiva de nomes, sem a coluna de classificação de funções. */
+#namesReview{width:min(1120px,96vw)}
+#namesReview th:nth-child(1){width:42%}
+#namesReview th:nth-child(2){width:38%}
+#namesReview th:nth-child(3){width:10%}
+#namesReview th:nth-child(4){width:10%}
+#namesReview td:nth-child(2) input{
+  min-width:170px;font-size:.94rem;
+  background:#fffaf0;border-color:#e0c48c;color:#174f72
+}
+#namesReview td:nth-child(3){text-align:center}
+#namesReview td:nth-child(3) input{width:18px;height:18px;accent-color:#047857}
+#namesReview .names-pending-filter{display:inline-flex;align-items:center;gap:7px;
+  font-size:.78rem;font-weight:750;color:#24516a;cursor:pointer}
+#namesReview .names-pending-filter input{width:17px;height:17px;accent-color:#075985}
+#namesReview [data-group] h3{position:sticky;top:0;z-index:1}
+@media(max-width:640px){#namesReview table{min-width:680px}
+  #namesReview .names-tools{align-items:stretch}
+}
