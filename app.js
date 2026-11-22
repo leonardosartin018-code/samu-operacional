@@ -1,3 +1,4 @@
+import { openNamesReview } from './names-review.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
 import { createSamuPdfArchive, downloadSamuFile } from './samu-report-download.js?v=20261115-90-pdf-equipes-relatorio';
@@ -245,7 +246,7 @@ function firstTwoNames(name){
 }
 function displayName(p){
   if(!p) return '—';
-  return (p.nome_de_guerra || firstTwoNames(p.nome_completo)).toUpperCase();
+  return (p.nome_exibicao || professionals.find(x=>x.id===p.id)?.nome_exibicao || p.nome_de_guerra || firstTwoNames(p.nome_completo)).toUpperCase();
 }
 function professionalRoleKey(p){
   const f=norm(p?.funcao_sistema);
@@ -694,7 +695,7 @@ function requestCloseModal(id){
 async function ensureProfessionals(){
   if(professionals.length) return professionals;
   const {data,error}=await supabase.from('profissionais')
-    .select('id,legacy_id,nome_completo,nome_de_guerra,funcao_sistema,categoria_origem,topico_ntfy,ativo')
+    .select('id,legacy_id,nome_completo,nome_de_guerra,nome_exibicao,nomes_anteriores,funcao_sistema,categoria_origem,topico_ntfy,ativo')
     .eq('ativo',true)
     .order('nome_completo');
   if(error) throw error;
@@ -2310,7 +2311,7 @@ function renderDestinations(){
 }
 
 function teamSearchText(p){
-  return norm((p.nome_completo||'')+' '+(p.nome_de_guerra||'')+' '+(p.funcao_sistema||''));
+  return norm((p.nome_completo||'')+' '+(p.nome_de_guerra||'')+' '+(p.nome_exibicao||'')+' '+(p.nomes_anteriores||[]).join(' ')+' '+(p.funcao_sistema||''));
 }
 function renderTeamSearch(q){
   const box=$('#teamSearchResults');
@@ -5175,7 +5176,7 @@ async function saveQuickRegistrationLocal(){
   const {data,error}=await supabase.from('profissionais').insert({
     nome_completo:nome,nome_de_guerra:war||null,funcao_sistema:funcao,
     notificar_padrao:false,ativo:true,data_cadastro:new Date().toISOString(),atualizado_em:new Date().toISOString()
-  }).select('id,legacy_id,nome_completo,nome_de_guerra,funcao_sistema,categoria_origem,topico_ntfy,ativo').single();
+  }).select('id,legacy_id,nome_completo,nome_de_guerra,nome_exibicao,nomes_anteriores,funcao_sistema,categoria_origem,topico_ntfy,ativo').single();
   if(error)return alert(error.message);
 
   professionals.push(data);
@@ -5319,16 +5320,8 @@ function internalStatusValue(row,fixed){
 function findProfessionalByReference(name){
   const n=norm(name);
   if(!n)return null;
-  let exact=professionals.find(p=>norm(p.nome_completo)===n);
-  if(exact)return exact;
-  const tokens=n.split(' ').filter(x=>x.length>2 && !['DOS','DAS','DE','DA'].includes(x));
-  let best=null,bestScore=0;
-  professionals.forEach(p=>{
-    const pn=norm(p.nome_completo),pt=pn.split(' ');
-    const score=tokens.filter(t=>pt.includes(t)).length/Math.max(tokens.length,1);
-    if(score>bestScore){best=p;bestScore=score}
-  });
-  return bestScore>=.72?best:null;
+  const matches=professionals.filter(p=>[p.nome_completo,p.nome_de_guerra,p.nome_exibicao,...(p.nomes_anteriores||[])].some(alias=>alias&&norm(alias)===n));
+  return matches.length===1?matches[0]:null;
 }
 async function ensurePlantaoForBook(){
   if(currentPlantao&&norm(currentPlantao.status)==='ENCERRADO'){
@@ -6755,3 +6748,5 @@ await applySession(initialSession).catch(error=>{
   $('#auth').classList.remove('hidden');
   $('#app').classList.add('hidden');
 });
+
+$('#reviewNamesBtn').onclick=()=>openNamesReview({client:remoteSupabase,canEdit:isOperator(),isReady:()=>navigator.onLine&&!offline.status().pending&&!offline.status().busy,afterSave:async()=>{await offline.prepare(currentPlantao?.id);professionals=[];await loadAll(selectedDate());}});

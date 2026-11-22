@@ -217,6 +217,8 @@ export const OFFLINE_SCHEMA = {
       "legacy_id",
       "nome_completo",
       "nome_de_guerra",
+      "nome_exibicao",
+      "nomes_anteriores",
       "funcao_sistema",
       "categoria_origem",
       "topico_ntfy",

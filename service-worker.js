@@ -1,7 +1,7 @@
-const CACHE_NAME = 'samu-shell-20261122-6';
+const CACHE_NAME = 'samu-shell-20261122-7';
 const SHELL = [
   './index.html', './styles.css', './offline.css', './app.js',
-  './offline-store.js', './offline-query.js', './offline-schema.js',
+  './names-review.js', './offline-store.js', './offline-query.js', './offline-schema.js',
   './offline-client.js', './offline-rpc.js', './offline-shell.js', './offline-ui.js',
   './regulation-import.js', './victim-destination-rules.js',
   './samu-report-download.js', './samu-report-structure.js', './rotation-weight-rules.js',
