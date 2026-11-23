@@ -6119,7 +6119,24 @@ function activeShiftHandoffPreview(){
 /* ---------- Troca e encerramento manual de plantão ---------- */
 function openShiftTransition(){
   if(!isOperator())return;
-  if(!currentPlantao)return alert('Nenhum plantão carregado.');
+  if(!currentPlantao){
+    // Primeiro plantão ou fim da escala anterior: só o operador cria a nova.
+    const ctx=operationalShiftContext();
+    $('#shiftTransitionTitle').textContent='Iniciar plantão manualmente';
+    $('#shiftTransitionDetails').innerHTML='<p><b>Não há plantão aberto carregado.</b></p>'+
+      '<p><b>Plantão a iniciar:</b> '+esc(shiftTitle(ctx))+'</p>'+
+      '<p>Nenhum novo plantão é aberto automaticamente às 07h ou às 19h.</p>';
+    $('#shiftTransitionAcknowledge').checked=false;
+    $('#shiftEndOnlyBtn').classList.add('hidden');
+    $('#shiftEndStartBtn').classList.add('hidden');
+    $('#shiftStartOnlyBtn').classList.remove('hidden');
+    $('#shiftReopenBtn').classList.add('hidden');
+    ['#shiftEndOnlyBtn','#shiftEndStartBtn','#shiftStartOnlyBtn','#shiftReopenBtn']
+      .forEach(id=>$(id).disabled=true);
+    shiftTransitionPlantaoId=null;
+    openModal('shiftTransitionModal');
+    return;
+  }
   const p=currentPlantao;
   const open=norm(p.status)==='ABERTO';
   const reopen=canReopenCurrentShift(p);
@@ -6134,11 +6151,14 @@ function openShiftTransition(){
     earlyEnd?'<strong>O turno atual ainda não chegou ao horário previsto de encerramento.</strong>':'',
     earlyStart&&!reopen?'<strong>O próximo turno será iniciado antes do horário previsto.</strong>':'',
     open&&active?'<strong>'+active+' ocorrência(s) em andamento.</strong> Serão mantidas no registro do plantão anterior; confira o repasse.':'',
-    open&&(operationalNeedsConfirmation()||internalNeedsConfirmation()||unsavedBook||anyDraftModalOpen())
-      ?'<strong>Há informações não confirmadas ou não salvas.</strong> Elas podem ser perdidas ao trocar de escala.':'',
+    open&&(operationalNeedsConfirmation()||internalNeedsConfirmation()||unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())
+      ?'<strong>Há informações não confirmadas ou não salvas.</strong> Salve e confirme antes de encerrar; o encerramento ficará bloqueado.':'',
+    'O plantão continuará com TODOS os dados visíveis até sua confirmação. A virada do relógio não muda o turno.',
+    'O Livro oficial e o relatório serão gerados ANTES do encerramento. Se falhar, o plantão ficará aberto para nova tentativa.',
+    'O arquivo será preparado para baixar e enviar. O envio automático por e-mail ainda não está configurado.',
     'A escala anterior fica no histórico. O sistema não encerra ocorrências nem altera automaticamente a situação das viaturas.'
   ].filter(Boolean);
-  $('#shiftTransitionTitle').textContent=open?'Trocar ou encerrar plantão':reopen?'Reabrir plantão vigente':'Iniciar próxima escala';
+  $('#shiftTransitionTitle').textContent=open?'ENCERRAR PLANTÃO / ENVIAR LIVRO':reopen?'Reabrir plantão vigente':'Iniciar próxima escala';
   $('#shiftTransitionDetails').innerHTML=points.map(p=>'<p>'+p+'</p>').join('')+
     (open?activeShiftHandoffPreview():'');
   $('#shiftTransitionAcknowledge').checked=false;
@@ -6159,7 +6179,26 @@ async function executeShiftTransition(...args){
 }
 async function executeShiftTransitionLocal(mode){
   if(!isOperator()||shiftTransitionBusy||!$('#shiftTransitionAcknowledge').checked)return;
-  if(!currentPlantao||shiftTransitionPlantaoId!==currentPlantao.id){
+  if(!currentPlantao){
+    if(mode!=='start'||shiftTransitionPlantaoId!==null)
+      return alert('Nenhum plantão selecionado para encerrar.');
+    shiftTransitionBusy=true;updateShiftTransitionButtons();
+    try{
+      const ctx=operationalShiftContext();
+      const next=await ensureOperationalPlantao(ctx.date,ctx.turno,alaForDate(ctx.date));
+      if(!next||norm(next.status)!=='ABERTO')throw new Error('O plantão ainda não foi aberto.');
+      autoFollowCurrentShift=true;
+      await loadAll(ctx.date,ctx.turno,true);
+      await loadExpressScale();
+      lastClockShiftKey=operationalShiftKey();
+      lastOperationalShiftKey=plantaoShiftKey();
+      closeModal('shiftTransitionModal');
+      setSync('Plantão iniciado manualmente • '+shiftTitle(ctx),'ok');
+    }catch(error){alert('Não foi possível iniciar o plantão: '+(error.message||error))}
+    finally{shiftTransitionBusy=false;updateShiftTransitionButtons();}
+    return;
+  }
+  if(shiftTransitionPlantaoId!==currentPlantao.id){
     alert('O plantão mudou. Abra novamente a janela para conferir os dados.');
     closeModal('shiftTransitionModal');
     return;
@@ -6170,6 +6209,10 @@ async function executeShiftTransitionLocal(mode){
   if(mode==='start'&&canReopenCurrentShift(old))return alert('O turno ainda está vigente. Reabra o plantão para continuar.');
   if(mode==='start'&&open)return alert('Encerre o plantão atual antes de iniciar o próximo.');
   if(mode!=='start'&&mode!=='reopen'&&!open)return alert('O plantão já foi encerrado.');
+  if(open&&(operationalNeedsConfirmation()||internalNeedsConfirmation()||
+    unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())){
+    return alert('ENCERRAMENTO BLOQUEADO: há escalas, Livro ou formulários sem confirmação. Salve e confirme os dados antes de encerrar o plantão.');
+  }
   shiftTransitionBusy=true;
   updateShiftTransitionButtons();
   let closed=false;
@@ -6193,17 +6236,24 @@ async function executeShiftTransitionLocal(mode){
       return;
     }
     if(open){
+      // O Livro e o relatório são preparados ANTES de gravar ENCERRADO.
+      // Falha de rede/PDF não perde o trabalho e não libera a troca.
+      const closeAt=new Date().toISOString();
+      const prepared=await exportClosingReport(
+        {...old,status:'ENCERRADO',encerrado_em:closeAt},
+        {includeBook:true,download:false}
+      );
+      if(!prepared?.blob?.size||prepared.shiftId!==old.id)
+        throw new Error('O Livro não ficou pronto. O plantão permanece aberto.');
       const {data,error}=await supabase.from('plantoes')
-        .update({status:'ENCERRADO',encerrado_em:new Date().toISOString(),operador_encerramento:profile?.nome||session?.user?.email||'OPERADOR'})
+        .update({status:'ENCERRADO',encerrado_em:closeAt,operador_encerramento:profile?.nome||session?.user?.email||'OPERADOR'})
         .eq('id',old.id).eq('status','ABERTO').select('id,encerrado_em').maybeSingle();
       if(error)throw error;
-      if(!data)throw new Error('Este plantão já foi modificado por outro operador. Atualize a tela.');
+      if(!data)throw new Error('Este plantão já foi modificado por outro operador. O plantão não foi encerrado por esta ação.');
       closed=true;
-      try{
-        await exportClosingReport({...old,status:'ENCERRADO',encerrado_em:data.encerrado_em});
-      }catch(reportError){
-        window.alert('Não foi possível baixar o relatório: '+(reportError.message||reportError)+'. Você pode baixá-lo pelo botão Relatório do plantão.');
-      }
+      // Com o modo offline, o arquivo só é disponibilizado para download
+      // depois que a transação local for concluída com sucesso.
+      downloadReadySamuPdf();
     }
     if(mode==='end'){
       autoFollowCurrentShift=false;
@@ -6632,7 +6682,7 @@ function downloadReadySamuPdf(){
   downloadSamuFile(samuPdfReadyFile.blob,samuPdfReadyFile.filename);
   setSamuPdfExportStatus('Arquivo '+samuPdfReadyFile.filename+' pronto. Confira a pasta Downloads ou use BAIXAR ARQUIVO PRONTO novamente.');
 }
-async function exportClosingReport(shift=currentPlantao,{includeBook=true}={}){
+async function exportClosingReport(shift=currentPlantao,{includeBook=true,download=true}={}){
   if(!isOperator()||!shift?.id)return;
   if(samuPdfExportInProgress)return;
   samuPdfExportInProgress=true;
@@ -6668,7 +6718,8 @@ async function exportClosingReport(shift=currentPlantao,{includeBook=true}={}){
     if(!blob?.size)throw new Error('O arquivo foi gerado vazio.');
     samuPdfReadyFile={blob,filename,shiftId:shift.id};
     $('#samuPdfRetryBtn')?.classList.remove('hidden');
-    downloadReadySamuPdf();
+    if(download)downloadReadySamuPdf();
+    return samuPdfReadyFile;
   }catch(error){
     setSamuPdfExportStatus('Falha ao gerar o arquivo: '+(error.message||error),true);
     throw error;
