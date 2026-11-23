@@ -1,8 +1,8 @@
 import { renderFleetOverview } from './operator-panels.js';
 import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261123-offline-17';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261123-offline-17';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261123-offline-18';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261123-offline-18';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -799,7 +799,7 @@ async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCr
   const initialShift=syncDateAndAla(date,turno);
   const ala=initialShift.ala;
   const isCurrentShift=autoFollowCurrentShift;
-  setSync('Identificando plantão atual e pré-carregando escalas...','warn');
+
 
   currentPlantao=null;
   vehicles=[];team=[];teamLoaded=false;occurrences=[];rotation=[];manualRotation=[];occurrenceTeam=[];
@@ -1010,7 +1010,7 @@ function sharedRotationCrewHtml(v,mem,o){
       doctors.map(m=>esc(displayName(m.profissionais)||m.nome_snapshot||'—')).join(' • ')+
       '</div>':'');
 }
-function crewGridHtml(v){
+function crewGridHtml(v,options={}){
   const o=activeOccurrence(v);
   const mem=crewRowsForCard(v);
   const summary=sharedRotationCrewHtml(v,mem,o);
@@ -1047,7 +1047,7 @@ function crewGridHtml(v){
   const label=o?'EQUIPE DA OCORRÊNCIA':comp.label;
   const state=o?'complete':comp.state;
   return '<div class="crew-grid '+cls+'">'+slots.join('')+'</div>'+
-    (o?'':'<div class="crew-setup '+state+'"><b>'+label+'</b></div>');
+    (o||options.hideReadiness?'':'<div class="crew-setup '+state+'"><b>'+label+'</b></div>');
 }
 /* Desfecho da ocorrência reutiliza o destino persistido no banco. */
 const VICTIM_DESTINATION_OPTIONS=['UPA','UPA PED','HOSPITAL MUNICIPAL','SANTA CASA','ALFREDO ABRAAO','HEANA','HEG','TRANSPORTADO POR TERCEIROS','RECUSA','NÃO ENCONTRADO','QTA'];
@@ -1197,7 +1197,7 @@ function vehicleCardHtml(v,options={}){
     '<div class="vehicle-top"><div><div class="vehicle-name">'+esc(v.nome||v.codigo)+'</div><div class="vehicle-subhint">'+(rosterOnly?'CLIQUE PARA ESCALAR / EDITAR EQUIPE':st.key==='occurrence'?'EQUIPE EMPENHADA • CLIQUE PARA EDITAR':'CLIQUE PARA EMPENHAR / EDITAR EQUIPE')+'</div></div><span class="status-badge">'+badgeLabel+'</span></div>'+
     (rosterOnly&&!crewRowsForCard(v).length?'<div class="roster-unassigned">NÃO ESCALADO</div>':'')+
     (!rosterOnly&&isOperator()?'<button type="button" class="crew-edit-pencil" data-summary-team-edit="'+esc(v.id)+'" title="Editar equipe" aria-label="Editar equipe '+esc(v.nome||v.codigo)+'">✎</button>':'')+
-    crewGridHtml(v)+
+    crewGridHtml(v,{hideReadiness:rosterOnly})+
     (rosterOnly
       ?'<div class="regional-roster-count">'+occurrences.filter(row=>row.viatura_id===v.id&&norm(row.status)==='FINALIZADA').length+' ocorrência(s) finalizada(s) no plantão</div>'+
         (isOperator()?'<button type="button" class="regional-roster-edit" data-regional-team="'+esc(v.id)+'">ESCALAR / EDITAR EQUIPE</button>':'')
@@ -2520,11 +2520,10 @@ function renderRegionalQuickScale(){
     if(!groups.has(base))groups.set(base,[]);
     groups.get(base).push(v);
   });
-  root.innerHTML=[...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR')).map(([base,list])=>
-    '<div class="regional-quick-base"><h3>'+esc(base)+'</h3><div class="regional-quick-vehicles">'+
-    list.map(v=>'<div class="regional-quick-unit">'+vehicleCardHtml(v,{rosterOnly:true})+
-      '<button type="button" class="regional-wa-open" data-regional-import="'+esc(v.id)+'">COLAR EQUIPE DO WHATSAPP</button></div>').join('')+'</div></div>'
-  ).join('')||'<div class="priority-empty">Nenhuma viatura de base descentralizada cadastrada.</div>';
+  root.innerHTML=[...groups.entries()].sort((a,b)=>a[0].localeCompare(b[0],'pt-BR')).flatMap(([base,list])=>list.map(v=>
+    '<div class="regional-quick-base"><h3>'+esc(base)+'</h3><div class="regional-quick-unit">'+vehicleCardHtml(v,{rosterOnly:true})+
+      '<button type="button" class="regional-wa-open" data-regional-import="'+esc(v.id)+'">COLAR EQUIPE DO WHATSAPP</button></div></div>'
+  )).join('')||'<div class="priority-empty">Nenhuma viatura de base descentralizada cadastrada.</div>';
   root.querySelectorAll('[data-regional-team]').forEach(b=>b.onclick=()=>openTeamModal(b.dataset.regionalTeam));
   root.querySelectorAll('[data-regional-import]').forEach(b=>b.onclick=async()=>{
     await openTeamModal(b.dataset.regionalImport);

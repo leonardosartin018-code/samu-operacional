@@ -85,3 +85,16 @@ body :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card[class] .
 .regional-base-vehicles .regional-vehicle-square:focus-visible{outline:3px solid #729fba;outline-offset:2px}
 @media(max-width:1000px){.regional-base-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:520px){.regional-base-tile{flex-direction:column;align-items:flex-start;gap:8px}.regional-base-name{max-width:100%}.regional-overview-header .fleet-stats{gap:8px 12px}}
+
+/* A atualização de rotina não abre avisos nem desloca o conteúdo. */
+.offline-status>div{flex:1 1 0;min-width:0}.offline-status #offlineStatusText{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.5}
+#offlineStatusControls:not([open]) #syncStatus{display:none}#offlineStatusControls[open] #syncStatus{display:block;margin:8px 0;padding:8px;border-radius:6px;font-size:.75rem}
+/* Um bloco por viatura, sempre em duas colunas na tela de montagem. */
+#regionalQuickScaleGrid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;align-items:start}
+#regionalQuickScaleGrid .regional-quick-base{margin:0;min-width:0;padding:10px}
+#regionalQuickScaleGrid .regional-quick-base h3{margin:0 0 8px;font-size:.82rem}
+#regionalQuickScaleGrid .regional-quick-unit{min-width:0}
+#regionalQuickScaleGrid .vehicle-card{padding:11px}
+#regionalQuickScaleGrid .regional-wa-open{min-height:36px;padding:8px;font-size:.68rem}
+#regionalQuickScaleGrid .regional-roster-count{margin:8px 0;font-size:.67rem}
+@media(max-width:750px){#regionalQuickScaleGrid{grid-template-columns:1fr}}
