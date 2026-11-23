@@ -95,6 +95,27 @@ const activeLoads = new Set();
 let operationalShiftTimer = null;
 let operationalShiftSyncBusy = false;
 let autoFollowCurrentShift = true;
+// Mantém o plantão operacional após 07h/19h inclusive ao atualizar o navegador.
+function shiftStorageKey(suffix){
+  const id=session?.user?.id;
+  return id?'samu-operacional-'+suffix+'-'+id:null;
+}
+function storedShiftId(){
+  try{return localStorage.getItem(shiftStorageKey('ativo'))||''}
+  catch{return ''}
+}
+function storedShiftHoldId(){
+  try{return localStorage.getItem(shiftStorageKey('aguardando'))||''}
+  catch{return ''}
+}
+function rememberShiftSelection(shift,{endedOnly=false}={}){
+  if(!session?.user?.id||!shift?.id)return;
+  try{
+    localStorage.setItem(shiftStorageKey('ativo'),shift.id);
+    if(endedOnly)localStorage.setItem(shiftStorageKey('aguardando'),shift.id);
+    else localStorage.removeItem(shiftStorageKey('aguardando'));
+  }catch(error){console.warn('Não foi possível preservar referência local do plantão',error)}
+}
 // A escala escolhida manualmente é apenas a referência de titulares para o plantão aberto.
 let manualScaleReference = null;
 let pendingScaleReference = null;
@@ -453,6 +474,17 @@ async function resolveOperationalShiftContext(){
   // Não seguir o relógio enquanto houver plantão ABERTO: 07h ou 19h
   // não encerram o Livro e nem permitem apagar a escala visível.
   if(isOpenShift(currentPlantao))return shiftContextOf(currentPlantao,alaForDate);
+  const fixedId=storedShiftId();
+  if(!currentPlantao&&fixedId){
+    const saved=await supabase.from('plantoes')
+      .select('id,data_plantao,turno,ala,status,iniciado_em')
+      .eq('id',fixedId).maybeSingle();
+    if(saved.error)throw saved.error;
+    if(saved.data&&(isOpenShift(saved.data)||
+      (norm(saved.data.status)==='ENCERRADO'&&storedShiftHoldId()===fixedId))){
+      return shiftContextOf(saved.data,alaForDate);
+    }
+  }
   const {data,error}=await supabase.from('plantoes')
     .select('id,data_plantao,turno,ala,status,iniciado_em')
     .eq('status','ABERTO').order('iniciado_em',{ascending:false}).limit(60);
@@ -567,6 +599,11 @@ async function synchronizeCurrentOperationalShift(force=false){
     const clockKey=operationalShiftKey();
     const ctx=await resolveOperationalShiftContext();
     const key=operationalShiftKey(ctx);
+    if(!force&&plantaoShiftKey()===key&&isOpenShift(currentPlantao)){
+      lastClockShiftKey=clockKey;
+      if(clockKey!==key)setSync('Virada de horário detectada. Plantão anterior preservado até ENCERRAR PLANTÃO / ENVIAR LIVRO.','warn');
+      return;
+    }
     if(!force&&clockKey===lastClockShiftKey&&plantaoShiftKey()===key)return;
     if(key!==plantaoShiftKey()&&(unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())){
       if(pendingShiftWarningKey!==key){
@@ -841,6 +878,8 @@ async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCr
     syncRotationCriterionFromPlantao();
     renderAll();
     if(currentPlantao){
+      if(autoFollowCurrentShift&&norm(currentPlantao.status)==='ABERTO')
+        rememberShiftSelection(currentPlantao);
       const turno=normalizeTurno(currentPlantao.turno||initialShift.turno);
       $('#plantaoInfo').textContent='Plantão '+(currentPlantao.legacy_id||'')+' • '+fmtDate(date)+' • ALA '+(currentPlantao.ala||ala)+' • '+turno+' • '+currentPlantao.status;
     }else{
@@ -6188,6 +6227,7 @@ async function executeShiftTransitionLocal(mode){
       const next=await ensureOperationalPlantao(ctx.date,ctx.turno,alaForDate(ctx.date));
       if(!next||norm(next.status)!=='ABERTO')throw new Error('O plantão ainda não foi aberto.');
       autoFollowCurrentShift=true;
+      rememberShiftSelection(next);
       await loadAll(ctx.date,ctx.turno,true);
       await loadExpressScale();
       lastClockShiftKey=operationalShiftKey();
@@ -6256,6 +6296,7 @@ async function executeShiftTransitionLocal(mode){
       downloadReadySamuPdf();
     }
     if(mode==='end'){
+      rememberShiftSelection(old,{endedOnly:true});
       autoFollowCurrentShift=false;
       unsavedBook=false;
       await loadAll(old.data_plantao,old.turno);
@@ -6271,7 +6312,8 @@ async function executeShiftTransitionLocal(mode){
     const np=await ensureOperationalPlantao(next.date,next.turno,next.ala);
     if(norm(np.status)!=='ABERTO')throw new Error('O próximo plantão não está aberto.');
     autoFollowCurrentShift=true;
-    await loadAll(next.date,next.turno);
+    rememberShiftSelection(np);
+    await loadAll(next.date,next.turno,true);
     await loadExpressScale();
     if(currentPlantao)await loadBookData();
     lastOperationalShiftKey=operationalShiftKey(next);
