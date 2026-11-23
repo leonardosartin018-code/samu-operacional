@@ -1,7 +1,8 @@
+import { renderFleetOverview } from './operator-panels.js';
 import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261123-offline-15';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261123-offline-15';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261123-offline-16';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261123-offline-16';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -901,6 +902,7 @@ async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCr
 }
 
 function renderAll(){
+  const expanded=new Set([...document.querySelectorAll('details[data-fold-key][open]')].map(el=>el.dataset.foldKey));
   $('#teamUnassigned').hidden=!(teamLoaded&&norm(currentPlantao?.status)==='ABERTO'&&activeTeamRows().length===0);
   renderSummary();
   renderFleet();
@@ -913,6 +915,7 @@ function renderAll(){
   renderScaleConfirmationStates();
   if(!$('#teamInternalPanel')?.classList.contains('hidden')) renderInternalEditors();
   if($('#book')?.classList.contains('active')) renderBook();
+  document.querySelectorAll('details[data-fold-key]').forEach(el=>el.open=expanded.has(el.dataset.foldKey));
 }
 function confirmationLabel(ts,by){
   if(!ts)return {text:'NÃO CONFIRMADA',cls:'pending'};
@@ -939,20 +942,10 @@ function renderScaleConfirmationStates(){
 function renderSummary(){
   $('#closingReportBtn').disabled=!isOperator()||!currentPlantao||samuPdfExportInProgress;
   $('#exportBtn').disabled=!isOperator()||!currentPlantao||samuPdfExportInProgress;
-  const an=vehicles.filter(isAnapolisVehicle),rg=vehicles.filter(v=>!isAnapolisVehicle(v));
-  const calc=list=>{
-    const x={base:0,occurrence:0,returning:0,other:0,total:list.length};
-    list.forEach(v=>{const k=statusInfo(v).key;if(k==='base')x.base++;else if(k==='occurrence')x.occurrence++;else if(k==='returning')x.returning++;else x.other++});
-    return x;
-  };
-  const a=calc(an),r=calc(rg),attention=a.returning+a.other+r.returning+r.other;
-  $('#summary').innerHTML=[
-    ['ANÁPOLIS QRV',a.base+' / '+a.total],
-    ['ANÁPOLIS EM OCORRÊNCIA',a.occurrence],
-    ['REGIONAL QRV',r.base+' / '+r.total],
-    ['REGIONAL EM OCORRÊNCIA',r.occurrence],
-    ['PRECISAM DE ATENÇÃO',attention]
-  ].map(x=>'<div class="sum"><span>'+x[0]+'</span><b>'+x[1]+'</b></div>').join('');
+  renderFleetOverview($('#summary'),vehicles,{isAnapolisVehicle,vehicleType,statusInfo,crewCompleteness,onJump:id=>{
+    const v=vehicleById(id),root=isAnapolisVehicle(v)?$('#vehicles'):$('#regionalGrid');const card=root?.querySelector('[data-v="'+id+'"]');if(!card)return;
+    card.scrollIntoView({behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth',block:'center'});card.setAttribute('tabindex','-1');card.focus({preventScroll:true});card.classList.add('navigation-target');setTimeout(()=>card.classList.remove('navigation-target'),2500);
+  }});
   $('#plantaoInfo').textContent=currentPlantao
     ? 'Plantão '+(currentPlantao.legacy_id||'')+' • '+fmtDate(currentPlantao.data_plantao)+' • '+currentPlantao.status
     : 'Nenhum plantão encontrado';
@@ -1043,7 +1036,7 @@ function crewGridHtml(v){
         const next=dispatchCandidateForVehicleRole(v,role,used);
         if(next){used.add(next.profissional_id);return rotationPreviewSlotHtml(next,role)}
       }
-      return memberSlotHtml(null);
+      return namedMemberSlotHtml(null,roleLabel(role));
     });
     const extra=mem.filter(m=>!exp.includes(teamRoleKey(m)) && !(teamRoleKey(m)==='nurse'&&exp.includes('tech')));
     slots.push(...extra.map(memberSlotHtml));
@@ -1054,7 +1047,7 @@ function crewGridHtml(v){
   const label=o?'EQUIPE DA OCORRÊNCIA':comp.label;
   const state=o?'complete':comp.state;
   return '<div class="crew-grid '+cls+'">'+slots.join('')+'</div>'+
-    '<div class="crew-setup '+state+'"><b>'+label+'</b><span>'+(o?'Equipe efetivamente empenhada':'Fixo + próximo do revezamento')+'</span></div>';
+    (o?'':'<div class="crew-setup '+state+'"><b>'+label+'</b></div>');
 }
 /* Desfecho da ocorrência reutiliza o destino persistido no banco. */
 const VICTIM_DESTINATION_OPTIONS=['UPA','UPA PED','HOSPITAL MUNICIPAL','SANTA CASA','ALFREDO ABRAAO','HEANA','HEG','TRANSPORTADO POR TERCEIROS','RECUSA','NÃO ENCONTRADO','QTA'];
@@ -1158,38 +1151,19 @@ function qthElapsedMinutes(o){
     minutesBetween(o.saida_em||o.acionada_em,o.chegada_qth_em);
 }
 function occurrenceInfoHtml(v,o){
-  if(!o) return '';
-  const qthRecorded=!!o.chegada_qth_em;
-  const qthNotReported=o.qth_nao_informado===true&&!qthRecorded;
-  const inicio=o.saida_em||o.acionada_em;
-  const tempoQth=qthElapsedMinutes(o);
-  const canCorrectNumber=isOperator()&&norm(currentPlantao?.status)==='ABERTO'&&
-    ['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status));
-  return '<div class="occ-identity-line"><div class="occ-detail">OC. '+esc(o.numero||'—')+
-    ' • '+esc(o.natureza||'SEM NATUREZA')+'</div>'+
-    (canCorrectNumber?'<button type="button" class="occ-number-correct-btn" data-act="correct-occ-number" data-o="'+esc(o.id)+'" title="Corrigir apenas o número desta ocorrência">✎ EDITAR Nº</button>':'')+
-    '</div>'+
-    '<div class="occ-address">'+esc([o.bairro,o.endereco,o.destino].filter(Boolean).join(' • '))+'</div>'+
-    '<div class="occ-timeline">'+
-      '<div class="occ-time-chip"><span>INÍCIO / SAÍDA</span><b>'+fmtTime(inicio)+'</b><small>'+esc(inicio?fmtDate(datetimeLocal(inicio).slice(0,10)):'')+'</small></div>'+
-      '<div class="occ-time-chip"><span>CHEGADA QTH</span><b>'+esc(qthDisplayTime(o))+'</b><small>'+esc(o.chegada_qth_em?fmtDate(datetimeLocal(o.chegada_qth_em).slice(0,10)):'')+'</small></div>'+
-      '<div class="occ-time-chip qth-duration"><span>TEMPO ATÉ QTH</span><b>'+fmtMinutes(tempoQth)+'</b></div>'+
-      '<div class="occ-time-chip"><span>INÍCIO RETORNO</span><b>'+fmtTime(o.inicio_retorno_em)+'</b></div>'+
-    '</div>'+
-    victimDestinationControlsHtml(o,v)+
-    (statusInfo(v).key==='occurrence'
-      ? '<div class="occurrence-main-actions">'+
-          '<button class="qth-btn '+(qthRecorded?'recorded':'')+'" data-act="qth" data-o="'+o.id+'">'+(qthRecorded?'QTH REGISTRADO • '+fmtTime(o.chegada_qth_em)+' • '+fmtMinutes(tempoQth):qthNotReported?'REGISTRAR CHEGADA NO QTH (CORREÇÃO)':'CHEGADA NO QTH')+'</button>'+
-          (!qthRecorded?'<button type="button" class="qth-not-informed-btn '+(qthNotReported?'selected':'')+'" data-act="qth-not-informed" data-o="'+o.id+'" '+(qthNotReported?'disabled':'')+'>'+
-            (qthNotReported?'✓ QTH NÃO INFORMADO':'NÃO INFORMADO • CHEGADA NO QTH')+'</button>':'')+
-          '<div class="occurrence-action-row">'+
-            '<button class="qta-btn" data-act="qta" data-o="'+o.id+'" data-v="'+v.id+'">QTA</button>'+
-            '<button class="edit-team-btn" data-act="edit-team" data-v="'+v.id+'">EDITAR EQUIPE</button>'+
-            '<button class="return-btn" data-act="return" data-o="'+o.id+'" data-v="'+v.id+'">RETORNAR À BASE</button>'+
-          '</div>'+
-        '</div>'
-      : '');
+ if(!o)return '';
+ const st=statusInfo(v).key,qth=!!o.chegada_qth_em,missing=o.qth_nao_informado===true;
+ const time=(label,value)=>'<div class="occ-time-chip"><span>'+label+'</span><b>'+fmtTime(value)+'</b><small>'+esc(value?fmtDate(datetimeLocal(value).slice(0,10)):'')+'</small></div>';
+ return '<div class="occ-identity-line"><span class="occ-number">Nº '+esc(o.numero||'—')+'</span><strong class="occ-nature">'+esc(o.natureza||'Natureza não informada')+'</strong></div>'+
+  (st==='occurrence'?'<button type="button" class="qth-btn '+(qth?'recorded':'')+'" data-act="qth" data-o="'+esc(o.id)+'">'+(qth?'✓ QTH registrado · '+fmtTime(o.chegada_qth_em):'CHEGADA AO QTH')+'</button>':'')+
+  '<details class="vehicle-details" data-fold-key="vtr-'+esc(v.id)+'"><summary>Horários, destino e outras ações <span>▾</span></summary><div class="vehicle-details-body">'+
+  '<div class="occ-timeline">'+time('Início / saída',o.saida_em||o.acionada_em)+time('Chegada QTH',o.chegada_qth_em)+'<div class="occ-time-chip"><span>Tempo até QTH</span><b>'+fmtMinutes(qthElapsedMinutes(o))+'</b></div>'+time('Início retorno',o.inicio_retorno_em)+'</div>'+
+  '<div class="occ-address">'+esc([o.bairro,o.endereco].filter(Boolean).join(' · '))+'</div>'+victimDestinationControlsHtml(o,v)+
+  (st==='occurrence'?'<div class="occurrence-main-actions">'+(!qth?'<button type="button" class="qth-not-informed-btn" data-act="qth-not-informed" data-o="'+esc(o.id)+'" '+(missing?'disabled':'')+'>'+(missing?'QTH não informado':'Marcar QTH não informado')+'</button>':'')+'<div class="occurrence-action-row"><button type="button" class="qta-btn" data-act="qta" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">QTA</button><button type="button" class="return-btn" data-act="return" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">Retornar à base</button></div></div>':'')+
+  (st==='returning'?'<button type="button" class="edit-team-btn" data-act="undo-return" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">Corrigir retorno</button>':'')+
+  (isOperator()?'<button type="button" class="time-edit-btn" data-summary-occ-edit="'+esc(o.id)+'">Editar dados / horários</button>':'')+'</div></details>';
 }
+
 function statusStripHtml(v){
   if(!isOperator()) return '';
   const o=activeOccurrence(v);
@@ -1207,27 +1181,27 @@ function statusStripHtml(v){
 function vehicleCardHtml(v,options={}){
   const rosterOnly=options.rosterOnly===true;
   const st=statusInfo(v),o=activeOccurrence(v);
+  const readiness=crewCompleteness(v);const badgeLabel=st.key==='base'&&readiness.state!=='complete'?(readiness.state==='empty'?'NA BASE · SEM EQUIPE':'NA BASE · EQUIPE PARCIAL'):st.label;
   let primary='';
   if(st.key==='base') primary='<button class="dispatch-btn" data-act="dispatch" data-v="'+v.id+'">ACIONAR VIATURA</button>';
   if(st.key==='returning'){
     primary='<div class="occurrence-main-actions">'+
       '<button class="arrive-btn" data-act="arrive" data-o="'+(o?.id||'')+'" data-v="'+v.id+'">CHEGADA À BASE</button>'+
-      (isOperator()&&o?'<button type="button" class="edit-team-btn occ-crew-correct-btn" data-act="edit-team" data-v="'+esc(v.id)+'" data-o="'+esc(o.id)+'">✎ CORRIGIR EQUIPE EMPENHADA</button>':'')+
-      (isOperator()&&norm(o?.status)==='RETORNANDO'
-        ?'<button type="button" class="edit-team-btn" data-act="undo-return" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">CORRIGIR RETORNO</button>':'')+
+
       '</div>';
   }
   return '<article class="vehicle-card '+st.cls+(rosterOnly?' roster-only-card':'')+'" data-team-card data-v="'+v.id+'">'+
     (st.key==='occurrence'
       ? '<div class="vehicle-giroflex" aria-hidden="true"><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span><span class="giroflex-led red"></span></div>'
       : '')+
-    '<div class="vehicle-top"><div><div class="vehicle-name">'+esc(v.nome||v.codigo)+'</div><div class="vehicle-subhint">'+(rosterOnly?'CLIQUE PARA ESCALAR / EDITAR EQUIPE':st.key==='occurrence'?'EQUIPE EMPENHADA • CLIQUE PARA EDITAR':'CLIQUE PARA EMPENHAR / EDITAR EQUIPE')+'</div></div><span class="status-badge">'+st.label+'</span></div>'+
+    '<div class="vehicle-top"><div><div class="vehicle-name">'+esc(v.nome||v.codigo)+'</div><div class="vehicle-subhint">'+(rosterOnly?'CLIQUE PARA ESCALAR / EDITAR EQUIPE':st.key==='occurrence'?'EQUIPE EMPENHADA • CLIQUE PARA EDITAR':'CLIQUE PARA EMPENHAR / EDITAR EQUIPE')+'</div></div><span class="status-badge">'+badgeLabel+'</span></div>'+
     (rosterOnly&&!crewRowsForCard(v).length?'<div class="roster-unassigned">NÃO ESCALADO</div>':'')+
+    (!rosterOnly&&isOperator()?'<button type="button" class="crew-edit-pencil" data-summary-team-edit="'+esc(v.id)+'" title="Editar equipe" aria-label="Editar equipe '+esc(v.nome||v.codigo)+'">✎</button>':'')+
     crewGridHtml(v)+
     (rosterOnly
       ?'<div class="regional-roster-count">'+occurrences.filter(row=>row.viatura_id===v.id&&norm(row.status)==='FINALIZADA').length+' ocorrência(s) finalizada(s) no plantão</div>'+
         (isOperator()?'<button type="button" class="regional-roster-edit" data-regional-team="'+esc(v.id)+'">ESCALAR / EDITAR EQUIPE</button>':'')
-      :occurrenceInfoHtml(v,o)+(o&&isOperator()?'<button type="button" class="time-edit-btn" data-summary-occ-edit="'+esc(o.id)+'">EDITAR DADOS / HORÁRIOS</button>':'')+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+statusStripHtml(v))+
+      :occurrenceInfoHtml(v,o)+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+(!o&&isOperator()?'<details class="vehicle-details" data-fold-key="status-'+esc(v.id)+'"><summary>Situação da viatura <span>▾</span></summary>'+statusStripHtml(v)+'</details>':''))+
   '</article>';
 }
 function operationalGroup(title,subtitle,cls,list,extra=''){
@@ -2651,7 +2625,7 @@ function bindVehicleActions(root){
   bindSummaryEditors(root);
   root.querySelectorAll('[data-team-card]').forEach(card=>{
     card.onclick=e=>{
-      if(e.target.closest('button,select,input,textarea,a'))return;
+      if(e.target.closest('button,select,input,textarea,a,summary,details'))return;
       const v=vehicleById(card.dataset.v);
       const o=v?activeOccurrence(v):null;
       if(o&&['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status))){

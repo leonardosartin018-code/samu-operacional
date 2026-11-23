@@ -1,6 +1,6 @@
-const CACHE_NAME = 'samu-shell-20261123-15';
+const CACHE_NAME = 'samu-shell-20261123-16';
 const SHELL = [
-  './index.html', './styles.css', './offline.css', './app.js',
+  './operator-theme.css', './operator-panels.js', './index.html', './styles.css', './offline.css', './app.js',
   './occurrence-time-editor.js', './shift-manual-lifecycle.js', './regional-whatsapp-import.js', './names-review.js', './professional-functions.js', './monthly-roster-match.js', './offline-store.js', './offline-query.js', './offline-schema.js',
   './offline-client.js', './offline-rpc.js', './offline-shell.js', './offline-ui.js',
   './regulation-import.js', './victim-destination-rules.js',
@@ -27,7 +27,7 @@ self.addEventListener('fetch', event => {
   const url = new URL(event.request.url);
   if (event.request.method !== 'GET' || url.origin !== self.location.origin) return;
   const scopePath = new URL(self.registration.scope).pathname;
-  const indexUrl = new URL('./index.html', self.registration.scope).href;
+  const indexUrl = new URL('./operator-theme.css', './operator-panels.js', './index.html', self.registration.scope).href;
   if (event.request.mode === 'navigate' && (url.pathname === scopePath || url.pathname === new URL(indexUrl).pathname)) {
     event.respondWith((async () => {
       const cache = await caches.open(CACHE_NAME);

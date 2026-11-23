@@ -1,0 +1,75 @@
+/* Identidade única do posto de operação: superfícies leves e cor de status só onde orienta decisão. */
+:root{--operator-ink:#213f52;--operator-muted:#587080;--operator-line:#cbd9e2;--operator-surface:#f4f7fa;--operator-accent:#245f80}
+body{background:#eaf0f4;color:var(--operator-ink)}
+.app .section,.dialog,.express-quick-wrap,.regional-quick-scale,.team-preview-wrap,.team-search-wrap,.roster-quick-area{background:var(--operator-surface);border-color:var(--operator-line);box-shadow:0 2px 6px #203e5010}
+.app .head h2,.dialog h2,.express-quick-title,.regional-quick-head h2{color:var(--operator-ink)}
+.app input:not([type=checkbox]):not([type=radio]),.app select,.app textarea,.dialog input:not([type=checkbox]):not([type=radio]),.dialog select,.dialog textarea{background:#fff;color:#213f52;border:1px solid #a6becd;border-radius:7px;box-shadow:none;min-height:40px;font-size:.84rem}
+.app input::placeholder,.dialog input::placeholder,.dialog textarea::placeholder{color:#6c8290;opacity:1}
+.app input:focus-visible,.app select:focus-visible,.app textarea:focus-visible,.dialog input:focus-visible,.dialog select:focus-visible,.dialog textarea:focus-visible{outline:2px solid #639abd;outline-offset:2px;background:#fff}
+.app label,.dialog label{color:#294b60}
+.app .btn,.dialog .btn{background:#fff;color:#28506b;border:1px solid #aec4d2;border-radius:7px;min-height:38px;box-shadow:none}
+.app .btn.primary,.dialog .btn.primary{background:#245f80;color:#fff;border-color:#245f80}
+.app .btn.danger,.dialog .btn.danger{background:#fff2f0;color:#943e3c;border-color:#d2a6a0}
+.app .btn:hover,.dialog .btn:hover{filter:brightness(.97)}
+.top{background:#193f54;overflow:visible;gap:16px;padding:14px 16px;box-shadow:none}
+.top h1{font-size:1.25rem}.top-actions{gap:8px}.top-actions .btn{font-size:.7rem;padding:8px 12px}.top-sub{color:#d3e2eb}
+.reports-menu{position:relative;color:#24465d}.reports-menu>summary{cursor:pointer;list-style:none;background:#f6fafc;border:1px solid #b9cfdd;border-radius:7px;padding:11px 14px;font-size:.73rem;font-weight:850}
+.reports-menu>div{position:absolute;z-index:80;right:0;top:calc(100% + 6px);width:290px;max-width:85vw;padding:12px;background:white;border:1px solid #c4d3de;border-radius:9px;box-shadow:0 7px 24px #19394e24;display:grid;gap:8px}
+.reports-menu #samuPdfExportStatus{color:#3c5b70}.sync-strip:not(.warn){display:none}
+.offline-status{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px 16px;padding:7px 14px;font-size:.75rem;border-width:1px;border-left-width:3px;background:#f2f8f5;margin:6px auto}
+.offline-status>details>summary{margin:0;font-size:.72rem;cursor:pointer;list-style:none;color:#365d4c}.offline-status>details[open]{flex:1 1 100%;padding-top:8px;border-top:1px solid #cbded2}.offline-status p{font-size:.74rem}.offline-status .btn{min-height:34px;font-size:.72rem}
+.tabs{gap:8px;background:#e8eff4}.tabs .tab{background:#f9fbfc;color:#2c4b61;border:1px solid #b9cddc;box-shadow:none}.tabs .tab.active{background:#245f80;color:#fff;border-color:#245f80}.tabs .book-tab:not(.active){background:#f9fbfc;color:#2c4b61}
+/* Navegação do panorama: sem somar equipe incompleta como QRV. */
+#summary.ops-summary{display:grid;grid-template-columns:1fr;gap:9px}
+.fleet-overview{border:1px solid #c0d1dd;border-radius:10px;background:#f9fbfc;min-width:0;overflow:hidden}
+.fleet-overview>summary{display:flex;gap:14px;align-items:center;justify-content:space-between;cursor:pointer;list-style:none;padding:12px 15px;flex-wrap:wrap}
+.fleet-overview summary strong{display:block;font-size:.94rem;color:#213f52}.fleet-overview summary small{display:block;font-size:.69rem;color:#617988;margin-top:3px}.fleet-overview summary em{font-style:normal;font-size:.71rem;color:#3d6e8a;font-weight:800}.fleet-stats{display:flex;flex-wrap:wrap;gap:8px 16px;align-items:center}.fleet-stat{font-size:.76rem;white-space:nowrap;color:#5c7180}.fleet-stat b{font-size:1.12rem}.fleet-stat.ready{color:#326c56}.fleet-stat.occurrence{color:#92444a}.fleet-stat.returning{color:#86661e}
+.fleet-jumps{padding:2px 14px 13px;display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:8px}.fleet-jump{background:white;border:1px solid #b6c9d6;border-left:4px solid #839aa9;border-radius:7px;padding:10px;text-align:left;cursor:pointer;min-height:54px;color:#29495e}.fleet-jump small{display:block;font-size:.65rem;margin-top:4px}.fleet-jump.state-ready{border-left-color:#3d8868}.fleet-jump.state-occurrence{background:#fff2f1;border-left-color:#ac4f53;color:#8f343e}.fleet-jump.state-returning{background:#fff8e6;border-left-color:#b99a46;color:#725a1c}.fleet-jump:hover{box-shadow:0 0 0 2px #b3d0e0}.fleet-base{margin:0 12px 10px;border:1px solid #d3dfe7;border-radius:8px;background:#fff}.fleet-base>summary{display:flex;gap:12px;justify-content:space-between;flex-wrap:wrap;align-items:center;cursor:pointer;padding:10px;list-style:none}.fleet-base-list{padding-top:4px}
+/* Cards: hierarquia viatura > equipe > número/natureza > ação imediata. */
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card{padding:13px;border-radius:11px;box-shadow:0 3px 9px #15344816;border-width:1px}
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card.status-base{background:#2e6756;border-color:#4f8b74}
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card.status-occurrence{background:#873e45;border-color:#aa6265}
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card.status-returning{background:#f6e9b9;border-color:#ccb879;color:#55451c}
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card.status-asepsis{background:#39627d;border-color:#7197ad}
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card.status-mechanical,:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card.status-noCrew{background:#52616c;border-color:#8495a0}
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card.status-noStretcher{background:#655773;border-color:#9785a5}
+.vehicle-card .vehicle-top{padding-right:33px;min-height:28px}.vehicle-card.roster-only-card .vehicle-top{padding-right:0}.vehicle-card .vehicle-name{font-size:1.1rem}.vehicle-card:not(.roster-only-card) .vehicle-subhint{display:none}
+.crew-edit-pencil{position:absolute;right:10px;top:10px;display:grid;place-items:center;width:30px;height:30px;min-height:30px;border:1px solid #ffffff60;border-radius:7px;background:#ffffff18;color:inherit;font-size:1.15rem;cursor:pointer;z-index:4}.crew-edit-pencil:hover{background:#ffffff35}
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-slot.has-professional{background:#203c4b;box-shadow:none;border:1px solid #a9bdcb77;padding:9px}.vehicle-card .crew-grid{gap:8px;margin:12px 0}
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card .crew-slot.has-professional .crew-name.has-person{color:#fff0b7;font-size:.95rem;line-height:1.35;text-shadow:none}.vehicle-card .crew-role{font-size:.62rem;letter-spacing:.02em}
+.occ-identity-line{display:flex;align-items:baseline;flex-wrap:wrap;gap:7px 10px;margin:12px 0;padding:10px 11px;background:#ffffff14;border:1px solid #ffffff28;border-radius:8px}.occ-number{font-size:1.14rem;font-weight:950;white-space:nowrap;line-height:1.3}.occ-nature{font-size:.87rem;line-height:1.4;overflow-wrap:anywhere}
+.vehicle-card .qth-btn{width:100%;min-height:42px;background:#eef6fb;color:#174e70;border:1px solid #bdd7e7;border-radius:7px;font-size:.77rem;font-weight:900;box-shadow:none}.vehicle-card .qth-btn.recorded{background:#f0f7f1;color:#285f43}
+.vehicle-details{margin-top:12px;border-top:1px solid #ffffff40}.vehicle-details>summary{display:flex;justify-content:space-between;gap:10px;padding:11px 1px 2px;cursor:pointer;list-style:none;font-size:.73rem;font-weight:800;color:inherit}.vehicle-details[open]>summary{padding-bottom:10px}.vehicle-details-body{display:grid;gap:11px}.vehicle-card .occ-timeline{margin:0;gap:6px}.vehicle-card .occ-time-chip{background:#ffffff12;border:1px solid #ffffff40;padding:7px 6px}.vehicle-card .occ-time-chip span{font-size:.55rem}.vehicle-card .occ-time-chip b{font-size:.75rem}.vehicle-card .occ-address:empty{display:none}
+.vehicle-card .victim-destination-card{border:1px solid #d8d3bf;background:#faf8ef;box-shadow:none}.vehicle-card .victim-destination-btn{background:#f0f5f8;color:#31566e;border:1px solid #b8cbd7;box-shadow:none}
+.vehicle-card .return-btn{background:#f6e9b9;border:1px solid #d3bc73;color:#604a12;min-height:40px}.vehicle-card .qta-btn,.vehicle-card .qth-not-informed-btn,.vehicle-card .time-edit-btn,.vehicle-card .edit-team-btn{background:#f6f9fb;border:1px solid #bed0dc;color:#34566b;min-height:36px}.vehicle-card .status-strip{margin-top:10px;gap:6px}.vehicle-card .status-strip button{background:#f4f7fa;color:#34566b;border-color:#b6cbd8}
+.vehicle-card .dispatch-btn{background:#e9f6ef;color:#215f43;border:1px solid #b3d8c1;min-height:40px;box-shadow:none}.vehicle-card.navigation-target{outline:4px solid #e0b54d;outline-offset:4px}
+/* Uma alternância suave por segundo, sem múltiplos flashes em cada ciclo. */
+.vehicle-card.status-occurrence .giroflex-led{animation:operatorBeacon 2.4s ease-in-out infinite;will-change:auto}.vehicle-card.status-occurrence .giroflex-led:nth-child(n+4){animation-delay:-1.2s}
+@keyframes operatorBeacon{0%,100%{opacity:.25;box-shadow:none}45%,55%{opacity:.85;box-shadow:0 0 5px #dc656555}}
+@media(prefers-reduced-motion:reduce){.vehicle-card.status-occurrence .giroflex-led{animation:none;opacity:.8}}
+/* Revezamento com espaço próprio e leitura por grupo. */
+.ops-side-column .section{padding:17px;background:#f6f9fc;border-color:#c6d6e1}.ops-side-column h2{font-size:1.25rem;line-height:1.35;letter-spacing:.01em}.ops-side-column .head{margin-bottom:16px}.rotation-criterion{background:#edf3f7;border-color:#c6d7e3;padding:12px}.priority-type-group{margin-top:15px;border-color:#bfcedb;background:#f8fafc}.priority-role-panel{padding:14px;margin-top:13px;border-color:#c8d7e2}.priority-person{padding:12px 9px}.priority-next,.priority-person.next{background:#f2f6f9;border-color:#bdcfdc}
+@media(min-width:1100px){.ops-main-grid{grid-template-columns:minmax(0,1fr) minmax(360px,410px);gap:20px}}
+@media(max-width:700px){.top{padding:12px}.top-actions{width:100%}.fleet-overview>summary{gap:10px}.fleet-overview>summary>span:first-child{width:100%}.fleet-stats{gap:8px 13px}.fleet-jumps{grid-template-columns:repeat(2,minmax(0,1fr))}.fleet-overview summary em{font-size:.7rem}.reports-menu>div{left:0;right:auto}.vehicle-card .occ-timeline{grid-template-columns:repeat(2,minmax(0,1fr))}.ops-side-column .section{padding:14px}}
+html{font-size:14px}
+.app .top label{color:#e7f0f5}.top .day-ala-badge{background:#eaf2f7;color:#31576e;border-color:#b5cbd8}.top .role-badge{background:#eef4f7;color:#36586c;border-color:#b5cbd8}
+.tabs .tab[data-page=book]:not(.active){background:#f9fbfc;color:#2c4b61;border-color:#b9cddc;box-shadow:none}
+#vehicles .vehicle-operational-group[class]{background:#f4f7fa;border:1px solid #c6d6e1;border-left:3px solid #aabfce;box-shadow:none}
+#vehicles .vehicle-operational-group .vehicle-group-head{background:#fff;border-color:#d0dce5;color:#31536a}
+body :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card[class] .dispatch-btn{background:#e9f6ef;color:#215f43;border:1px solid #b3d8c1;box-shadow:none}
+body :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card[class] .qth-btn{background:#eef6fb;color:#174e70;border:1px solid #bdd7e7;box-shadow:none}
+.vehicle-card.status-base .status-badge{background:#e2f0e8;color:#285d45;border-color:#b9d6c6}.vehicle-card.status-occurrence .status-badge{background:#fff0ef;color:#82383d;border-color:#d4acac}
+.cockpit-rotation .criterion-row{padding:12px;background:#edf3f7;border:1px solid #c7d6e1;border-radius:8px}.cockpit-rotation .criterion-row label{background:transparent;border:0;padding:0;color:#31536a}.cockpit-rotation .head h2{font-size:1.3rem}.cockpit-rotation .head p{font-size:.77rem;line-height:1.55}
+#priority .rotation-panel-group{background:#f8fafc;border:1px solid #c5d5e1;border-left:3px solid #9fb9cb;padding:13px;margin-top:17px;color:#294d64}
+#priority .rotation-panel-heading b{font-size:1rem;color:#294d64}#priority .rotation-panel-heading small{color:#61798a}
+#priority .rotation-people-card{background:white;border:1px solid #c7d6e2;padding:14px;margin-top:16px;border-radius:9px}
+#priority .rotation-people-head{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:center;padding-bottom:12px}#priority .rotation-people-head>b{grid-column:1/-1;color:#31536a;font-size:.79rem;line-height:1.45}#priority .rotation-people-head small{font-size:.69rem;color:#657c8c}
+#priority .rotation-person-next{background:#edf4f8;border:1px solid #bcd0de;padding:14px;border-radius:8px;margin:2px 0 13px;box-shadow:none}
+#priority .rotation-person-next>strong{display:block;font-size:1.02rem;color:#214d67;margin:6px 0;line-height:1.4}#priority .rotation-next-tag{color:#557287;font-size:.64rem;letter-spacing:.03em}
+#priority .rotation-person-row{padding:13px 2px;gap:9px;border-color:#dbe5ec}#priority .rotation-wait-person>b{font-size:.85rem;color:#294d64}#priority .rotation-wait-metrics{font-size:.72rem;line-height:1.6;color:#61798a;gap:6px}
+#priority button{background:#f8fafc;color:#3b6179;border:1px solid #bed0de;border-radius:6px;min-height:32px;font-size:.65rem;padding:7px 9px;box-shadow:none}#priority .rotation-person-only-note{background:#edf4f8;border-color:#c1d3df;color:#3e6278;line-height:1.6}
+@media(max-width:700px){.top{display:flex;flex-direction:column;align-items:stretch;gap:10px}.top-brand{width:100%}.top-actions{display:flex;flex-wrap:wrap;justify-content:flex-start;width:100%;gap:8px}.top-actions .date-field{display:flex;align-items:center;gap:10px;flex:1 1 100%;min-width:0}.top-actions .date-field input{flex:1;min-width:0}.top-actions .day-ala-badge{margin-right:auto}.top .top-sub{font-size:.72rem;line-height:1.45}}
+body :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card[class] .crew-shared-rotation{background:#e7f1ec;color:#2b5a46;border:1px solid #bbd1c5;box-shadow:none}
+#teamModal .quick-team-field{background:#f6f9fb;border-color:#c4d5e1;box-shadow:none}#teamModal .quick-scale-placement{background:#edf3f7;border-color:#bdcfdd;color:#31566e}#teamModal .quick-team-field label{color:#31566e}.dialog input[readonly]{background:#edf2f5;color:#5a7181}
+.vehicle-card .status-badge{max-width:125px;line-height:1.4;text-align:center;white-space:normal}
+:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .qta-btn,:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .return-btn{animation:none}

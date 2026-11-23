@@ -5,8 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261123-offline-15">
-  <link rel="stylesheet" href="./offline.css?v=20261123-offline-15">
+  <link rel="stylesheet" href="./styles.css?v=20261123-offline-16">
+  <link rel="stylesheet" href="./offline.css?v=20261123-offline-16">
+  <link rel="stylesheet" href="./operator-theme.css?v=20261123-offline-16">
 </head>
 <body>
 
@@ -46,8 +47,8 @@
 </section>
 
 <section id="offlineStatus" class="offline-status" hidden aria-live="polite">
-  <div><strong id="offlineStatusText"></strong><p id="offlineStatusDetail"></p></div>
-  <details><summary>Sincronização</summary>
+  <div><strong id="offlineStatusText"></strong></div>
+  <details id="offlineStatusControls"><summary>Detalhes da sincronização ▾</summary><p id="offlineStatusDetail"></p>
     <p>As ações pendentes ficam neste navegador até o banco confirmar o recebimento.</p>
     <button id="offlineRetry" class="btn" type="button">Tentar sincronizar</button>
     <button id="offlineLogin" class="btn" type="button">Entrar novamente</button>
@@ -61,7 +62,7 @@
     <div class="top-brand">
       <div class="top-title-row">
         <h1>Central Operacional SAMU</h1>
-        <span class="version-badge">NOVO BANCO</span>
+        
       </div>
       <div class="top-sub">Central de regulação operacional • Anápolis • escala • viaturas • ocorrências</div>
     </div>
@@ -69,10 +70,11 @@
       <label class="date-field">Data do plantão<input id="shiftDate" type="date"></label>
       <span id="dayAlaBadge" class="day-ala-badge">ALA DO DIA: —</span>
       <span id="roleBadge" class="role-badge">CONSULTA</span>
-      <button id="exportBtn" class="btn" type="button">BAIXAR RELATÓRIO PDF</button>
+      <details class="reports-menu"><summary>Relatórios ▾</summary><div>      <button id="exportBtn" class="btn" type="button">BAIXAR RELATÓRIO PDF</button>
       <button id="closingReportBtn" class="btn" type="button" disabled>BAIXAR LIVRO + RELATÓRIO (ZIP)</button>
       <button id="samuPdfRetryBtn" class="btn hidden" type="button">BAIXAR ARQUIVO PRONTO</button>
       <span id="samuPdfExportStatus" class="samu-pdf-export-status hidden" role="status" aria-live="polite"></span>
+</div></details>
       <button id="endShiftBtn" class="btn danger">ENCERRAR PLANTÃO / ENVIAR LIVRO</button>
       <button id="logoutBtn" class="btn">Sair</button>
     </div>
@@ -109,7 +111,7 @@
           <section class="section cockpit-rotation">
             <div class="head">
               <div>
-                <h2>Próximas viaturas e revezamento</h2>
+                <h2>Controle de revezamento</h2>
                 <p>USA e USB separadas • mostra somente os profissionais em revezamento e os fixos necessários. Motolância não participa.</p>
               </div>
             </div>
@@ -972,6 +974,6 @@
 <script src="./vendor/jspdf-2.5.2.js"></script>
 <script src="./vendor/jspdf-autotable-3.8.4.js"></script>
 <script src="./vendor/html2canvas-1.4.1.js"></script>
-<script type="module" src="./app.js?v=20261123-offline-15"></script>
+<script type="module" src="./app.js?v=20261123-offline-16"></script>
 </body>
 </html>

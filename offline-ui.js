@@ -17,6 +17,8 @@ export function renderOfflineStatus(status) {
   else if (!status.connected) text.textContent = 'OFFLINE · ' + status.pending + ' ação(ões) pendente(s)';
   else if (status.pending) text.textContent = 'Salvo neste computador · ' + status.pending + ' ação(ões) aguardando envio';
   else text.textContent = status.lastSync ? 'ONLINE · alterações sincronizadas' : 'ONLINE · cópia local pronta';
+  const controls=document.getElementById('offlineStatusControls');
+  if(controls&&(status.error||status.conflict)&&panel.dataset.openedError!==String(status.error||status.conflict)){controls.open=true;panel.dataset.openedError=String(status.error||status.conflict);}
   detail.textContent = status.conflict || status.error ||
     (status.shellReady ? 'Arquivos disponíveis para reabrir o sistema sem internet.' : 'Preparando arquivos para abertura offline.');
   document.getElementById('offlineArchive').hidden = !status.conflict;
