@@ -43,8 +43,8 @@ body{background:#eaf0f4;color:var(--operator-ink)}
 .vehicle-card .victim-destination-card{border:1px solid #d8d3bf;background:#faf8ef;box-shadow:none}.vehicle-card .victim-destination-btn{background:#f0f5f8;color:#31566e;border:1px solid #b8cbd7;box-shadow:none}
 .vehicle-card .return-btn{background:#f6e9b9;border:1px solid #d3bc73;color:#604a12;min-height:40px}.vehicle-card .qta-btn,.vehicle-card .qth-not-informed-btn,.vehicle-card .time-edit-btn,.vehicle-card .edit-team-btn{background:#f6f9fb;border:1px solid #bed0dc;color:#34566b;min-height:36px}.vehicle-card .status-strip{margin-top:10px;gap:6px}.vehicle-card .status-strip button{background:#f4f7fa;color:#34566b;border-color:#b6cbd8}
 .vehicle-card .dispatch-btn{background:#e9f6ef;color:#215f43;border:1px solid #b3d8c1;min-height:40px;box-shadow:none}.vehicle-card.navigation-target{outline:4px solid #e0b54d;outline-offset:4px}
-/* Uma alternância suave por segundo, sem múltiplos flashes em cada ciclo. */
-.vehicle-card.status-occurrence .giroflex-led{animation:operatorBeacon 2.4s ease-in-out infinite;will-change:auto}.vehicle-card.status-occurrence .giroflex-led:nth-child(n+4){animation-delay:-1.2s}
+/* Ciclo de 1,5 segundo, com os dois lados alternados a cada meio ciclo. */
+.vehicle-card.status-occurrence .giroflex-led{animation:operatorBeacon 1.5s ease-in-out infinite;will-change:auto}.vehicle-card.status-occurrence .giroflex-led:nth-child(n+4){animation-delay:-.75s}
 @keyframes operatorBeacon{0%,100%{opacity:.25;box-shadow:none}45%,55%{opacity:.85;box-shadow:0 0 5px #dc656555}}
 @media(prefers-reduced-motion:reduce){.vehicle-card.status-occurrence .giroflex-led{animation:none;opacity:.8}}
 /* Revezamento com espaço próprio e leitura por grupo. */
