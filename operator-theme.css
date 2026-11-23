@@ -98,3 +98,13 @@ body :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card[class] .
 #regionalQuickScaleGrid .regional-wa-open{min-height:36px;padding:8px;font-size:.68rem}
 #regionalQuickScaleGrid .regional-roster-count{margin:8px 0;font-size:.67rem}
 @media(max-width:750px){#regionalQuickScaleGrid{grid-template-columns:1fr}}
+
+/* Indicadores de frota: valor destacado, rótulo legível e cores discretas. */
+.fleet-overview .fleet-stats{gap:8px;align-items:center}
+.fleet-overview .fleet-stat{display:inline-flex;align-items:center;gap:9px;min-height:44px;padding:8px 12px;border:1px solid #cbd8e2;border-radius:8px;background:#f1f5f8;color:#526b7d;font-size:12px;font-weight:650;line-height:1.25;white-space:nowrap}
+.fleet-overview .fleet-stat b{font-size:22px;line-height:1;font-weight:850;font-variant-numeric:tabular-nums;min-width:15px;text-align:center}
+.fleet-overview .fleet-stat.ready{background:#edf6f1;border-color:#c3ddce;color:#2d6751}
+.fleet-overview .fleet-stat.occurrence{background:#fff1f1;border-color:#e2c3c6;color:#923f49}
+.fleet-overview .fleet-stat.returning{background:#fff8e8;border-color:#e2d3a6;color:#806520}
+.fleet-overview .fleet-stat.other{background:#f0f4f7;border-color:#ced9e2;color:#536b7d}
+@media(max-width:700px){.fleet-overview .fleet-stats{gap:6px}.fleet-overview .fleet-stat{min-height:40px;padding:8px;gap:7px;font-size:11px}.fleet-overview .fleet-stat b{font-size:20px}}
