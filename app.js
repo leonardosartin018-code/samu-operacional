@@ -1,4 +1,5 @@
 import { openNamesReview } from './names-review.js';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261122-offline-13';
 import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261122-offline-12';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
@@ -449,12 +450,18 @@ function shiftTitle(ctx){
 }
 async function resolveOperationalShiftContext(){
   const clock=operationalShiftContext();
-  const next=nextShiftContext(clock);
-  const {data,error}=await supabase.from('plantoes').select('id')
-    .eq('data_plantao',next.date).eq('turno',next.turno).eq('ala',next.ala)
-    .eq('status','ABERTO').limit(1);
+  // Não seguir o relógio enquanto houver plantão ABERTO: 07h ou 19h
+  // não encerram o Livro e nem permitem apagar a escala visível.
+  if(isOpenShift(currentPlantao))return shiftContextOf(currentPlantao,alaForDate);
+  const {data,error}=await supabase.from('plantoes')
+    .select('id,data_plantao,turno,ala,status,iniciado_em')
+    .eq('status','ABERTO').order('iniciado_em',{ascending:false}).limit(60);
   if(error)throw error;
-  return data?.length?next:{...clock,ala:alaForDate(clock.date)};
+  const selected=chooseUnfinishedShift(data||[],clock,alaForDate);
+  if(selected)return shiftContextOf(selected,alaForDate);
+  // Sem plantão aberto, mostrar o turno do relógio para consulta, mas
+  // nunca iniciar automaticamente uma escala nova; exigir confirmação.
+  return {...clock,ala:alaForDate(clock.date)};
 }
 function plantaoShiftKey(p=currentPlantao){
   if(!p)return '';
@@ -574,7 +581,7 @@ async function synchronizeCurrentOperationalShift(force=false){
       manualScaleReference=null;
     }
     syncDateAndAla(ctx.date,ctx.turno);
-    await loadAll(ctx.date,ctx.turno);
+    await loadAll(ctx.date,ctx.turno,true);
     await loadExpressScale();
     if(currentPlantao)await loadBookData();
     if(!$('#teamInternalPanel')?.classList.contains('hidden'))renderInternalEditors();
@@ -752,7 +759,7 @@ async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCr
   const turno=normalizeTurno(preferredTurno||(previous?.data_plantao===date?previous.turno:null)||ctx.turno);
   const initialShift=syncDateAndAla(date,turno);
   const ala=initialShift.ala;
-  const isCurrentShift=autoFollowCurrentShift&&(date===ctx.date||!!preferredTurno);
+  const isCurrentShift=autoFollowCurrentShift;
   setSync('Identificando plantão atual e pré-carregando escalas...','warn');
 
   currentPlantao=null;
@@ -762,9 +769,8 @@ async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCr
   try{
     try{
       currentPlantao=await choosePlantao(date,turno,ala);
-      if(!skipAutoCreate&&!currentPlantao&&isCurrentShift&&date===ctx.date&&turno===ctx.turno){
-        currentPlantao=await ensureOperationalPlantao(date,turno,ala);
-      }
+      // A criação de plantão é EXCLUSIVAMENTE feita pelo botão de
+      // início/encerramento. Nunca criar na virada de 07h ou 19h.
       syncDateAndAla(date,currentPlantao?.turno||turno);
     }catch(e){
       console.warn('Falha ao carregar plantão',e);
@@ -913,8 +919,8 @@ function renderSummary(){
   $('#realShiftStart').textContent=currentPlantao?.iniciado_em ? fmtTime(currentPlantao.iniciado_em) : '—';
   if($('#endShiftBtn')){
     const open=norm(currentPlantao?.status)==='ABERTO';
-    $('#endShiftBtn').disabled=!isOperator()||!currentPlantao;
-    $('#endShiftBtn').textContent=open?'TROCAR / ENCERRAR':canReopenCurrentShift()?'REABRIR PLANTÃO':'INICIAR PRÓXIMA ESCALA';
+    $('#endShiftBtn').disabled=!isOperator();
+    $('#endShiftBtn').textContent=open?'ENCERRAR PLANTÃO / ENVIAR LIVRO':canReopenCurrentShift()?'REABRIR PLANTÃO':'INICIAR PRÓXIMA ESCALA';
     $('#endShiftBtn').classList.toggle('danger',open);
     $('#endShiftBtn').classList.toggle('primary',!open);
   }
@@ -6883,6 +6889,11 @@ $$('[data-close-modal]').forEach(b=>b.onclick=()=>requestCloseModal(b.dataset.cl
 $$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)requestCloseModal(m.id)}));
 $('#shiftDate').onchange=async()=>{
   const previous=currentPlantao?.data_plantao||operationalShiftContext().date;
+  if(shouldBlockDateNavigation(currentPlantao,$('#shiftDate').value)){
+    $('#shiftDate').value=previous;
+    alert('PLANTÃO AINDA ABERTO\n\nPara proteger equipes, ocorrências e o Livro, a troca de data fica bloqueada enquanto o plantão não for encerrado. Use ENCERRAR PLANTÃO / ENVIAR LIVRO para concluir e avançar.');
+    return;
+  }
   if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,includeBook:true,action:'trocar a data do plantão'})){
     $('#shiftDate').value=previous;
     return;
