@@ -1,4 +1,5 @@
 import { openNamesReview } from './names-review.js';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261122-offline-13';
 import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261122-offline-12';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
@@ -94,6 +95,27 @@ const activeLoads = new Set();
 let operationalShiftTimer = null;
 let operationalShiftSyncBusy = false;
 let autoFollowCurrentShift = true;
+// Mantém o plantão operacional após 07h/19h inclusive ao atualizar o navegador.
+function shiftStorageKey(suffix){
+  const id=session?.user?.id;
+  return id?'samu-operacional-'+suffix+'-'+id:null;
+}
+function storedShiftId(){
+  try{return localStorage.getItem(shiftStorageKey('ativo'))||''}
+  catch{return ''}
+}
+function storedShiftHoldId(){
+  try{return localStorage.getItem(shiftStorageKey('aguardando'))||''}
+  catch{return ''}
+}
+function rememberShiftSelection(shift,{endedOnly=false}={}){
+  if(!session?.user?.id||!shift?.id)return;
+  try{
+    localStorage.setItem(shiftStorageKey('ativo'),shift.id);
+    if(endedOnly)localStorage.setItem(shiftStorageKey('aguardando'),shift.id);
+    else localStorage.removeItem(shiftStorageKey('aguardando'));
+  }catch(error){console.warn('Não foi possível preservar referência local do plantão',error)}
+}
 // A escala escolhida manualmente é apenas a referência de titulares para o plantão aberto.
 let manualScaleReference = null;
 let pendingScaleReference = null;
@@ -449,12 +471,29 @@ function shiftTitle(ctx){
 }
 async function resolveOperationalShiftContext(){
   const clock=operationalShiftContext();
-  const next=nextShiftContext(clock);
-  const {data,error}=await supabase.from('plantoes').select('id')
-    .eq('data_plantao',next.date).eq('turno',next.turno).eq('ala',next.ala)
-    .eq('status','ABERTO').limit(1);
+  // Não seguir o relógio enquanto houver plantão ABERTO: 07h ou 19h
+  // não encerram o Livro e nem permitem apagar a escala visível.
+  if(isOpenShift(currentPlantao))return shiftContextOf(currentPlantao,alaForDate);
+  const fixedId=storedShiftId();
+  if(!currentPlantao&&fixedId){
+    const saved=await supabase.from('plantoes')
+      .select('id,data_plantao,turno,ala,status,iniciado_em')
+      .eq('id',fixedId).maybeSingle();
+    if(saved.error)throw saved.error;
+    if(saved.data&&(isOpenShift(saved.data)||
+      (norm(saved.data.status)==='ENCERRADO'&&storedShiftHoldId()===fixedId))){
+      return shiftContextOf(saved.data,alaForDate);
+    }
+  }
+  const {data,error}=await supabase.from('plantoes')
+    .select('id,data_plantao,turno,ala,status,iniciado_em')
+    .eq('status','ABERTO').order('iniciado_em',{ascending:false}).limit(60);
   if(error)throw error;
-  return data?.length?next:{...clock,ala:alaForDate(clock.date)};
+  const selected=chooseUnfinishedShift(data||[],clock,alaForDate);
+  if(selected)return shiftContextOf(selected,alaForDate);
+  // Sem plantão aberto, mostrar o turno do relógio para consulta, mas
+  // nunca iniciar automaticamente uma escala nova; exigir confirmação.
+  return {...clock,ala:alaForDate(clock.date)};
 }
 function plantaoShiftKey(p=currentPlantao){
   if(!p)return '';
@@ -560,6 +599,11 @@ async function synchronizeCurrentOperationalShift(force=false){
     const clockKey=operationalShiftKey();
     const ctx=await resolveOperationalShiftContext();
     const key=operationalShiftKey(ctx);
+    if(!force&&plantaoShiftKey()===key&&isOpenShift(currentPlantao)){
+      lastClockShiftKey=clockKey;
+      if(clockKey!==key)setSync('Virada de horário detectada. Plantão anterior preservado até ENCERRAR PLANTÃO / ENVIAR LIVRO.','warn');
+      return;
+    }
     if(!force&&clockKey===lastClockShiftKey&&plantaoShiftKey()===key)return;
     if(key!==plantaoShiftKey()&&(unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())){
       if(pendingShiftWarningKey!==key){
@@ -574,7 +618,7 @@ async function synchronizeCurrentOperationalShift(force=false){
       manualScaleReference=null;
     }
     syncDateAndAla(ctx.date,ctx.turno);
-    await loadAll(ctx.date,ctx.turno);
+    await loadAll(ctx.date,ctx.turno,true);
     await loadExpressScale();
     if(currentPlantao)await loadBookData();
     if(!$('#teamInternalPanel')?.classList.contains('hidden'))renderInternalEditors();
@@ -752,7 +796,7 @@ async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCr
   const turno=normalizeTurno(preferredTurno||(previous?.data_plantao===date?previous.turno:null)||ctx.turno);
   const initialShift=syncDateAndAla(date,turno);
   const ala=initialShift.ala;
-  const isCurrentShift=autoFollowCurrentShift&&(date===ctx.date||!!preferredTurno);
+  const isCurrentShift=autoFollowCurrentShift;
   setSync('Identificando plantão atual e pré-carregando escalas...','warn');
 
   currentPlantao=null;
@@ -762,9 +806,8 @@ async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCr
   try{
     try{
       currentPlantao=await choosePlantao(date,turno,ala);
-      if(!skipAutoCreate&&!currentPlantao&&isCurrentShift&&date===ctx.date&&turno===ctx.turno){
-        currentPlantao=await ensureOperationalPlantao(date,turno,ala);
-      }
+      // A criação de plantão é EXCLUSIVAMENTE feita pelo botão de
+      // início/encerramento. Nunca criar na virada de 07h ou 19h.
       syncDateAndAla(date,currentPlantao?.turno||turno);
     }catch(e){
       console.warn('Falha ao carregar plantão',e);
@@ -835,6 +878,8 @@ async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCr
     syncRotationCriterionFromPlantao();
     renderAll();
     if(currentPlantao){
+      if(autoFollowCurrentShift&&norm(currentPlantao.status)==='ABERTO')
+        rememberShiftSelection(currentPlantao);
       const turno=normalizeTurno(currentPlantao.turno||initialShift.turno);
       $('#plantaoInfo').textContent='Plantão '+(currentPlantao.legacy_id||'')+' • '+fmtDate(date)+' • ALA '+(currentPlantao.ala||ala)+' • '+turno+' • '+currentPlantao.status;
     }else{
@@ -913,8 +958,8 @@ function renderSummary(){
   $('#realShiftStart').textContent=currentPlantao?.iniciado_em ? fmtTime(currentPlantao.iniciado_em) : '—';
   if($('#endShiftBtn')){
     const open=norm(currentPlantao?.status)==='ABERTO';
-    $('#endShiftBtn').disabled=!isOperator()||!currentPlantao;
-    $('#endShiftBtn').textContent=open?'TROCAR / ENCERRAR':canReopenCurrentShift()?'REABRIR PLANTÃO':'INICIAR PRÓXIMA ESCALA';
+    $('#endShiftBtn').disabled=!isOperator();
+    $('#endShiftBtn').textContent=open?'ENCERRAR PLANTÃO / ENVIAR LIVRO':canReopenCurrentShift()?'REABRIR PLANTÃO':'INICIAR PRÓXIMA ESCALA';
     $('#endShiftBtn').classList.toggle('danger',open);
     $('#endShiftBtn').classList.toggle('primary',!open);
   }
@@ -6113,7 +6158,24 @@ function activeShiftHandoffPreview(){
 /* ---------- Troca e encerramento manual de plantão ---------- */
 function openShiftTransition(){
   if(!isOperator())return;
-  if(!currentPlantao)return alert('Nenhum plantão carregado.');
+  if(!currentPlantao){
+    // Primeiro plantão ou fim da escala anterior: só o operador cria a nova.
+    const ctx=operationalShiftContext();
+    $('#shiftTransitionTitle').textContent='Iniciar plantão manualmente';
+    $('#shiftTransitionDetails').innerHTML='<p><b>Não há plantão aberto carregado.</b></p>'+
+      '<p><b>Plantão a iniciar:</b> '+esc(shiftTitle(ctx))+'</p>'+
+      '<p>Nenhum novo plantão é aberto automaticamente às 07h ou às 19h.</p>';
+    $('#shiftTransitionAcknowledge').checked=false;
+    $('#shiftEndOnlyBtn').classList.add('hidden');
+    $('#shiftEndStartBtn').classList.add('hidden');
+    $('#shiftStartOnlyBtn').classList.remove('hidden');
+    $('#shiftReopenBtn').classList.add('hidden');
+    ['#shiftEndOnlyBtn','#shiftEndStartBtn','#shiftStartOnlyBtn','#shiftReopenBtn']
+      .forEach(id=>$(id).disabled=true);
+    shiftTransitionPlantaoId=null;
+    openModal('shiftTransitionModal');
+    return;
+  }
   const p=currentPlantao;
   const open=norm(p.status)==='ABERTO';
   const reopen=canReopenCurrentShift(p);
@@ -6128,11 +6190,14 @@ function openShiftTransition(){
     earlyEnd?'<strong>O turno atual ainda não chegou ao horário previsto de encerramento.</strong>':'',
     earlyStart&&!reopen?'<strong>O próximo turno será iniciado antes do horário previsto.</strong>':'',
     open&&active?'<strong>'+active+' ocorrência(s) em andamento.</strong> Serão mantidas no registro do plantão anterior; confira o repasse.':'',
-    open&&(operationalNeedsConfirmation()||internalNeedsConfirmation()||unsavedBook||anyDraftModalOpen())
-      ?'<strong>Há informações não confirmadas ou não salvas.</strong> Elas podem ser perdidas ao trocar de escala.':'',
+    open&&(operationalNeedsConfirmation()||internalNeedsConfirmation()||unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())
+      ?'<strong>Há informações não confirmadas ou não salvas.</strong> Salve e confirme antes de encerrar; o encerramento ficará bloqueado.':'',
+    'O plantão continuará com TODOS os dados visíveis até sua confirmação. A virada do relógio não muda o turno.',
+    'O Livro oficial e o relatório serão gerados ANTES do encerramento. Se falhar, o plantão ficará aberto para nova tentativa.',
+    'O arquivo será preparado para baixar e enviar. O envio automático por e-mail ainda não está configurado.',
     'A escala anterior fica no histórico. O sistema não encerra ocorrências nem altera automaticamente a situação das viaturas.'
   ].filter(Boolean);
-  $('#shiftTransitionTitle').textContent=open?'Trocar ou encerrar plantão':reopen?'Reabrir plantão vigente':'Iniciar próxima escala';
+  $('#shiftTransitionTitle').textContent=open?'ENCERRAR PLANTÃO / ENVIAR LIVRO':reopen?'Reabrir plantão vigente':'Iniciar próxima escala';
   $('#shiftTransitionDetails').innerHTML=points.map(p=>'<p>'+p+'</p>').join('')+
     (open?activeShiftHandoffPreview():'');
   $('#shiftTransitionAcknowledge').checked=false;
@@ -6153,7 +6218,27 @@ async function executeShiftTransition(...args){
 }
 async function executeShiftTransitionLocal(mode){
   if(!isOperator()||shiftTransitionBusy||!$('#shiftTransitionAcknowledge').checked)return;
-  if(!currentPlantao||shiftTransitionPlantaoId!==currentPlantao.id){
+  if(!currentPlantao){
+    if(mode!=='start'||shiftTransitionPlantaoId!==null)
+      return alert('Nenhum plantão selecionado para encerrar.');
+    shiftTransitionBusy=true;updateShiftTransitionButtons();
+    try{
+      const ctx=operationalShiftContext();
+      const next=await ensureOperationalPlantao(ctx.date,ctx.turno,alaForDate(ctx.date));
+      if(!next||norm(next.status)!=='ABERTO')throw new Error('O plantão ainda não foi aberto.');
+      autoFollowCurrentShift=true;
+      rememberShiftSelection(next);
+      await loadAll(ctx.date,ctx.turno,true);
+      await loadExpressScale();
+      lastClockShiftKey=operationalShiftKey();
+      lastOperationalShiftKey=plantaoShiftKey();
+      closeModal('shiftTransitionModal');
+      setSync('Plantão iniciado manualmente • '+shiftTitle(ctx),'ok');
+    }catch(error){alert('Não foi possível iniciar o plantão: '+(error.message||error))}
+    finally{shiftTransitionBusy=false;updateShiftTransitionButtons();}
+    return;
+  }
+  if(shiftTransitionPlantaoId!==currentPlantao.id){
     alert('O plantão mudou. Abra novamente a janela para conferir os dados.');
     closeModal('shiftTransitionModal');
     return;
@@ -6164,6 +6249,10 @@ async function executeShiftTransitionLocal(mode){
   if(mode==='start'&&canReopenCurrentShift(old))return alert('O turno ainda está vigente. Reabra o plantão para continuar.');
   if(mode==='start'&&open)return alert('Encerre o plantão atual antes de iniciar o próximo.');
   if(mode!=='start'&&mode!=='reopen'&&!open)return alert('O plantão já foi encerrado.');
+  if(open&&(operationalNeedsConfirmation()||internalNeedsConfirmation()||
+    unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())){
+    return alert('ENCERRAMENTO BLOQUEADO: há escalas, Livro ou formulários sem confirmação. Salve e confirme os dados antes de encerrar o plantão.');
+  }
   shiftTransitionBusy=true;
   updateShiftTransitionButtons();
   let closed=false;
@@ -6187,19 +6276,27 @@ async function executeShiftTransitionLocal(mode){
       return;
     }
     if(open){
+      // O Livro e o relatório são preparados ANTES de gravar ENCERRADO.
+      // Falha de rede/PDF não perde o trabalho e não libera a troca.
+      const closeAt=new Date().toISOString();
+      const prepared=await exportClosingReport(
+        {...old,status:'ENCERRADO',encerrado_em:closeAt},
+        {includeBook:true,download:false}
+      );
+      if(!prepared?.blob?.size||prepared.shiftId!==old.id)
+        throw new Error('O Livro não ficou pronto. O plantão permanece aberto.');
       const {data,error}=await supabase.from('plantoes')
-        .update({status:'ENCERRADO',encerrado_em:new Date().toISOString(),operador_encerramento:profile?.nome||session?.user?.email||'OPERADOR'})
+        .update({status:'ENCERRADO',encerrado_em:closeAt,operador_encerramento:profile?.nome||session?.user?.email||'OPERADOR'})
         .eq('id',old.id).eq('status','ABERTO').select('id,encerrado_em').maybeSingle();
       if(error)throw error;
-      if(!data)throw new Error('Este plantão já foi modificado por outro operador. Atualize a tela.');
+      if(!data)throw new Error('Este plantão já foi modificado por outro operador. O plantão não foi encerrado por esta ação.');
       closed=true;
-      try{
-        await exportClosingReport({...old,status:'ENCERRADO',encerrado_em:data.encerrado_em});
-      }catch(reportError){
-        window.alert('Não foi possível baixar o relatório: '+(reportError.message||reportError)+'. Você pode baixá-lo pelo botão Relatório do plantão.');
-      }
+      // Com o modo offline, o arquivo só é disponibilizado para download
+      // depois que a transação local for concluída com sucesso.
+      downloadReadySamuPdf();
     }
     if(mode==='end'){
+      rememberShiftSelection(old,{endedOnly:true});
       autoFollowCurrentShift=false;
       unsavedBook=false;
       await loadAll(old.data_plantao,old.turno);
@@ -6215,7 +6312,8 @@ async function executeShiftTransitionLocal(mode){
     const np=await ensureOperationalPlantao(next.date,next.turno,next.ala);
     if(norm(np.status)!=='ABERTO')throw new Error('O próximo plantão não está aberto.');
     autoFollowCurrentShift=true;
-    await loadAll(next.date,next.turno);
+    rememberShiftSelection(np);
+    await loadAll(next.date,next.turno,true);
     await loadExpressScale();
     if(currentPlantao)await loadBookData();
     lastOperationalShiftKey=operationalShiftKey(next);
@@ -6626,7 +6724,7 @@ function downloadReadySamuPdf(){
   downloadSamuFile(samuPdfReadyFile.blob,samuPdfReadyFile.filename);
   setSamuPdfExportStatus('Arquivo '+samuPdfReadyFile.filename+' pronto. Confira a pasta Downloads ou use BAIXAR ARQUIVO PRONTO novamente.');
 }
-async function exportClosingReport(shift=currentPlantao,{includeBook=true}={}){
+async function exportClosingReport(shift=currentPlantao,{includeBook=true,download=true}={}){
   if(!isOperator()||!shift?.id)return;
   if(samuPdfExportInProgress)return;
   samuPdfExportInProgress=true;
@@ -6662,7 +6760,8 @@ async function exportClosingReport(shift=currentPlantao,{includeBook=true}={}){
     if(!blob?.size)throw new Error('O arquivo foi gerado vazio.');
     samuPdfReadyFile={blob,filename,shiftId:shift.id};
     $('#samuPdfRetryBtn')?.classList.remove('hidden');
-    downloadReadySamuPdf();
+    if(download)downloadReadySamuPdf();
+    return samuPdfReadyFile;
   }catch(error){
     setSamuPdfExportStatus('Falha ao gerar o arquivo: '+(error.message||error),true);
     throw error;
@@ -6883,6 +6982,11 @@ $$('[data-close-modal]').forEach(b=>b.onclick=()=>requestCloseModal(b.dataset.cl
 $$('.modal').forEach(m=>m.addEventListener('click',e=>{if(e.target===m)requestCloseModal(m.id)}));
 $('#shiftDate').onchange=async()=>{
   const previous=currentPlantao?.data_plantao||operationalShiftContext().date;
+  if(shouldBlockDateNavigation(currentPlantao,$('#shiftDate').value)){
+    $('#shiftDate').value=previous;
+    alert('PLANTÃO AINDA ABERTO\n\nPara proteger equipes, ocorrências e o Livro, a troca de data fica bloqueada enquanto o plantão não for encerrado. Use ENCERRAR PLANTÃO / ENVIAR LIVRO para concluir e avançar.');
+    return;
+  }
   if(!confirmUnsavedRisk({includeOperational:true,includeInternal:true,includeBook:true,action:'trocar a data do plantão'})){
     $('#shiftDate').value=previous;
     return;
