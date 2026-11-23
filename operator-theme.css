@@ -73,3 +73,15 @@ body :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card[class] .
 #teamModal .quick-team-field{background:#f6f9fb;border-color:#c4d5e1;box-shadow:none}#teamModal .quick-scale-placement{background:#edf3f7;border-color:#bdcfdd;color:#31566e}#teamModal .quick-team-field label{color:#31566e}.dialog input[readonly]{background:#edf2f5;color:#5a7181}
 .vehicle-card .status-badge{max-width:125px;line-height:1.4;text-align:center;white-space:normal}
 :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .qta-btn,:is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .return-btn{animation:none}
+
+/* Bases sempre visíveis: quatro colunas e duas linhas para oito cidades. */
+.regional-overview-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;padding:11px 14px 7px}
+.regional-overview-header>span>strong{display:block;font-size:.94rem;color:#213f52}.regional-overview-header small{display:block;font-size:.69rem;color:#617988;margin-top:3px}
+.regional-base-grid{display:grid;grid-template-columns:repeat(var(--base-columns),minmax(0,1fr));gap:8px;padding:4px 12px 12px}
+.regional-base-tile{display:flex;align-items:center;justify-content:space-between;gap:9px;min-width:0;padding:8px 10px;background:#fff;border:1px solid #d1dde6;border-radius:8px}
+.regional-base-name{font-size:.8rem;color:#31536b;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.regional-base-vehicles{display:flex;gap:6px;flex:0 0 auto}.regional-base-vehicles .regional-vehicle-square{display:grid;place-items:center;width:40px;height:40px;min-height:40px;padding:0;border:1px solid #aebfcc;border-radius:6px;background:#f0f3f6;color:#526978;font-size:.7rem;font-weight:900;text-align:center}
+.regional-base-vehicles .state-ready{background:#e7f2eb;border-color:#a2cbb3;color:#2c6549}.regional-base-vehicles .state-occurrence{background:#fff0ef;border-color:#c98b91;color:#943e48}.regional-base-vehicles .state-returning{background:#fff6da;border-color:#d6bf7d;color:#7c631e}
+.regional-base-vehicles .regional-vehicle-square:focus-visible{outline:3px solid #729fba;outline-offset:2px}
+@media(max-width:1000px){.regional-base-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.regional-base-tile{flex-direction:column;align-items:flex-start;gap:8px}.regional-base-name{max-width:100%}.regional-overview-header .fleet-stats{gap:8px 12px}}
