@@ -5,8 +5,8 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261122-offline-13">
-  <link rel="stylesheet" href="./offline.css?v=20261122-offline-13">
+  <link rel="stylesheet" href="./styles.css?v=20261123-offline-14">
+  <link rel="stylesheet" href="./offline.css?v=20261123-offline-14">
 </head>
 <body>
 
@@ -269,16 +269,7 @@
         </div>
 
 
-        <section id="regionalQuickScale" class="regional-quick-scale" aria-label="Escala e acionamento das bases descentralizadas">
-          <div class="regional-quick-head">
-            <div>
-              <h2>Escalar equipes das bases descentralizadas</h2>
-              <p>Escolha a viatura para escalar ou editar a equipe. Os acionamentos ficam no Painel operacional.</p>
-            </div>
-            <span>SEM ALTERAR O REVEZAMENTO DE ANÁPOLIS</span>
-          </div>
-          <div id="regionalQuickScaleGrid" class="regional-quick-grid"></div>
-        </section>
+
 
         <div class="team-search-wrap">
           <div>
@@ -302,6 +293,17 @@
           </div>
           <div id="teamPreview"></div>
         </div>
+
+        <section id="regionalQuickScale" class="regional-quick-scale" aria-label="Escala e acionamento das bases descentralizadas">
+          <div class="regional-quick-head">
+            <div>
+              <h2>Escalar equipes das bases descentralizadas</h2>
+              <p>Escolha a viatura para escalar ou editar a equipe. Os acionamentos ficam no Painel operacional.</p>
+            </div>
+            <span>SEM ALTERAR O REVEZAMENTO DE ANÁPOLIS</span>
+          </div>
+          <div id="regionalQuickScaleGrid" class="regional-quick-grid"></div>
+        </section>
 
         <details class="registry-details">
           <summary>
@@ -577,7 +579,7 @@
           <label>Nº ocorrência<input id="occNumber" inputmode="numeric" placeholder="Número da ocorrência"></label>
           <label>Natureza<input id="occNature" placeholder="Ex.: clínico, colisão, transferência"></label>
           <label>Viatura<select id="occVehicleSelect"></select></label>
-          <label>Hora início / saída<input id="occStart" type="time"></label>
+          <label>Data e hora de início / saída<input id="occStart" type="datetime-local"></label>
         </div>
       </section>
       <section class="dispatch-section dispatch-import" aria-label="Importação de dados da regulação">
@@ -675,8 +677,8 @@
       <p id="regionalWhatsappStatus" role="status" aria-live="polite" class="regional-wa-status">Cole a mensagem completa da equipe.</p>
       <div id="regionalWhatsappReview" class="regional-wa-review hidden"></div>
       <div class="regional-wa-actions">
-        <button id="regionalWhatsappParse" type="button" class="btn secondary">ORGANIZAR EQUIPE</button>
-        <button id="regionalWhatsappApply" type="button" class="btn primary hidden" disabled>CONFIRMAR, CADASTRAR NOVOS E ESCALAR</button>
+        <button id="regionalWhatsappParse" type="button" class="btn secondary">RELER MENSAGEM</button>
+        <button id="regionalWhatsappApply" type="button" class="btn primary hidden" disabled>CONFIRMAR EQUIPE</button>
       </div>
       <small>Novos nomes serão cadastrados apenas na confirmação. O cadastro provisório poderá ser conferido depois. Dados ambíguos não são cadastrados automaticamente.</small>
     </section>
@@ -970,6 +972,6 @@
 <script src="./vendor/jspdf-2.5.2.js"></script>
 <script src="./vendor/jspdf-autotable-3.8.4.js"></script>
 <script src="./vendor/html2canvas-1.4.1.js"></script>
-<script type="module" src="./app.js?v=20261122-offline-13"></script>
+<script type="module" src="./app.js?v=20261123-offline-14"></script>
 </body>
 </html>

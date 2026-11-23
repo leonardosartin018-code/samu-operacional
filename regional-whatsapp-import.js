@@ -5,7 +5,7 @@
  */
 import { hasProfessionalFunction } from './professional-functions.js';
 
-const ROLE_PATTERN=/\b(condutor(?:a)?|motorista|cond\.?|t[eé]cnic[oa](?:\s+de\s+enfermagem)?|t[eé]c\.?|enfermeir[oa]|enf\.?|m[eé]dic[oa]|m[eé]d\.?|doutor(?:a)?|dr\.?|dra\.?)\b\.?\s*(?:[:=\-–—]\s*|\s+(?=[A-Za-zÀ-ÿ]))/giu;
+const ROLE_PATTERN=/\b(condutor(?:a)?|motorista|cond\.?|t[eé]cnic[oa](?:\s+de\s+enfermagem)?|t[eé]c\.?(?:\s+enf\.?)?|enfermeir[oa]|enf\.?|m[eé]dic[oa]|m[eé]d\.?|doutor(?:a)?|dr\.?|dra\.?)\b\.?\s*(?:[:=\-–—]\s*|\s+(?=[A-Za-zÀ-ÿ]))/giu;
 const MAX_LENGTH=12000;
 const CITIES=[
   ['ABADIANIA',/\bABADI[AÂ]NIA\b/i],
@@ -24,7 +24,7 @@ function fold(value){
 export function regionalRoleFromLabel(label){
   const value=fold(label).replace(/\s/g,'');
   if(/^(COND|CONDUTOR|CONDUTORA|MOTORISTA)$/.test(value))return 'driver';
-  if(/^(TEC|TECNICA|TECNICO|TECNICADEENFERMAGEM|TECNICODEENFERMAGEM)$/.test(value))return 'tech';
+  if(/^(TEC|TECENF|TECNICA|TECNICO|TECNICADEENFERMAGEM|TECNICODEENFERMAGEM)$/.test(value))return 'tech';
   if(/^(ENF|ENFERMEIRO|ENFERMEIRA)$/.test(value))return 'nurse';
   if(/^(MED|MEDICO|MEDICA|DOUTOR|DOUTORA|DR|DRA)$/.test(value))return 'doctor';
   return null;
@@ -128,6 +128,8 @@ export function resolveRegionalCrewName(name,role,professionals=[]){
     const values=aliases(p);
     return values.some(v=>v.startsWith(query+' ')||query.startsWith(v+' '));
   });
+  const compatible=possible.filter(p=>regionalCanFillRole(p,role));
+  if(compatible.length===1 && query.split(' ').length>=2)return {status:'MATCHED',professional:compatible[0],candidates:compatible};
   if(possible.length)return {status:'POSSIBLE_DUPLICATE',candidates:possible.slice(0,12)};
   return {status:'NEW',candidates:[]};
 }

@@ -1,6 +1,7 @@
+import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261122-offline-13';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261122-offline-12';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261123-offline-14';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261123-offline-14';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -18,7 +19,7 @@ const remoteSupabase = window.supabase.createClient(
 
 const offline = createOfflineClient(remoteSupabase, {
   beforeAction: async () => {
-    clearTimeout(reloadTimer);
+    clearTimeout(reloadTimer);reloadTimer=null;
     await Promise.all([...activeLoads]);
   },
   onStatus: renderOfflineStatus,
@@ -169,7 +170,7 @@ const fmtTime = v => v ? new Date(v).toLocaleTimeString('pt-BR',{hour:'2-digit',
 
 function minutesBetween(a,b){
   if(!a || !b) return null;
-  const n = Math.round((new Date(b)-new Date(a))/60000);
+  const n = Math.floor((new Date(b)-new Date(a))/60000);
   return Number.isFinite(n) && n >= 0 ? n : null;
 }
 function fmtMinutes(n){
@@ -1170,8 +1171,8 @@ function occurrenceInfoHtml(v,o){
     '</div>'+
     '<div class="occ-address">'+esc([o.bairro,o.endereco,o.destino].filter(Boolean).join(' • '))+'</div>'+
     '<div class="occ-timeline">'+
-      '<div class="occ-time-chip"><span>INÍCIO / SAÍDA</span><b>'+fmtTime(inicio)+'</b></div>'+
-      '<div class="occ-time-chip"><span>CHEGADA QTH</span><b>'+esc(qthDisplayTime(o))+'</b></div>'+
+      '<div class="occ-time-chip"><span>INÍCIO / SAÍDA</span><b>'+fmtTime(inicio)+'</b><small>'+esc(inicio?fmtDate(datetimeLocal(inicio).slice(0,10)):'')+'</small></div>'+
+      '<div class="occ-time-chip"><span>CHEGADA QTH</span><b>'+esc(qthDisplayTime(o))+'</b><small>'+esc(o.chegada_qth_em?fmtDate(datetimeLocal(o.chegada_qth_em).slice(0,10)):'')+'</small></div>'+
       '<div class="occ-time-chip qth-duration"><span>TEMPO ATÉ QTH</span><b>'+fmtMinutes(tempoQth)+'</b></div>'+
       '<div class="occ-time-chip"><span>INÍCIO RETORNO</span><b>'+fmtTime(o.inicio_retorno_em)+'</b></div>'+
     '</div>'+
@@ -1226,7 +1227,7 @@ function vehicleCardHtml(v,options={}){
     (rosterOnly
       ?'<div class="regional-roster-count">'+occurrences.filter(row=>row.viatura_id===v.id&&norm(row.status)==='FINALIZADA').length+' ocorrência(s) finalizada(s) no plantão</div>'+
         (isOperator()?'<button type="button" class="regional-roster-edit" data-regional-team="'+esc(v.id)+'">ESCALAR / EDITAR EQUIPE</button>':'')
-      :occurrenceInfoHtml(v,o)+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+statusStripHtml(v))+
+      :occurrenceInfoHtml(v,o)+(o&&isOperator()?'<button type="button" class="time-edit-btn" data-summary-occ-edit="'+esc(o.id)+'">EDITAR DADOS / HORÁRIOS</button>':'')+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+statusStripHtml(v))+
   '</article>';
 }
 function operationalGroup(title,subtitle,cls,list,extra=''){
@@ -2486,18 +2487,20 @@ function renderTeamPreview(){
     '<div class="roster-quick-vehicles">'+items.map(v=>{
       const members=active.filter(m=>m.viatura_id===v.id);
       const finished=occurrences.filter(o=>o.viatura_id===v.id&&norm(o.status)==='FINALIZADA');
-      const oNums=finished.map(o=>'Nº '+esc(o.numero||'não informado')).join(' · ')||'Nenhuma finalizada';
+      const attended=occurrences.filter(o=>o.viatura_id===v.id);
+      const oNums=attended.map(o=>'<button type="button" data-summary-occ-edit="'+esc(o.id)+'">Nº '+esc(o.numero||'não informado')+' · '+esc(o.status)+'</button>').join(' ')||'Nenhuma ocorrência registrada';
       return '<article class="roster-quick-vehicle">'+
         '<div class="roster-quick-vtr-head"><b>'+esc(v.nome||v.codigo||'—')+'</b>'+
-          '<span>'+esc(statusInfo(v).label)+'</span></div>'+
+          '<span>'+esc(statusInfo(v).label)+'</span>'+(isOperator()?'<button type="button" data-summary-team-edit="'+esc(v.id)+'">✎ Editar equipe</button>':'')+'</div>'+
         '<div class="roster-quick-vtr-stats"><strong>'+finished.length+'</strong>'+
           '<span>ocorrência(s) finalizada(s) pela viatura</span></div>'+
         '<div class="roster-quick-vtr-occ">'+oNums+'</div>'+
         '<div class="roster-quick-members">'+(members.length?members.map(m=>{
           const attendance=completedOccurrencesForMember(m);
-          const numbers=attendance.map(o=>'Nº '+esc(o.numero||'não informado')).join(' · ')||'Sem participação finalizada registrada';
+          const participated=occurrences.filter(o=>occurrenceMembers(o.id).some(link=>link.profissional_id===m.profissional_id));
+          const numbers=participated.map(o=>'<button type="button" data-summary-occ-edit="'+esc(o.id)+'">Nº '+esc(o.numero||'não informado')+' · '+esc(o.status)+'</button>').join(' ')||'Sem participação registrada';
           return '<div class="roster-quick-member"><div><small>'+esc(m.funcao||'EQUIPE')+'</small>'+
-            '<b>'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</b></div>'+
+            '<b>'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</b>'+(isOperator()?'<button type="button" data-individual-occ="'+esc(m.id)+'">Lançar nº individual</button>':'')+(isOperator()?'<button type="button" data-edit-member="'+esc(m.id)+'">✎ Editar escala</button>':'')+'</div>'+
             '<strong>'+attendance.length+' ocorrência(s)</strong>'+
             '<span>'+numbers+'</span></div>';
         }).join(''):'<div class="roster-quick-vacant">Nenhum profissional fixo vinculado. Confira a fila de revezamento ou a escala.</div>')+
@@ -2511,22 +2514,23 @@ function renderTeamPreview(){
     String(a.bases?.nome||'').localeCompare(String(b.bases?.nome||''),'pt-BR')||
     String(a.nome).localeCompare(String(b.nome),'pt-BR',{numeric:true}));
   const shared=an.filter(m=>!m.viatura_id);
-  const sharedBlock=shared.length?
-    '<section class="roster-quick-area"><header><b>PROFISSIONAIS EM REVEZAMENTO — ANÁPOLIS</b>'+
-    '<span>'+shared.length+' escalado(s)</span></header><div class="roster-quick-shared">'+
-      shared.map(m=>{
-        const participation=completedOccurrencesForMember(m);
-        return '<div class="roster-quick-member"><div><small>'+esc(m.funcao||'PROFISSIONAL')+'</small>'+
-          '<b>'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</b></div>'+
-          '<strong>'+participation.length+' ocorrência(s)</strong>'+
-          '<span>'+(participation.length?participation.map(o=>'Nº '+esc(o.numero||'não informado')).join(' · '):'Sem participação finalizada registrada')+'</span></div>';
-      }).join('')+'</div></section>':'';
+  const rotationGroups=new Map();
+  shared.forEach(m=>{const group=norm(m.grupo_revezamento||m.revezamento_tipo_viatura);const type=group.includes('USA')?'USA':group.includes('USB')?'USB':'Outras filas';const key=type+' — '+(m.funcao||'Profissionais');if(!rotationGroups.has(key))rotationGroups.set(key,[]);rotationGroups.get(key).push(m);});
+  const sharedBlock=[...rotationGroups.entries()].sort(([a],[b])=>a.localeCompare(b,'pt-BR')).map(([label,list])=>
+    '<section class="roster-quick-area"><header><b>REVEZAMENTO '+esc(label)+'</b><span>'+list.length+' escalado(s)</span></header><div class="roster-quick-shared">'+list.map(m=>{
+      const participation=completedOccurrencesForMember(m);
+      const linked=occurrences.filter(o=>occurrenceMembers(o.id).some(link=>link.profissional_id===m.profissional_id));
+      return '<div class="roster-quick-member"><div><small>'+esc(m.funcao||'PROFISSIONAL')+'</small><b>'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</b>'+(isOperator()?'<button type="button" data-individual-occ="'+esc(m.id)+'">Lançar nº individual</button>':'')+(isOperator()?'<button type="button" data-edit-member="'+esc(m.id)+'">✎ Editar escala</button>':'')+'</div><strong>'+participation.length+' finalizada(s)</strong><span>'+linked.map(o=>'<button type="button" data-summary-occ-edit="'+esc(o.id)+'">Nº '+esc(o.numero||'não informado')+' · '+esc(o.status)+'</button>').join(' ')+'</span></div>';
+    }).join('')+'</div></section>').join('');
   const quick='<div class="roster-quick-dashboard">'+
     '<div class="roster-quick-intro">RESUMO DO PLANTÃO • Profissionais em cada viatura e participações finalizadas registradas. '+
     'Profissionais do revezamento aparecem separadamente; a equipe escolhida em cada ocorrência é registrada no histórico.</div>'+
-    quickVehicles('VIATURAS DE ANÁPOLIS',anVehicles)+sharedBlock+
+    ['USA','USB','MOTO','OUTRAS VIATURAS'].map(type=>quickVehicles(type==='MOTO'?'MOTOLÂNCIA':type,anVehicles.filter(v=>type==='MOTO'?vehicleType(v).includes('MOTO'):type==='OUTRAS VIATURAS'?!['USA','USB'].includes(vehicleType(v))&&!vehicleType(v).includes('MOTO'):vehicleType(v)===type))).join('')+sharedBlock+
     quickVehicles('BASES DESCENTRALIZADAS',regionalVehicles)+'</div>';
-  $('#teamPreview').innerHTML=quick+anHtml+regionalHtml;
+  const regionalSection=$('#regionalQuickScale');if(regionalSection)regionalSection.remove();
+  $('#teamPreview').innerHTML=quick+'<div class="roster-detail-anapolis">'+anHtml+'</div><div id="regionalRosterDetails">'+regionalHtml+'</div>';
+  const regionalDetails=$('#regionalRosterDetails');if(regionalSection&&regionalDetails)regionalDetails.before(regionalSection);
+  bindSummaryEditors($('#teamPreview'));
   $('#teamPreview').querySelectorAll('[data-individual-occ]').forEach(b=>b.onclick=()=>openIndividualOccurrence(b.dataset.individualOcc));
   $('#teamPreview').querySelectorAll('[data-edit-member]').forEach(b=>b.onclick=()=>openEditTeamMember(b.dataset.editMember));
   $('#teamPreview').querySelectorAll('[data-remove-member]').forEach(b=>b.onclick=()=>removeTeamMember(b.dataset.removeMember));
@@ -2644,6 +2648,7 @@ function renderHistory(){
 }
 
 function bindVehicleActions(root){
+  bindSummaryEditors(root);
   root.querySelectorAll('[data-team-card]').forEach(card=>{
     card.onclick=e=>{
       if(e.target.closest('button,select,input,textarea,a'))return;
@@ -2689,10 +2694,12 @@ function clearRegionalWhatsappDraft(){
   if(review){review.innerHTML='';review.classList.add('hidden')}
   $('#regionalWhatsappApply')?.classList.add('hidden');
   if($('#regionalWhatsappApply'))$('#regionalWhatsappApply').disabled=true;
-  if($('#saveTeam'))$('#saveTeam').disabled=false;
+  if($('#saveTeam')){$('#saveTeam').disabled=false;$('#saveTeam').classList.remove('hidden');}
+  $('#teamModal .quick-team-grid')?.classList.remove('hidden');
 }
 function resetRegionalWhatsappImporter(v){
   clearRegionalWhatsappDraft();
+  $('#teamModal .quick-team-grid').classList.remove('hidden');$('#saveTeam').classList.remove('hidden');
   const panel=$('#regionalWhatsappImporter');
   panel?.classList.toggle('hidden',!v||isAnapolisVehicle(v));
   $('#regionalWhatsappRaw').value='';
@@ -2726,7 +2733,7 @@ function renderRegionalWhatsappReview(){
     rows.findIndex(other=>other.slot===item.slot)!==i).map(item=>item.slot);
   const repeatedNames=rows.filter((item,i)=>
     rows.findIndex(other=>norm(other.name)===norm(item.name))!==i);
-  const baseMismatch=draft.base&&coverageCityKey(v.bases?.nome)!==draft.base;
+  const baseMismatch=draft.base&&coverageCityKey(v.bases?.nome)!==draft.base&&!draft.baseAcknowledged;
   const blocked=!!draft.warnings.length||!!repeatedSlots.length||!!repeatedNames.length||
     !!baseMismatch||!!activeOccurrence(v)||rows.some(item=>
       !slots.includes(item.slot) || item.resolution.status==='INVALID' ||
@@ -2750,15 +2757,17 @@ function renderRegionalWhatsappReview(){
         pool.map(p=>'<option value="'+esc(p.id)+'"'+(item.selectedId===p.id?' selected':'')+'>'+
           esc(displayName(p))+' — '+esc(p.nome_completo)+'</option>').join('')+'</select>'
       :'';
+    if(!needsChoice&&resolution.status!=='INVALID')return '<div class="regional-wa-confirmed"><strong>'+esc(REGIONAL_ROLE[item.key]?.label||item.key)+'</strong><span>'+esc(existing?displayName(existing):item.name)+'</span><small>'+esc(status)+'</small></div>';
     return '<div class="regional-wa-person '+(existing&&regionalCanFillRole(existing,item.key)?'matched':resolution.status==='NEW'?'new':'needs-review')+'">'+
       '<div class="regional-wa-person-top"><b>'+esc(REGIONAL_ROLE[item.key]?.label||item.key)+'</b>'+
         '<span>'+esc(status)+'</span></div>'+
       '<input data-regional-name="'+index+'" maxlength="120" autocomplete="off" value="'+esc(item.name)+'" aria-label="Nome de '+esc(REGIONAL_ROLE[item.key]?.label||item.key)+'">'+
       choices+'</div>';
   });
-  review.innerHTML=lines.join('')+
+  review.innerHTML=(baseMismatch?'<label class="regional-wa-base-check"><input type="checkbox" id="regionalBaseAcknowledge"> A mensagem cita '+esc(draft.base)+'. Confirmo que estou escalando '+esc(v.nome||v.codigo)+' da base '+esc(v.bases?.nome||'')+'.</label>':'')+lines.join('')+
     (draft.warnings.length?'<p class="regional-wa-warning">'+esc(draft.warnings.join(' • '))+'</p>':'');
   review.classList.remove('hidden');
+  const baseCheck=$('#regionalBaseAcknowledge');if(baseCheck)baseCheck.onchange=()=>{draft.baseAcknowledged=baseCheck.checked;renderRegionalWhatsappReview();};
   review.querySelectorAll('[data-regional-name]').forEach(input=>{
     input.onchange=()=>{
       const item=draft.items[Number(input.dataset.regionalName)];
@@ -2778,11 +2787,12 @@ function renderRegionalWhatsappReview(){
   else if(repeatedSlots.length||repeatedNames.length)regionalWhatsappStatus('A mensagem possui função ou nome repetido. Ajuste antes de salvar.',true);
   else if(blocked)regionalWhatsappStatus('Confira as funções, possíveis duplicidades e selecione o profissional existente quando indicado.',true);
   else regionalWhatsappStatus(rows.length+' profissional(is) reconhecido(s). '+newCount+
-    ' será(ão) cadastrado(s) automaticamente ao confirmar. Os demais serão vinculados ao cadastro existente.');
+    ' nome(s) novo(s). Clique em Confirmar equipe para salvar. Cadastros reconhecidos serão reutilizados.');
   $('#regionalWhatsappApply').classList.remove('hidden');
   $('#regionalWhatsappApply').disabled=blocked;
   // Não permitir salvar a tela comum sem antes resolver os nomes novos.
   $('#saveTeam').disabled=true;
+  $('#teamModal .quick-team-grid').classList.add('hidden');$('#saveTeam').classList.add('hidden');
 }
 function parseRegionalWhatsappIntoTeam(){
   const v=vehicleById(selectedTeamVehicle);
@@ -2816,7 +2826,7 @@ async function saveRegionalWhatsappIntoTeam(){
   // Reavaliar diretamente antes de gravar. Nunca confiar só no HTML da prévia.
   const rows=regionalWhatsappCurrentCandidates();
   const allowed=regionalSlotsForVehicle(vehicleType(v));
-  if(!rows.length||draft.warnings.length||
+  if((draft.base&&coverageCityKey(v.bases?.nome)!==draft.base&&!draft.baseAcknowledged)||!rows.length||draft.warnings.length||
     rows.some(r=>!allowed.includes(r.slot)||!r.name.trim()||
       (!r.selected&&r.resolution.status!=='MATCHED'&&r.resolution.status!=='NEW'))||
     new Set(rows.map(r=>r.slot)).size!==rows.length||
@@ -3680,7 +3690,7 @@ function openOccurrenceModal(vId=null){
   selectedVehicle=vId;
   populateVehicleSelect($('#occVehicleSelect'),vId,true);
   $('#occModalTitle').textContent=vId?'Acionar '+(vehicleById(vId)?.nome||'viatura'):'Lançar ocorrência manual';
-  $('#occNumber').value='';$('#occNature').value='';$('#occBairro').value='';$('#occDestino').value='';$('#occEndereco').value='';$('#occObs').value='';$('#occStart').value=nowLocalTime();
+  $('#occNumber').value='';$('#occNature').value='';$('#occBairro').value='';$('#occDestino').value='';$('#occEndereco').value='';$('#occObs').value='';$('#occStart').value=datetimeLocal(new Date().toISOString());
   resetRegulationImport();
   renderDispatchCrewPanel();
   openModal('occModal');
@@ -3720,7 +3730,10 @@ async function saveOccurrenceLocal(){
         changes+'\n\nEssa escolha será registrada somente nesta ocorrência. Deseja acionar?'))return;
     }
   }
-  const now=localDateTimeIso(currentPlantao.data_plantao,$('#occStart').value||nowLocalTime());
+  const startInput=$('#occStart').value;
+  if(!startInput)return alert('Informe a data e hora de saída.');
+  const now=new Date(startInput).toISOString();
+  if(Date.parse(now)>Date.now()+120000)return alert('A saída não pode estar no futuro. Confira a data e hora.');
   const crit=currentRotationCriterion();
   const payload={
     plantao_id:currentPlantao.id,viatura_id:vId,numero:$('#occNumber').value.trim()||null,natureza:$('#occNature').value.trim()||null,
@@ -6040,11 +6053,11 @@ function collectPermutas(){
     registrados.add(titularId);
     out.push({funcao:'CONDUTOR',substituto,substituido:titular});
   });
-  internalScaleRows.filter(r=>norm(r.tipo_alteracao)==='PERMUTA'&&
+  internalScaleRows.filter(r=>norm(r.status)==='ATIVO'&&r.titular_profissional_id&&!registrados.has(r.titular_profissional_id)&&norm(r.tipo_alteracao)==='PERMUTA'&&
     r.profissional_id!==r.titular_profissional_id&&!isServingInShift(r.titular_profissional_id)).forEach(r=>out.push({
     funcao:r.funcao==='SANITARIA'?'SANITARIA':r.funcao,
-    substituto:r.nome_snapshot||professionalNameById(r.profissional_id)||'—',
-    substituido:r.titular_nome_snapshot||professionalNameById(r.titular_profissional_id)||'—'
+    substituto:professionalNameById(r.profissional_id)||r.nome_snapshot||'—',
+    substituido:professionalNameById(r.titular_profissional_id)||r.titular_nome_snapshot||'—'
   }));
   return out;
 }
@@ -6785,21 +6798,30 @@ function exportCSV(){
 }
 
 /* ---------- realtime ---------- */
+let remoteReloadPending=false;
 function scheduleReload(){
-  if(shiftTransitionBusy||offline.status().busy||anyDraftModalOpen())return;
-  clearTimeout(reloadTimer);
-  reloadTimer=setTimeout(()=>{
-    if(shiftTransitionBusy||offline.status().busy||anyDraftModalOpen())return;
-    const refresh=autoFollowCurrentShift
-      ? synchronizeCurrentOperationalShift(true)
-      : loadAll(selectedDate(),currentPlantao?.turno);
-    Promise.resolve(refresh).catch(console.error);
-  },280);
+ remoteReloadPending=true;
+ if(reloadTimer)return;
+ const refresh=async()=>{
+  reloadTimer=null;
+  if(!session||!remoteReloadPending)return;
+  if(shiftTransitionBusy||offline.status().busy||activeLoads.size||anyDraftModalOpen()||document.querySelector('dialog[open]')||unsavedOperationalScale||unsavedInternalScale||unsavedBook){reloadTimer=setTimeout(refresh,1000);return;}
+  remoteReloadPending=false;
+  try{if(autoFollowCurrentShift)await synchronizeCurrentOperationalShift(true);else await loadAll(selectedDate(),currentPlantao?.turno,true);}
+  catch(error){console.warn('Atualização remota adiada',error);}
+ };
+ reloadTimer=setTimeout(refresh,300);
 }
+let lastProfessionalRefresh=Date.now();
+setInterval(()=>{if(session&&navigator.onLine&&document.visibilityState==='visible'){if(Date.now()-lastProfessionalRefresh>=60000){professionals=[];lastProfessionalRefresh=Date.now();}scheduleReload();}},10000);
+window.addEventListener('focus',()=>{if(session)scheduleReload();});
+window.addEventListener('online',()=>{if(session){offline.synchronize().then(scheduleReload);}});
+
 function subscribeRealtime(){
   if(realtimeChannel)supabase.removeChannel(realtimeChannel);
   realtimeChannel=supabase.channel('samu-operacional-live')
     .on('postgres_changes',{event:'*',schema:'public',table:'viaturas'},scheduleReload)
+    .on('postgres_changes',{event:'*',schema:'public',table:'profissionais'},()=>{professionals=[];scheduleReload();})
     .on('postgres_changes',{event:'*',schema:'public',table:'equipe_plantao'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'ocorrencias'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'equipe_ocorrencia'},scheduleReload)
@@ -6808,7 +6830,7 @@ function subscribeRealtime(){
     .on('postgres_changes',{event:'*',schema:'public',table:'livro_plantao'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'escala_interna_plantao'},scheduleReload)
     .on('postgres_changes',{event:'*',schema:'public',table:'plantoes'},scheduleReload)
-    .subscribe(s=>{if(s==='SUBSCRIBED')setSync('Banco conectado • atualização em tempo real ativa')});
+    .subscribe(s=>{if(s==='SUBSCRIBED'){setSync('Banco conectado • atualização em tempo real ativa');scheduleReload();}else if(['CHANNEL_ERROR','TIMED_OUT','CLOSED'].includes(s)){setSync('Reconectando comunicação • atualização periódica ativa','warn');}});
 }
 
 /* ---------- session ---------- */
@@ -7148,3 +7170,24 @@ await applySession(initialSession).catch(error=>{
 });
 
 $('#reviewNamesBtn').onclick=()=>openNamesReview({client:remoteSupabase,canEdit:isOperator(),isReady:()=>navigator.onLine&&!offline.status().pending&&!offline.status().busy,afterSave:async()=>{await offline.prepare(currentPlantao?.id);professionals=[];await loadAll(selectedDate());}});
+
+function bindSummaryEditors(root){
+ root.querySelectorAll('[data-summary-occ-edit]').forEach(b=>b.onclick=()=>editOccurrenceTimes(b.dataset.summaryOccEdit));
+ root.querySelectorAll('[data-summary-team-edit]').forEach(b=>b.onclick=()=>{
+  const v=vehicleById(b.dataset.summaryTeamEdit),o=v?activeOccurrence(v):null;
+  if(o)openOccurrenceCrewCorrection(o.id);else openTeamModal(b.dataset.summaryTeamEdit);
+ });
+}
+function editOccurrenceTimes(id){
+ if(!isOperator())return;
+ const row=occurrences.find(o=>o.id===id);if(!row)return;
+ openOccurrenceEditor(row,async values=>{
+  const result=await offline.userAction('Corrigir dados e horários da ocorrência',async()=>{
+   if(!canEditOpenShift())throw new Error('Reabra o plantão antes de corrigir seus registros.');
+   let query=supabase.from('ocorrencias').update({...values,observacao:(row.observacao||'')+'\nCorreção em '+new Date().toISOString()+': '+JSON.stringify({antes:Object.fromEntries(Object.keys(values).map(key=>[key,row[key]??null])),depois:values}),qth_nao_informado:values.chegada_qth_em?false:row.qth_nao_informado}).eq('id',row.id).eq('status',row.status);
+   for(const key of ['numero','natureza','observacao','acionada_em','saida_em','chegada_qth_em','inicio_retorno_em','retorno_base_em'])query=row[key]==null?query.is(key,null):query.eq(key,row[key]);
+   const result=await query.select('id').maybeSingle();if(result.error)throw result.error;if(!result.data)throw new Error('Registro alterado em outro computador. Reabra a edição.');
+   await loadAll(selectedDate(),currentPlantao?.turno,true);
+  });if(result?.error)throw new Error(result.error.message);
+ });
+}
