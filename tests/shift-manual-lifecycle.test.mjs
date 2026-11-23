@@ -27,7 +27,7 @@ test('às 19h, quando diurno ainda está aberto, não escolher noturno criado au
 });
 
 test('às 7h, após noite sem encerramento, preservar plantão noturno anterior',()=>{
-  const nightYesterday={...night,data_plantao:'2026-11-21',ala:'DELTA'};
+  const nightYesterday={...night,data_plantao:'2026-11-21',ala:'DELTA',iniciado_em:'2026-11-21T22:00:00Z'};
   const morning={...day,data_plantao:'2026-11-22'};
   const chosen=chooseUnfinishedShift([morning,nightYesterday],{
     date:'2026-11-22',turno:'DIURNO'
