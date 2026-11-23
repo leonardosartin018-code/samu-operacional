@@ -108,3 +108,11 @@ body :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card[class] .
 .fleet-overview .fleet-stat.returning{background:#fff8e8;border-color:#e2d3a6;color:#806520}
 .fleet-overview .fleet-stat.other{background:#f0f4f7;border-color:#ced9e2;color:#536b7d}
 @media(max-width:700px){.fleet-overview .fleet-stats{gap:6px}.fleet-overview .fleet-stat{min-height:40px;padding:8px;gap:7px;font-size:11px}.fleet-overview .fleet-stat b{font-size:20px}}
+
+/* Regional summary uses the same operational palette as the vehicle cards. */
+.regional-base-vehicles .regional-vehicle-square.state-ready{background:#2e6756;border-color:#4f8b74;color:#fff}
+.regional-base-vehicles .regional-vehicle-square.state-occurrence{background:#873e45;border-color:#aa6265;color:#fff}
+.regional-base-vehicles .regional-vehicle-square.state-returning{background:#f6e9b9;border-color:#ccb879;color:#55451c}
+.regional-base-vehicles .regional-vehicle-square.state-asepsis{background:#39627d;border-color:#7197ad;color:#fff}
+.regional-base-vehicles .regional-vehicle-square:is(.state-mechanical,.state-noCrew){background:#52616c;border-color:#8495a0;color:#fff}
+.regional-base-vehicles .regional-vehicle-square.state-noStretcher{background:#655773;border-color:#9785a5;color:#fff}
