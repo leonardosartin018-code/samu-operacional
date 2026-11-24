@@ -1,8 +1,8 @@
 import { renderFleetOverview } from './operator-panels.js';
 import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261123-offline-21';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261123-offline-21';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261124-offline-22';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261124-offline-22';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -1198,6 +1198,7 @@ function vehicleCardHtml(v,options={}){
     (rosterOnly&&!crewRowsForCard(v).length?'<div class="roster-unassigned">NÃO ESCALADO</div>':'')+
     (!rosterOnly&&isOperator()?'<button type="button" class="crew-edit-pencil" data-summary-team-edit="'+esc(v.id)+'" title="Editar equipe" aria-label="Editar equipe '+esc(v.nome||v.codigo)+'">✎</button>':'')+
     crewGridHtml(v,{hideReadiness:rosterOnly})+
+    (rosterOnly?vehicleUnassignHtml(v):'')+
     (rosterOnly
       ?'<div class="regional-roster-count">'+occurrences.filter(row=>row.viatura_id===v.id&&norm(row.status)==='FINALIZADA').length+' ocorrência(s) finalizada(s) no plantão</div>'+
         (isOperator()?'<button type="button" class="regional-roster-edit" data-regional-team="'+esc(v.id)+'">ESCALAR / EDITAR EQUIPE</button>':'')
@@ -2396,7 +2397,7 @@ function rosterPersonHtml(m,individualOccurrences){
         ?'<button type="button" class="person-early-exit" data-schedule-exit="'+esc(m.id)+'">'+
           (earlyExitStatus(m)?'EDITAR SAÍDA':'PROGRAMAR SAÍDA')+'</button>':'')+
       (isOperator()?'<button class="person-edit" data-edit-member="'+m.id+'">EDITAR</button>'+
-        '<button class="person-remove" data-remove-member="'+m.id+'">RETIRAR DA ESCALA</button>':'')+
+        '<button class="person-remove" data-remove-member="'+m.id+'">DESESCALAR</button>':'')+
     '</div></div>';
 }
 function renderTeamPreview(){
@@ -2524,6 +2525,7 @@ function renderRegionalQuickScale(){
     '<div class="regional-quick-base"><h3>'+esc(base)+'</h3><div class="regional-quick-unit">'+vehicleCardHtml(v,{rosterOnly:true})+
       '<button type="button" class="regional-wa-open" data-regional-import="'+esc(v.id)+'">COLAR EQUIPE DO WHATSAPP</button></div></div>'
   )).join('')||'<div class="priority-empty">Nenhuma viatura de base descentralizada cadastrada.</div>';
+  bindUnassignButtons(root);
   root.querySelectorAll('[data-regional-team]').forEach(b=>b.onclick=()=>openTeamModal(b.dataset.regionalTeam));
   root.querySelectorAll('[data-regional-import]').forEach(b=>b.onclick=async()=>{
     await openTeamModal(b.dataset.regionalImport);
@@ -4426,6 +4428,8 @@ function expressCard(r){
   return '<article class="express-driver-card '+st.state+'">'+
     '<div class="express-driver-top"><div class="express-vtr">'+esc(v?.nome||r.codigo_viatura)+'</div>'+
       '<div class="express-driver-tools"><span class="express-row-badge '+st.state+'">'+st.label+'</span>'+
+      (current&&isOperator()&&norm(currentPlantao?.status)==='ABERTO'?
+        '<button type="button" class="roster-unassign-btn" data-unassign-member="'+esc(current.id)+'" data-unassign-vehicle="'+esc(current.viatura_id||'')+'" title="Desescalar '+esc(currentName)+'">DESESCALAR</button>':'')+
       (current&&v&&r.profissional_id&&isOperator()&&norm(currentPlantao?.status)==='ABERTO'?
         '<button type="button" class="express-driver-edit" data-exp-edit="'+esc(r.id)+'" '+
         'title="Editar condutor escalado" aria-label="Editar condutor da '+esc(v.nome||r.codigo_viatura)+'">'+
@@ -4449,6 +4453,7 @@ function renderExpressDrivers(){
     return '<section class="express-vehicle-section"><div class="express-vehicle-section-head"><div><h3>'+title+'</h3></div><span>'+ready+' de '+list.length+' escalados</span></div><div class="express-driver-grid">'+(list.length?list.map(expressCard).join(''):'<div class="autocomplete-empty">Nenhum registro.</div>')+'</div></section>';
   };
   $('#expressDriverGrid').innerHTML=group('USA','USA — SUPORTE AVANÇADO','Condutores das Unidades de Suporte Avançado',usa)+group('USB','USB — SUPORTE BÁSICO','Condutores das Unidades de Suporte Básico',usb);
+  bindUnassignButtons($('#expressDriverGrid'));
   $('#expressDriverGrid').querySelectorAll('[data-exp-edit]').forEach(b=>b.onclick=()=>expressSwap(b.dataset.expEdit,true));
   $('#expressDriverGrid').querySelectorAll('[data-exp-fixed]').forEach(b=>b.onclick=()=>expressUseFixed(b.dataset.expFixed));
   $('#expressDriverGrid').querySelectorAll('[data-exp-rotation]').forEach(b=>b.onclick=()=>expressToggleRotation(b.dataset.expRotation));
@@ -5384,10 +5389,41 @@ async function removeTeamMember(...args){
   return offline.userAction('Retirar profissional da escala',()=>removeTeamMemberLocal(...args));
 }
 async function removeTeamMemberLocal(id){
-  if(!isOperator())return;
-  const m=team.find(x=>x.id===id);if(!m)return;
-  if(!confirm('Retirar '+displayName(m.profissionais)+' da escala atual?'))return;
-  await deactivateTeamRow(m,new Date().toISOString());await loadAll(selectedDate());
+  return unassignMemberLocal(id);
+}
+function vehicleUnassignHtml(v){
+  if(!isOperator()||norm(currentPlantao?.status)!=='ABERTO')return '';
+  return '<div class="roster-unassign-list">'+vehicleMembers(v).map(m=>
+    '<div><span><small>'+esc(roleLabel(teamRoleKey(m)))+'</small><strong>'+esc(displayName(m.profissionais)||m.nome_snapshot||'—')+'</strong></span>'+
+    '<button type="button" class="roster-unassign-btn" data-unassign-member="'+esc(m.id)+'" data-unassign-vehicle="'+esc(v.id)+'">DESESCALAR</button></div>'
+  ).join('')+'</div>';
+}
+function bindUnassignButtons(root){
+  root?.querySelectorAll('[data-unassign-member]').forEach(button=>button.onclick=async()=>{
+    if(button.disabled)return;
+    button.disabled=true;
+    try{await offline.userAction('Desescalar profissional',()=>unassignMemberLocal(button.dataset.unassignMember,button.dataset.unassignVehicle));}
+    finally{button.disabled=false;}
+  });
+}
+async function unassignMemberLocal(id,expectedVehicleId=null){
+  if(!canEditOpenShift()||!currentPlantao)return;
+  const m=team.find(row=>row.id===id&&row.plantao_id===currentPlantao.id&&norm(row.status)==='ATIVO');
+  if(!m||(expectedVehicleId!==null&&(m.viatura_id||'')!==expectedVehicleId))return alert('A escala mudou. Atualize e confira o profissional antes de desescalar.');
+  const v=vehicleById(m.viatura_id);
+  if(memberIsBusy(m)||(v&&activeOccurrence(v)))return alert('Aguarde o encerramento da ocorrência antes de desescalar este profissional.');
+  const name=displayName(m.profissionais)||m.nome_snapshot||'este profissional';
+  if(!confirm('Desescalar '+name+(v?' da '+(v.nome||v.codigo):' da escala atual')+'? Os demais integrantes e o histórico serão mantidos.'))return;
+  try{
+    const {data,error}=await supabase.from('equipe_plantao').update({status:'INATIVO',saiu_em:new Date().toISOString(),tipo_alteracao_escala:'DESESCALADO'})
+      .eq('id',m.id).eq('plantao_id',currentPlantao.id).eq('status','ATIVO').select('id').maybeSingle();
+    if(error)throw error;
+    if(!data)throw new Error('A escala já foi alterada. Atualize e confira a posição.');
+    // Keep occurrence membership and its snapshots intact for the historical reports.
+    expressTechSelected.delete(m.profissional_id);expressNurseSelected.delete(m.profissional_id);
+    markOperationalDirty();
+    await loadAll(selectedDate());await loadExpressScale();await refreshBookProjection();
+  }catch(error){alert('Não foi possível desescalar: '+error.message);}
 }
 
 /* ---------- individual occurrence ---------- */

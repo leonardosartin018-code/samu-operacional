@@ -116,3 +116,11 @@ body :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card[class] .
 .regional-base-vehicles .regional-vehicle-square.state-asepsis{background:#39627d;border-color:#7197ad;color:#fff}
 .regional-base-vehicles .regional-vehicle-square:is(.state-mechanical,.state-noCrew){background:#52616c;border-color:#8495a0;color:#fff}
 .regional-base-vehicles .regional-vehicle-square.state-noStretcher{background:#655773;border-color:#9785a5;color:#fff}
+
+/* Explicit individual removal from the current roster. */
+.roster-unassign-btn{min-height:30px;padding:6px 9px;border:1px solid #c7a6a6;border-radius:6px;background:#fff5f3;color:#823f3f;font-size:.65rem;font-weight:800;cursor:pointer;white-space:nowrap}
+.roster-unassign-btn:disabled{opacity:.5;cursor:wait}
+.roster-unassign-list{display:grid;gap:6px;margin:8px 0}
+.roster-unassign-list>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border:1px solid #ffffff35;border-radius:7px;background:#ffffff0c}
+.roster-unassign-list span{min-width:0}.roster-unassign-list small,.roster-unassign-list strong{display:block;overflow-wrap:anywhere}.roster-unassign-list small{font-size:.6rem}.roster-unassign-list strong{font-size:.8rem}
+.express-driver-tools{flex-wrap:wrap}
