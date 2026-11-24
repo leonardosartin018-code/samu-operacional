@@ -124,3 +124,25 @@ body :is(#vehicles,#regionalGrid,#regionalQuickScaleGrid) .vehicle-card[class] .
 .roster-unassign-list>div{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;border:1px solid #ffffff35;border-radius:7px;background:#ffffff0c}
 .roster-unassign-list span{min-width:0}.roster-unassign-list small,.roster-unassign-list strong{display:block;overflow-wrap:anywhere}.roster-unassign-list small{font-size:.6rem}.roster-unassign-list strong{font-size:.8rem}
 .express-driver-tools{flex-wrap:wrap}
+
+/* Operational actions stay visible and follow the order used by the radio operator. */
+.card-occurrence-body{display:grid;gap:10px;min-width:0}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-occurrence-body .occ-timeline{grid-template-columns:repeat(2,minmax(0,1fr));margin:0;gap:6px}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-occurrence-body .occ-time-chip{padding:7px 8px;min-height:0}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-occurrence-body .occ-time-chip span{font-size:.6rem;letter-spacing:0}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-occurrence-body .occ-time-chip b{font-size:.85rem}
+.card-care-actions{display:grid;gap:9px}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-care-actions .qth-btn{min-height:48px;padding:11px;border:1px solid #c36318;background:#f5a249;color:#382006;font-size:.83rem;box-shadow:none}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-care-actions .qth-btn.recorded{background:#e7f3eb;border-color:#a5cbb2;color:#285b40}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-care-actions .victim-destination-card{display:grid;grid-template-columns:minmax(0,1fr);margin:0;padding:10px;background:#fff8ea;border:1px solid #d8c8a5;border-radius:7px;gap:8px}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-care-actions .victim-destination-btn{width:100%;min-height:40px;background:#f7e5be;border-color:#d5b77c;color:#694a19}
+.card-secondary-actions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:7px;padding-top:10px;border-top:1px solid #ffffff35}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-secondary-actions button{width:100%;min-width:0;min-height:38px;padding:8px 6px;font-size:.7rem;line-height:1.3;white-space:normal;border-radius:7px}
+.card-secondary-actions .time-edit-btn{grid-column:1/-1}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-secondary-actions .qta-btn{background:#fff0ed;border-color:#d9aaa3;color:#873e36}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-return-action{width:100%;min-height:43px;padding:10px;font-size:.78rem;font-weight:900;border-radius:7px}
+.card-status-actions{margin-top:12px;padding-top:9px;border-top:1px solid #ffffff35}.card-action-label{font-size:.6rem;font-weight:800;letter-spacing:.03em;opacity:.85;margin-bottom:6px}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-status-actions .status-strip{gap:5px;margin:0}
+body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-status-actions .status-strip button{min-height:34px;min-width:0;padding:6px 2px;font-size:.6rem}
+
+.card-secondary-actions:not(:has(.qth-not-informed-btn)) .qta-btn{grid-column:1/-1}

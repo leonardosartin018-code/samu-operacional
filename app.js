@@ -1,8 +1,8 @@
 import { renderFleetOverview } from './operator-panels.js';
 import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261124-offline-22';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261124-offline-22';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261124-offline-23';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261124-offline-23';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -1155,13 +1155,18 @@ function occurrenceInfoHtml(v,o){
  const st=statusInfo(v).key,qth=!!o.chegada_qth_em,missing=o.qth_nao_informado===true;
  const time=(label,value)=>'<div class="occ-time-chip"><span>'+label+'</span><b>'+fmtTime(value)+'</b><small>'+esc(value?fmtDate(datetimeLocal(value).slice(0,10)):'')+'</small></div>';
  return '<div class="occ-identity-line"><span class="occ-number">Nº '+esc(o.numero||'—')+'</span><strong class="occ-nature">'+esc(o.natureza||'Natureza não informada')+'</strong></div>'+
-  (st==='occurrence'?'<button type="button" class="qth-btn '+(qth?'recorded':'')+'" data-act="qth" data-o="'+esc(o.id)+'">'+(qth?'✓ QTH registrado · '+fmtTime(o.chegada_qth_em):'CHEGADA AO QTH')+'</button>':'')+
-  '<details class="vehicle-details" data-fold-key="vtr-'+esc(v.id)+'"><summary>Horários, destino e outras ações <span>▾</span></summary><div class="vehicle-details-body">'+
+  '<div class="card-occurrence-body">'+
   '<div class="occ-timeline">'+time('Início / saída',o.saida_em||o.acionada_em)+time('Chegada QTH',o.chegada_qth_em)+'<div class="occ-time-chip"><span>Tempo até QTH</span><b>'+fmtMinutes(qthElapsedMinutes(o))+'</b></div>'+time('Início retorno',o.inicio_retorno_em)+'</div>'+
-  '<div class="occ-address">'+esc([o.bairro,o.endereco].filter(Boolean).join(' · '))+'</div>'+victimDestinationControlsHtml(o,v)+
-  (st==='occurrence'?'<div class="occurrence-main-actions">'+(!qth?'<button type="button" class="qth-not-informed-btn" data-act="qth-not-informed" data-o="'+esc(o.id)+'" '+(missing?'disabled':'')+'>'+(missing?'QTH não informado':'Marcar QTH não informado')+'</button>':'')+'<div class="occurrence-action-row"><button type="button" class="qta-btn" data-act="qta" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">QTA</button><button type="button" class="return-btn" data-act="return" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">Retornar à base</button></div></div>':'')+
+  '<div class="occ-address">'+esc([o.bairro,o.endereco].filter(Boolean).join(' · '))+'</div>'+
+  '<div class="card-care-actions">'+
+  (st==='occurrence'?'<button type="button" class="qth-btn '+(qth?'recorded':'')+'" data-act="qth" data-o="'+esc(o.id)+'">'+(qth?'✓ QTH registrado · '+fmtTime(o.chegada_qth_em):'CHEGADA AO QTH')+'</button>':'')+
+  victimDestinationControlsHtml(o,v)+'</div>'+
+  '<div class="card-secondary-actions" aria-label="Outras ações da ocorrência">'+
+  (st==='occurrence'?(!qth?'<button type="button" class="qth-not-informed-btn" data-act="qth-not-informed" data-o="'+esc(o.id)+'" '+(missing?'disabled':'')+'>'+(missing?'QTH não informado':'Marcar QTH não informado')+'</button>':'')+
+  '<button type="button" class="qta-btn" data-act="qta" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">QTA / cancelar atendimento</button>':'')+
   (st==='returning'?'<button type="button" class="edit-team-btn" data-act="undo-return" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">Corrigir retorno</button>':'')+
-  (isOperator()?'<button type="button" class="time-edit-btn" data-summary-occ-edit="'+esc(o.id)+'">Editar dados / horários</button>':'')+'</div></details>';
+  (isOperator()?'<button type="button" class="time-edit-btn" data-summary-occ-edit="'+esc(o.id)+'">Editar ocorrência / horários</button>':'')+'</div>'+
+  (st==='occurrence'?'<button type="button" class="return-btn card-return-action" data-act="return" data-o="'+esc(o.id)+'" data-v="'+esc(v.id)+'">RETORNAR À BASE</button>':'')+'</div>';
 }
 
 function statusStripHtml(v){
@@ -1202,7 +1207,7 @@ function vehicleCardHtml(v,options={}){
     (rosterOnly
       ?'<div class="regional-roster-count">'+occurrences.filter(row=>row.viatura_id===v.id&&norm(row.status)==='FINALIZADA').length+' ocorrência(s) finalizada(s) no plantão</div>'+
         (isOperator()?'<button type="button" class="regional-roster-edit" data-regional-team="'+esc(v.id)+'">ESCALAR / EDITAR EQUIPE</button>':'')
-      :occurrenceInfoHtml(v,o)+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+(!o&&isOperator()?'<details class="vehicle-details" data-fold-key="status-'+esc(v.id)+'"><summary>Situação da viatura <span>▾</span></summary>'+statusStripHtml(v)+'</details>':''))+
+      :occurrenceInfoHtml(v,o)+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+(!o&&isOperator()?'<div class="card-status-actions"><div class="card-action-label">SITUAÇÃO DA VIATURA</div>'+statusStripHtml(v)+'</div>':''))+
   '</article>';
 }
 function operationalGroup(title,subtitle,cls,list,extra=''){
