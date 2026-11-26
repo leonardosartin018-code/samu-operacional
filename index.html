@@ -5,9 +5,9 @@
   <meta name="viewport" content="width=device-width,initial-scale=1">
   <meta name="theme-color" content="#075985">
   <title>Central Operacional SAMU</title>
-  <link rel="stylesheet" href="./styles.css?v=20261126-offline-26">
-  <link rel="stylesheet" href="./offline.css?v=20261126-offline-26">
-  <link rel="stylesheet" href="./operator-theme.css?v=20261126-offline-26">
+  <link rel="stylesheet" href="./styles.css?v=20261126-offline-27">
+  <link rel="stylesheet" href="./offline.css?v=20261126-offline-27">
+  <link rel="stylesheet" href="./operator-theme.css?v=20261126-offline-27">
 </head>
 <body>
 
@@ -498,15 +498,15 @@
     <div id="shiftTransitionDetails" class="shift-transition-details"></div>
     <label class="shift-transition-consent">
       <input type="checkbox" id="shiftTransitionAcknowledge">
-      <span>Conferi o plantão. Sei que só esta confirmação encerra o turno e libera a próxima escala; o arquivo será gerado para download e envio.</span>
+      <span>Conferi e confirmo esta operação.</span>
     </label>
     <div class="modal-actions shift-transition-actions">
       <button class="btn" type="button" data-close-modal="shiftTransitionModal">CANCELAR</button>
-      <button id="shiftEndOnlyBtn" class="btn" type="button" disabled>ENCERRAR E GERAR LIVRO</button>
-      <button id="shiftEndStartBtn" class="btn primary" type="button" disabled>ENCERRAR / GERAR LIVRO / PRÓXIMO</button>
+      <button id="shiftEndStartBtn" class="btn primary" type="button" disabled>GERAR LIVRO E ENCERRAR</button>
       <button id="shiftStartOnlyBtn" class="btn primary hidden" type="button" disabled>INICIAR PRÓXIMA ESCALA</button>
       <button id="shiftReopenBtn" class="btn primary hidden" type="button" disabled>REABRIR PLANTÃO</button>
     </div>
+    <details class="shift-closing-more"><summary>Outras opções</summary><button id="shiftEndOnlyBtn" class="btn" type="button" disabled>Somente encerrar, sem iniciar o próximo</button></details>
   </div>
 </div>
 
@@ -975,6 +975,6 @@
 <script src="./vendor/jspdf-2.5.2.js"></script>
 <script src="./vendor/jspdf-autotable-3.8.4.js"></script>
 <script src="./vendor/html2canvas-1.4.1.js"></script>
-<script type="module" src="./app.js?v=20261126-offline-26"></script>
+<script type="module" src="./app.js?v=20261126-offline-27"></script>
 </body>
 </html>

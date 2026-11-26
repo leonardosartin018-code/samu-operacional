@@ -1,8 +1,8 @@
 import { renderFleetOverview } from './operator-panels.js';
 import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-26';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-26';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-27';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-27';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -6202,14 +6202,47 @@ function externalHandoffHtml(o){
 function activeShiftHandoffPreview(){
   const active=activeHandoffOccurrences();
   const items=active.map(o=>{
-    const v=vehicleById(o.viatura_id),crew=occurrenceMembers(o.id).map(m=>(m.nome_snapshot||displayName(m.profissionais)||'Não identificado')+' — '+(m.funcao||'Função não informada')).join(' / ');
-    return '<label class="shift-handoff-item"><input type="checkbox" data-handoff-occurrence="'+esc(o.id)+'"><span><strong>'+esc(v?.nome||o.viatura_snapshot||'SEM VIATURA')+' · Nº '+esc(o.numero||'—')+'</strong><small>'+esc(o.status)+' · '+esc(o.natureza||'Natureza não informada')+'</small><small>'+esc(crew||'Equipe não registrada: confira antes de continuar.')+'</small></span></label>';
+    const v=vehicleById(o.viatura_id),crew=occurrenceMembers(o.id).map(m=>m.nome_snapshot||displayName(m.profissionais)||'Não identificado').join(' / ');
+    return '<label class="shift-handoff-item"><input type="checkbox" data-handoff-occurrence="'+esc(o.id)+'"><span><strong>'+esc(v?.nome||o.viatura_snapshot||'SEM VIATURA')+' · Nº '+esc(o.numero||'—')+'</strong><small>'+esc(crew||'Equipe não registrada')+'</small></span></label>';
   }).join('');
-  return '<section class="shift-handoff-review"><h3>COMO INICIAR O PRÓXIMO PLANTÃO</h3><p>O Livro será gerado antes do encerramento. O envio do arquivo é manual.</p>'+
-    '<label class="handoff-mode"><input type="radio" name="shiftHandoffMode" value="clean" '+(!active.length?'checked':'')+'> Começar limpo: sem equipe anterior e sem ocorrências encerradas no painel.</label>'+
-    '<label class="handoff-mode"><input type="radio" name="shiftHandoffMode" value="carry" '+(!active.length?'disabled':'')+'> Manter somente os atendimentos e equipes selecionados abaixo.</label>'+
-    (active.length?'<p><b>Equipes ainda na rua: selecione quais continuarão no próximo turno.</b></p><div data-handoff-list>'+items+'</div>':'<p>Nenhuma equipe deste plantão está em ocorrência ou retorno.</p>')+
-    '<p class="shift-handoff-warning">Começar limpo não encerra atendimentos nem libera viaturas ocupadas. Pendências anteriores ficam identificadas separadamente, até serem retomadas e concluídas.</p></section>';
+  return '<section class="shift-handoff-review"><h3>Como começar o próximo plantão?</h3>'+
+    '<label class="handoff-mode"><input type="radio" name="shiftHandoffMode" value="clean" checked> Começar limpo</label>'+
+    (active.length?'<label class="handoff-mode"><input type="radio" name="shiftHandoffMode" value="carry"> Manter equipes na rua ('+active.length+')</label><div data-handoff-list hidden><p>Selecione quem continuará:</p>'+items+'</div><small class="shift-closing-note">Viaturas ainda na rua continuam ocupadas, mesmo ao começar limpo.</small>':'')+'</section>';
+}
+function shiftClosingPending(){
+  if(!isOpenShift(currentPlantao))return [];
+  const pending=[];
+  for(const id of TRACKED_DRAFT_MODALS){
+    if($('#'+id)?.classList.contains('show')&&modalHasUnsavedDraft(id)){
+      const title=$('#'+id)?.querySelector('h2,h3')?.textContent?.trim()||'Formulário aberto';
+      pending.push({key:'draft-'+id,label:title+' — alterações não salvas',draft:id,action:'Voltar ao formulário'});
+    }
+  }
+  if(unsavedBook)pending.push({key:'book',label:'Livro com alterações não salvas',page:'book',target:'saveBookBtn',action:'Ir para salvar'});
+  if(operationalNeedsConfirmation())pending.push({key:'operational',label:unsavedOperationalScale?'Escala operacional alterada, sem confirmação':'Escala operacional ainda não confirmada',page:'team',scope:'operational',target:'confirmExpressBtn',action:'Ir para confirmar'});
+  if(internalNeedsConfirmation())pending.push({key:'internal',label:unsavedInternalScale?'Serviço interno alterado, sem confirmação':'Serviço interno ainda não confirmado',page:'team',scope:'internal',target:'confirmInternalBtn',action:'Ir para confirmar'});
+  return pending;
+}
+function renderShiftClosingPending(){
+  const root=$('#shiftClosingPending');if(!root)return;
+  const pending=shiftClosingPending();root.hidden=!pending.length;
+  root.innerHTML=pending.length?'<strong>Antes de encerrar, resolva:</strong>'+pending.map(p=>'<div class="shift-pending-row"><span>'+esc(p.label)+'</span><button type="button" data-resolve-closing="'+esc(p.key)+'">'+esc(p.action)+'</button></div>').join(''):'';
+  root.querySelectorAll('[data-resolve-closing]').forEach(button=>button.onclick=()=>resolveShiftClosingPending(button.dataset.resolveClosing));
+}
+function resolveShiftClosingPending(key){
+  const item=shiftClosingPending().find(p=>p.key===key);if(!item)return;
+  closeModal('shiftTransitionModal');
+  if(item.draft){$('#'+item.draft)?.querySelector('input,select,textarea,button')?.focus();return;}
+  // Navigate to the existing fields without reloading or discarding their draft values.
+  $$('.page').forEach(page=>page.classList.toggle('active',page.id===item.page));
+  $$('.tab').forEach(tab=>tab.classList.toggle('active',tab.dataset.page===item.page&&(item.page!=='team'||tab.dataset.teamView==='edit')));
+  if(item.page==='team'){
+    $('#teamOperationalPanel')?.classList.remove('roster-only');
+    $('#teamOperationalPanel')?.classList.toggle('hidden',item.scope==='internal');
+    $('#teamInternalPanel')?.classList.toggle('hidden',item.scope!=='internal');
+    $$('.scale-scope-btn').forEach(button=>button.classList.toggle('active',button.dataset.teamScope===item.scope));
+  }
+  const target=$('#'+item.target);target?.scrollIntoView({behavior:'smooth',block:'center'});target?.focus({preventScroll:true});
 }
 function readShiftHandoffDecision(old){
   const mode=document.querySelector('input[name="shiftHandoffMode"]:checked')?.value;
@@ -6281,12 +6314,13 @@ function openShiftTransition(){
   if(!currentPlantao){
     // Primeiro plantão ou fim da escala anterior: só o operador cria a nova.
     const ctx=operationalShiftContext();
-    $('#shiftTransitionTitle').textContent='Iniciar plantão manualmente';
+    $('#shiftTransitionTitle').textContent='Iniciar plantão';
     $('#shiftTransitionDetails').innerHTML='<p><b>Não há plantão aberto carregado.</b></p>'+
       '<p><b>Plantão a iniciar:</b> '+esc(shiftTitle(ctx))+'</p>'+
-      '<p>Nenhum novo plantão é aberto automaticamente às 07h ou às 19h.</p>';
+      '<p>O início depende da sua confirmação.</p>';
     $('#shiftTransitionAcknowledge').checked=false;
     $('#shiftEndOnlyBtn').classList.add('hidden');
+    $('.shift-closing-more')?.classList.add('hidden');
     $('#shiftEndStartBtn').classList.add('hidden');
     $('#shiftStartOnlyBtn').classList.remove('hidden');
     $('#shiftReopenBtn').classList.add('hidden');
@@ -6301,25 +6335,13 @@ function openShiftTransition(){
   const reopen=canReopenCurrentShift(p);
   const next=nextManualShiftContext(p);
   const earlyEnd=open&&Date.now()<shiftExpectedEnd(p).getTime();
-  const earlyStart=Date.now()<shiftExpectedStart(next).getTime();
-  const active=activeHandoffOccurrences().length;
-  const points=[
-    '<b>Plantão atual:</b> '+esc(shiftTitle(p))+' — '+(open?'ABERTO':'ENCERRADO'),
-    reopen?'O turno ainda está vigente. Reabra este plantão para continuar com a equipe e a Parte Diária já registradas.':
-      '<b>Próximo plantão:</b> '+esc(shiftTitle(next)),
-    earlyEnd?'<strong>O turno atual ainda não chegou ao horário previsto de encerramento.</strong>':'',
-    earlyStart&&!reopen?'<strong>O próximo turno será iniciado antes do horário previsto.</strong>':'',
-    open&&active?'<strong>'+active+' ocorrência(s) em andamento.</strong> Confirme abaixo quais equipes continuarão.':'',
-    open&&(operationalNeedsConfirmation()||internalNeedsConfirmation()||unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())
-      ?'<strong>Há informações não confirmadas ou não salvas.</strong> Salve e confirme antes de encerrar; o encerramento ficará bloqueado.':'',
-    'O plantão continuará com TODOS os dados visíveis até sua confirmação. A virada do relógio não muda o turno.',
-    'O Livro oficial e o relatório serão gerados ANTES do encerramento. Somente após essa geração e sua confirmação o turno poderá mudar. Se falhar, o plantão ficará aberto.',
-    'O arquivo será preparado para baixar e enviar. O envio automático por e-mail ainda não está configurado.',
-    'A escala anterior fica no histórico. O sistema não encerra ocorrências nem altera automaticamente a situação das viaturas.'
-  ].filter(Boolean);
-  $('#shiftTransitionTitle').textContent=open?'ENCERRAR PLANTÃO / ENVIAR LIVRO':reopen?'Reabrir plantão vigente':'Iniciar próxima escala';
-  $('#shiftTransitionDetails').innerHTML=points.map(p=>'<p>'+p+'</p>').join('')+
-    (open?activeShiftHandoffPreview():(p.repasse_plantao?.outgoing?'<p>A decisão de continuidade registrada no encerramento será usada na abertura. Atendimentos já concluídos não serão transferidos.</p>':''));
+  $('#shiftTransitionTitle').textContent=open?'Encerrar plantão':reopen?'Reabrir plantão':'Iniciar próximo plantão';
+  $('#shiftTransitionDetails').innerHTML='<div class="shift-closing-current"><small>'+ (open?'Plantão a encerrar':'Plantão selecionado')+'</small><strong>'+esc(shiftTitle(p))+'</strong></div>'+
+    (reopen?'<p>Reabra para continuar o turno vigente.</p>':'<p class="shift-closing-next"><b>Próximo:</b> '+esc(shiftTitle(next))+'</p>')+
+    (earlyEnd?'<p class="shift-closing-early">O horário previsto deste turno ainda não terminou.</p>':'')+
+    '<div id="shiftClosingPending" role="status" aria-live="polite" hidden></div>'+
+    (open?activeShiftHandoffPreview()+'<small class="shift-closing-note">O Livro será gerado para baixar e enviar.</small>':'');
+  renderShiftClosingPending();
   $('#shiftTransitionDetails').querySelectorAll('input').forEach(input=>input.onchange=()=>{
     if(input.matches('[data-handoff-occurrence]')&&input.checked)document.querySelector('input[name="shiftHandoffMode"][value="carry"]').checked=true;
     if(input.name==='shiftHandoffMode'&&input.value==='clean'&&input.checked)document.querySelectorAll('[data-handoff-occurrence]').forEach(box=>box.checked=false);
@@ -6327,6 +6349,7 @@ function openShiftTransition(){
   });
   $('#shiftTransitionAcknowledge').checked=false;
   $('#shiftEndOnlyBtn').classList.toggle('hidden',!open);
+  $('.shift-closing-more')?.classList.toggle('hidden',!open);
   $('#shiftEndStartBtn').classList.toggle('hidden',!open);
   $('#shiftStartOnlyBtn').classList.toggle('hidden',open||reopen);
   $('#shiftReopenBtn').classList.toggle('hidden',!reopen);
@@ -6337,7 +6360,9 @@ function openShiftTransition(){
 function updateShiftTransitionButtons(){
   const choice=document.querySelector('input[name="shiftHandoffMode"]:checked');
   const handoffReady=!isOpenShift(currentPlantao)||(choice&&(choice.value==='clean'||document.querySelector('[data-handoff-occurrence]:checked')));
-  const allowed=$('#shiftTransitionAcknowledge').checked&&!shiftTransitionBusy&&handoffReady;
+  const list=$('[data-handoff-list]');if(list)list.hidden=choice?.value!=='carry';
+  const pending=shiftClosingPending();
+  const allowed=$('#shiftTransitionAcknowledge').checked&&!shiftTransitionBusy&&handoffReady&&!pending.length;
   ['#shiftEndOnlyBtn','#shiftEndStartBtn','#shiftStartOnlyBtn','#shiftReopenBtn'].forEach(id=>$(id).disabled=!allowed);
 }
 async function executeShiftTransition(...args){
@@ -6376,9 +6401,10 @@ async function executeShiftTransitionLocal(mode){
   if(mode==='start'&&canReopenCurrentShift(old))return alert('O turno ainda está vigente. Reabra o plantão para continuar.');
   if(mode==='start'&&open)return alert('Encerre o plantão atual antes de iniciar o próximo.');
   if(mode!=='start'&&mode!=='reopen'&&!open)return alert('O plantão já foi encerrado.');
-  if(open&&(operationalNeedsConfirmation()||internalNeedsConfirmation()||
-    unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())){
-    return alert('ENCERRAMENTO BLOQUEADO: há escalas, Livro ou formulários sem confirmação. Salve e confirme os dados antes de encerrar o plantão.');
+  if(open&&shiftClosingPending().length){
+    renderShiftClosingPending();updateShiftTransitionButtons();
+    $('#shiftClosingPending')?.scrollIntoView({behavior:'smooth',block:'nearest'});
+    return;
   }
   let handoffDecision;
   try{handoffDecision=open?readShiftHandoffDecision(old):old.repasse_plantao?.outgoing;}catch(error){return alert(error.message);}

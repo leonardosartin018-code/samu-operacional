@@ -154,3 +154,21 @@ body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-status-actions .sta
 .previous-shift-notice{margin-top:12px;padding:10px;border:1px solid #ffffff60;border-radius:7px;background:#ffffff16;font-size:.76rem;line-height:1.4}.previous-shift-notice p{margin:7px 0}.previous-shift-notice .btn{width:100%;font-size:.7rem}
 
 .continuity-label{margin-top:10px;font-size:.64rem;font-weight:850;letter-spacing:.02em;padding:7px;border:1px solid #ffffff60;border-radius:6px;background:#ffffff15}
+
+/* Closing: one decision, one primary action, actionable pending confirmations. */
+#shiftTransitionModal .dialog{width:min(540px,calc(100vw - 24px))}
+#shiftTransitionModal .shift-transition-details{background:transparent;border:0;padding:0}
+#shiftTransitionModal .shift-closing-current{display:grid;gap:4px;padding:12px;border:1px solid #c5d6e1;border-radius:8px;background:#eef4f8}
+.shift-closing-current small{font-size:.72rem;color:#597080}.shift-closing-current strong{font-size:.95rem;color:#25495f}
+.shift-closing-next{font-size:.8rem}.shift-closing-early{font-size:.76rem;color:#815b1a}
+#shiftClosingPending{margin:12px 0;padding:11px;background:#fff8e9;border:1px solid #dfc999;border-radius:8px;font-size:.8rem;color:#654c20}
+.shift-pending-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding-top:10px}.shift-pending-row span{flex:1;min-width:0}
+.shift-pending-row button{min-height:34px;padding:7px 9px;border:1px solid #9eb9c9;background:#fff;color:#24536f;border-radius:6px;font-size:.72rem;font-weight:800;cursor:pointer}
+#shiftTransitionModal .shift-handoff-review{padding:0;border:0;background:transparent;margin:14px 0 10px}#shiftTransitionModal .shift-handoff-review h3{font-size:.87rem;margin:0 0 8px}
+#shiftTransitionModal .handoff-mode{margin:6px 0;padding:10px;font-size:.82rem}
+#shiftTransitionModal [data-handoff-list][hidden],#shiftClosingPending[hidden]{display:none}
+#shiftTransitionModal [data-handoff-list]{margin-top:10px;max-height:230px;overflow-y:auto;padding-right:3px}
+#shiftTransitionModal .shift-closing-note{display:block;font-size:.72rem;line-height:1.45;color:#597080;margin:9px 0}
+#shiftTransitionModal .shift-transition-consent{padding:10px;font-size:.8rem;margin-top:12px}
+.shift-closing-more{margin-top:12px;font-size:.73rem;color:#557080}.shift-closing-more summary{cursor:pointer}.shift-closing-more button{margin-top:9px}
+@media(max-width:500px){.shift-pending-row{align-items:flex-start;flex-direction:column}.shift-pending-row button{width:100%}}
