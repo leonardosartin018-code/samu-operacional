@@ -148,3 +148,9 @@ body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-status-actions .sta
 .card-secondary-actions:not(:has(.qth-not-informed-btn)) .qta-btn{grid-column:1/-1}
 
 #namesReview tr[data-base-label] th{padding:12px 10px;background:#edf4f8;color:#28536c;border-top:1px solid #cbdce7;text-align:left;font-size:.85rem}
+
+.handoff-mode,.shift-handoff-item{display:flex;align-items:flex-start;gap:10px;padding:12px;border:1px solid #c4d4df;border-radius:8px;background:#fff;margin:8px 0;cursor:pointer}
+.handoff-mode input,.shift-handoff-item input{margin-top:3px;flex:0 0 auto}.shift-handoff-item span{min-width:0}.shift-handoff-item strong,.shift-handoff-item small{display:block;line-height:1.5}.shift-handoff-item small{font-size:.76rem;color:#4b6575}
+.previous-shift-notice{margin-top:12px;padding:10px;border:1px solid #ffffff60;border-radius:7px;background:#ffffff16;font-size:.76rem;line-height:1.4}.previous-shift-notice p{margin:7px 0}.previous-shift-notice .btn{width:100%;font-size:.7rem}
+
+.continuity-label{margin-top:10px;font-size:.64rem;font-weight:850;letter-spacing:.02em;padding:7px;border:1px solid #ffffff60;border-radius:6px;background:#ffffff15}

@@ -1,8 +1,8 @@
 import { renderFleetOverview } from './operator-panels.js';
 import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-25';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-25';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-26';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-26';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -67,6 +67,7 @@ let vehicles = [];
 let team = [];
 let teamLoaded = false;
 let occurrences = [];
+let externalActiveOccurrences = [];
 let occurrenceTeam = [];
 let rotation = [];
 let manualRotation = [];
@@ -369,7 +370,7 @@ function validateDispatchCrew(v){
   return false;
 }
 function activeOccurrence(v){
-  return occurrences.find(o=>o.viatura_id===v.id && !['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status)));
+  return [...occurrences,...externalActiveOccurrences].find(o=>o.viatura_id===v.id && !['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status)));
 }
 function occurrenceMembers(occId){
   return occurrenceTeam.filter(x=>x.ocorrencia_id===occId);
@@ -475,7 +476,12 @@ async function resolveOperationalShiftContext(){
   const clock=operationalShiftContext();
   // Não seguir o relógio enquanto houver plantão ABERTO: 07h ou 19h
   // não encerram o Livro e nem permitem apagar a escala visível.
-  if(isOpenShift(currentPlantao))return shiftContextOf(currentPlantao,alaForDate);
+  if(isOpenShift(currentPlantao)){
+    const fresh=await supabase.from('plantoes').select('id,data_plantao,turno,ala,status,iniciado_em').eq('id',currentPlantao.id).maybeSingle();
+    if(fresh.error)throw fresh.error;
+    if(fresh.data&&isOpenShift(fresh.data))return shiftContextOf(fresh.data,alaForDate);
+    if(fresh.data)currentPlantao={...currentPlantao,...fresh.data};
+  }
   const fixedId=storedShiftId();
   if(!currentPlantao&&fixedId){
     const saved=await supabase.from('plantoes')
@@ -802,7 +808,7 @@ async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCr
 
 
   currentPlantao=null;
-  vehicles=[];team=[];teamLoaded=false;occurrences=[];rotation=[];manualRotation=[];occurrenceTeam=[];
+  vehicles=[];team=[];teamLoaded=false;occurrences=[];externalActiveOccurrences=[];rotation=[];manualRotation=[];occurrenceTeam=[];
   const warnings=[];
 
   try{
@@ -869,8 +875,26 @@ async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCr
       if(mr.error){console.warn(mr.error);warnings.push('ordem manual')}
       else manualRotation=mr.data||[];
 
-      if(occurrences.length){
-        const ids=occurrences.map(o=>o.id);
+      const carryIds=handoffIncomingIds(currentPlantao);
+      if(carryIds.length){
+        const carried=await supabase.from('ocorrencias').select('*').in('id',carryIds);
+        if(carried.error)throw carried.error;
+        const own=new Map(occurrences.map(o=>[o.id,o]));
+        for(const o of carried.data||[])own.set(o.id,o);
+        occurrences=[...own.values()];
+      }
+      if(isOpenShift(currentPlantao)){
+        const live=await supabase.from('ocorrencias').select('*').in('status',['EM OCORRENCIA','RETORNANDO']);
+        if(live.error)throw live.error;
+        externalActiveOccurrences=(live.data||[]).filter(o=>!occurrences.some(own=>own.id===o.id));
+        // Never advertise an occupied vehicle as QRV, including a clean start.
+        for(const v of vehicles){
+          const busy=[...occurrences,...externalActiveOccurrences].find(o=>o.viatura_id===v.id&&['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status)));
+          if(busy)v.status_atual=busy.status;
+        }
+      }
+      if(occurrences.length||externalActiveOccurrences.length){
+        const ids=[...new Set([...occurrences,...externalActiveOccurrences].map(o=>o.id))];
         const et=await supabase.from('equipe_ocorrencia').select('*').in('ocorrencia_id',ids);
         if(et.error){console.warn(et.error);warnings.push('equipe das ocorrências')}
         else occurrenceTeam=(et.data||[]).map(m=>({...m,profissionais:profMap.get(m.profissional_id)||null}));
@@ -972,6 +996,7 @@ function rotationPreviewSlotHtml(m,role){
 }
 function crewRowsForCard(v){
   const o=activeOccurrence(v);
+  if(o&&externalActiveOccurrences.some(x=>x.id===o.id))return vehicleMembers(v);
   if(o){
     const occRows=occurrenceMembers(o.id);
     if(occRows.length)return occRows;
@@ -1152,9 +1177,10 @@ function qthElapsedMinutes(o){
 }
 function occurrenceInfoHtml(v,o){
  if(!o)return '';
+ const continuity=o.plantao_id!==currentPlantao?.id?'<div class="continuity-label">EM CONTINUIDADE DO PLANTÃO ANTERIOR</div>':'';
  const st=statusInfo(v).key,qth=!!o.chegada_qth_em,missing=o.qth_nao_informado===true;
  const time=(label,value)=>'<div class="occ-time-chip"><span>'+label+'</span><b>'+fmtTime(value)+'</b><small>'+esc(value?fmtDate(datetimeLocal(value).slice(0,10)):'')+'</small></div>';
- return '<div class="occ-identity-line"><span class="occ-number">Nº '+esc(o.numero||'—')+'</span><strong class="occ-nature">'+esc(o.natureza||'Natureza não informada')+'</strong></div>'+
+ return continuity+'<div class="occ-identity-line"><span class="occ-number">Nº '+esc(o.numero||'—')+'</span><strong class="occ-nature">'+esc(o.natureza||'Natureza não informada')+'</strong></div>'+
   '<div class="card-occurrence-body">'+
   '<div class="occ-timeline">'+time('Início / saída',o.saida_em||o.acionada_em)+time('Chegada QTH',o.chegada_qth_em)+'<div class="occ-time-chip"><span>Tempo até QTH</span><b>'+fmtMinutes(qthElapsedMinutes(o))+'</b></div>'+time('Início retorno',o.inicio_retorno_em)+'</div>'+
   '<div class="occ-address">'+esc([o.bairro,o.endereco].filter(Boolean).join(' · '))+'</div>'+
@@ -1187,9 +1213,10 @@ function vehicleCardHtml(v,options={}){
   const rosterOnly=options.rosterOnly===true;
   const st=statusInfo(v),o=activeOccurrence(v);
   const readiness=crewCompleteness(v);const badgeLabel=st.key==='base'&&readiness.state!=='complete'?(readiness.state==='empty'?'NA BASE · SEM EQUIPE':'NA BASE · EQUIPE PARCIAL'):st.label;
+  const external=o&&externalActiveOccurrences.some(x=>x.id===o.id);
   let primary='';
-  if(st.key==='base') primary='<button class="dispatch-btn" data-act="dispatch" data-v="'+v.id+'">ACIONAR VIATURA</button>';
-  if(st.key==='returning'){
+  if(st.key==='base'&&isOpenShift(currentPlantao)) primary='<button class="dispatch-btn" data-act="dispatch" data-v="'+v.id+'">ACIONAR VIATURA</button>';
+  if(st.key==='returning'&&!external){
     primary='<div class="occurrence-main-actions">'+
       '<button class="arrive-btn" data-act="arrive" data-o="'+(o?.id||'')+'" data-v="'+v.id+'">CHEGADA À BASE</button>'+
 
@@ -1201,13 +1228,13 @@ function vehicleCardHtml(v,options={}){
       : '')+
     '<div class="vehicle-top"><div><div class="vehicle-name">'+esc(v.nome||v.codigo)+'</div><div class="vehicle-subhint">'+(rosterOnly?'CLIQUE PARA ESCALAR / EDITAR EQUIPE':st.key==='occurrence'?'EQUIPE EMPENHADA • CLIQUE PARA EDITAR':'CLIQUE PARA EMPENHAR / EDITAR EQUIPE')+'</div></div><span class="status-badge">'+badgeLabel+'</span></div>'+
     (rosterOnly&&!crewRowsForCard(v).length?'<div class="roster-unassigned">NÃO ESCALADO</div>':'')+
-    (!rosterOnly&&isOperator()?'<button type="button" class="crew-edit-pencil" data-summary-team-edit="'+esc(v.id)+'" title="Editar equipe" aria-label="Editar equipe '+esc(v.nome||v.codigo)+'">✎</button>':'')+
+    (!rosterOnly&&isOperator()&&(!o||o.plantao_id===currentPlantao?.id)?'<button type="button" class="crew-edit-pencil" data-summary-team-edit="'+esc(v.id)+'" title="Editar equipe" aria-label="Editar equipe '+esc(v.nome||v.codigo)+'">✎</button>':'')+
     crewGridHtml(v,{hideReadiness:rosterOnly})+
     (rosterOnly?vehicleUnassignHtml(v):'')+
     (rosterOnly
       ?'<div class="regional-roster-count">'+occurrences.filter(row=>row.viatura_id===v.id&&norm(row.status)==='FINALIZADA').length+' ocorrência(s) finalizada(s) no plantão</div>'+
         (isOperator()?'<button type="button" class="regional-roster-edit" data-regional-team="'+esc(v.id)+'">ESCALAR / EDITAR EQUIPE</button>':'')
-      :occurrenceInfoHtml(v,o)+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+(!o&&isOperator()?'<div class="card-status-actions"><div class="card-action-label">SITUAÇÃO DA VIATURA</div>'+statusStripHtml(v)+'</div>':''))+
+      :(external?externalHandoffHtml(o):occurrenceInfoHtml(v,o))+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+(!o&&isOperator()?'<div class="card-status-actions"><div class="card-action-label">SITUAÇÃO DA VIATURA</div>'+statusStripHtml(v)+'</div>':''))+
   '</article>';
 }
 function operationalGroup(title,subtitle,cls,list,extra=''){
@@ -1297,7 +1324,7 @@ function fixedVehicleForMemberType(m,type){
   return vehicleType(v).includes(type)?v:null;
 }
 function activeOccurrenceIdsSet(){
-  return new Set(occurrences.filter(o=>!['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status))).map(o=>o.id));
+  return new Set([...occurrences,...externalActiveOccurrences].filter(o=>!['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status))).map(o=>o.id));
 }
 function memberIsBusy(m){
   if(!m)return true;
@@ -2629,11 +2656,13 @@ function renderHistory(){
 
 function bindVehicleActions(root){
   bindSummaryEditors(root);
+  root.querySelectorAll('[data-handoff-include]').forEach(b=>b.onclick=()=>includePreviousOccurrence(b.dataset.handoffInclude));
   root.querySelectorAll('[data-team-card]').forEach(card=>{
     card.onclick=e=>{
       if(e.target.closest('button,select,input,textarea,a,summary,details'))return;
       const v=vehicleById(card.dataset.v);
       const o=v?activeOccurrence(v):null;
+      if(o&&o.plantao_id!==currentPlantao?.id)return;
       if(o&&['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status))){
         openOccurrenceCrewCorrection(o.id);
       }else{
@@ -6156,31 +6185,95 @@ async function saveBookLocal(){
 
 /* Prévia do repasse: exibe quem está realmente empenhado na ocorrência.
    Não presume dobra de plantão nem muda a escala do próximo turno. */
+function handoffIncomingIds(shift){
+  return [...new Set((shift?.repasse_plantao?.incoming?.occurrence_ids||[]).filter(id=>typeof id==='string'))];
+}
+function nextManualShiftContext(old){
+  const expected=nextShiftContext(old),clock=operationalShiftContext();
+  return shiftExpectedStart(clock)>shiftExpectedStart(expected)?{...clock,ala:alaForDate(clock.date)}:expected;
+}
+function activeHandoffOccurrences(){
+  return [...new Map([...occurrences,...externalActiveOccurrences].filter(o=>['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status))).map(o=>[o.id,o])).values()];
+}
+function externalHandoffHtml(o){
+  return '<div class="previous-shift-notice"><strong>ATENDIMENTO DO PLANTÃO ANTERIOR</strong><p>Nº '+esc(o.numero||'—')+' · '+esc(o.natureza||'Natureza não informada')+'</p><p>A viatura permanece ocupada. A equipe anterior não foi incluída nesta escala.</p>'+
+    (isOperator()&&isOpenShift(currentPlantao)?'<button type="button" class="btn" data-handoff-include="'+esc(o.id)+'">INCLUIR CONTINUIDADE</button>':'')+'</div>';
+}
 function activeShiftHandoffPreview(){
-  const active=occurrences.filter(o=>['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status)));
-  if(!active.length)return '';
+  const active=activeHandoffOccurrences();
   const items=active.map(o=>{
-    const vehicle=vehicleById(o.viatura_id);
-    const members=occurrenceMembers(o.id);
-    const crew=members.length?members.map(m=>
-      (m.nome_snapshot||displayName(m.profissionais)||'Não identificado')+
-      (m.funcao?' — '+m.funcao:'')
-    ).join(' / '):'Guarnição não registrada. Confira antes de encerrar!';
-    return '<article class="shift-handoff-item">'+
-      '<div><strong>'+esc(vehicle?.nome||o.viatura_snapshot||'SEM VIATURA')+
-      ' • OC. '+esc(o.numero||'—')+'</strong><span>'+esc(o.status||'EM ATENDIMENTO')+'</span></div>'+
-      '<p><b>Equipe que está na rua:</b> '+esc(crew)+'</p>'+
-      '<p><b>Natureza:</b> '+esc(o.natureza||'Não informada')+
-      ' • <b>Saída:</b> '+esc(fmtTime(o.saida_em||o.acionada_em))+'</p>'+
-      '</article>';
+    const v=vehicleById(o.viatura_id),crew=occurrenceMembers(o.id).map(m=>(m.nome_snapshot||displayName(m.profissionais)||'Não identificado')+' — '+(m.funcao||'Função não informada')).join(' / ');
+    return '<label class="shift-handoff-item"><input type="checkbox" data-handoff-occurrence="'+esc(o.id)+'"><span><strong>'+esc(v?.nome||o.viatura_snapshot||'SEM VIATURA')+' · Nº '+esc(o.numero||'—')+'</strong><small>'+esc(o.status)+' · '+esc(o.natureza||'Natureza não informada')+'</small><small>'+esc(crew||'Equipe não registrada: confira antes de continuar.')+'</small></span></label>';
+  }).join('');
+  return '<section class="shift-handoff-review"><h3>COMO INICIAR O PRÓXIMO PLANTÃO</h3><p>O Livro será gerado antes do encerramento. O envio do arquivo é manual.</p>'+
+    '<label class="handoff-mode"><input type="radio" name="shiftHandoffMode" value="clean" '+(!active.length?'checked':'')+'> Começar limpo: sem equipe anterior e sem ocorrências encerradas no painel.</label>'+
+    '<label class="handoff-mode"><input type="radio" name="shiftHandoffMode" value="carry" '+(!active.length?'disabled':'')+'> Manter somente os atendimentos e equipes selecionados abaixo.</label>'+
+    (active.length?'<p><b>Equipes ainda na rua: selecione quais continuarão no próximo turno.</b></p><div data-handoff-list>'+items+'</div>':'<p>Nenhuma equipe deste plantão está em ocorrência ou retorno.</p>')+
+    '<p class="shift-handoff-warning">Começar limpo não encerra atendimentos nem libera viaturas ocupadas. Pendências anteriores ficam identificadas separadamente, até serem retomadas e concluídas.</p></section>';
+}
+function readShiftHandoffDecision(old){
+  const mode=document.querySelector('input[name="shiftHandoffMode"]:checked')?.value;
+  if(!['clean','carry'].includes(mode))throw new Error('Escolha como iniciar o próximo plantão.');
+  const ids=mode==='carry'?[...document.querySelectorAll('[data-handoff-occurrence]:checked')].map(e=>e.dataset.handoffOccurrence):[];
+  if(mode==='carry'&&!ids.length)throw new Error('Selecione pelo menos um atendimento em continuidade.');
+  const activeIds=new Set(activeHandoffOccurrences().map(o=>o.id));
+  if(ids.some(id=>!activeIds.has(id)))throw new Error('Os atendimentos mudaram. Reabra a conferência.');
+  return {mode,occurrence_ids:ids,pending_occurrence_ids:[...activeIds],source_shift_id:old.id,target:nextManualShiftContext(old),confirmed_at:new Date().toISOString(),confirmed_by:profile?.nome||null};
+}
+async function applyShiftHandoff(next,decision,{allowExisting=false}={}){
+  const [tr,or,ir,rr]=await Promise.all([
+    supabase.from('equipe_plantao').select('*').eq('plantao_id',next.id),
+    supabase.from('ocorrencias').select('id').eq('plantao_id',next.id),
+    supabase.from('escala_interna_plantao').select('id').eq('plantao_id',next.id),
+    supabase.from('revezamento_plantao').select('id').eq('plantao_id',next.id)
+  ]);
+  if(tr.error||or.error||ir.error||rr.error)throw tr.error||or.error||ir.error||rr.error;
+  if(!allowExisting&&((tr.data||[]).length||(or.data||[]).length||(ir.data||[]).length||(rr.data||[]).length||next.repasse_plantao?.incoming))throw new Error('O próximo plantão já contém registros. Nenhum dado foi apagado; confira o turno antes de continuar.');
+  const ids=decision.mode==='carry'?decision.occurrence_ids:[];
+  const selected=ids.length?await supabase.from('ocorrencias').select('*').in('id',ids):{data:[]};
+  if(selected.error)throw selected.error;
+  if(ids.some(id=>!(selected.data||[]).some(o=>o.id===id&&['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status)))))throw new Error('Um atendimento selecionado já mudou de situação. Reabra o repasse.');
+  const links=ids.length?await supabase.from('equipe_ocorrencia').select('*').in('ocorrencia_id',ids):{data:[]};
+  if(links.error)throw links.error;
+  if((selected.data||[]).some(o=>!o.viatura_id||!(links.data||[]).some(m=>m.ocorrencia_id===o.id)))throw new Error('Há atendimento sem viatura ou guarnição registrada. Corrija antes de incluir a continuidade.');
+  const sourceShiftIds=[...new Set((selected.data||[]).map(o=>o.plantao_id))];
+  const sourceRows=sourceShiftIds.length?await supabase.from('equipe_plantao').select('*').in('plantao_id',sourceShiftIds):{data:[]};
+  if(sourceRows.error)throw sourceRows.error;
+  const assigned=new Map((tr.data||[]).filter(m=>norm(m.status)==='ATIVO').map(m=>[m.profissional_id,m]));
+  for(const o of selected.data||[]){
+    // A guard also detects a conflicting status change during synchronization.
+    const guard=await supabase.from('ocorrencias').update({status:o.status}).eq('id',o.id).eq('status',o.status).eq('viatura_id',o.viatura_id).select('id').maybeSingle();
+    if(guard.error||!guard.data)throw guard.error||new Error('A ocorrência mudou durante o repasse.');
+    for(const member of (links.data||[]).filter(m=>m.ocorrencia_id===o.id)){
+      if(!member.profissional_id)throw new Error('Identifique os profissionais da ocorrência antes de continuar.');
+      const existing=assigned.get(member.profissional_id);
+      if(existing){if(existing.viatura_id!==o.viatura_id)throw new Error('Um profissional selecionado já está escalado em outra posição no novo turno.');continue;}
+      const source=(sourceRows.data||[]).find(m=>m.plantao_id===o.plantao_id&&m.profissional_id===member.profissional_id&&norm(m.status)==='ATIVO');
+      const rotation=source&&isRotationMember(source);
+      const row={plantao_id:next.id,profissional_id:member.profissional_id,nome_snapshot:member.nome_snapshot,
+        funcao:member.funcao,tipo_escala:rotation?source.tipo_escala:'FIXO EM VIATURA',status:'ATIVO',entrou_em:new Date().toISOString(),
+        viatura_id:rotation?null:o.viatura_id,viatura_snapshot:rotation?null:(vehicleById(o.viatura_id)?.nome||o.viatura_snapshot),
+        grupo_revezamento:rotation?source.grupo_revezamento:null,revezamento_tipo_viatura:rotation?source.revezamento_tipo_viatura:null,
+        origem_escala:'CONTINUIDADE_PLANTAO'};
+      const result=await supabase.from('equipe_plantao').insert(row).select('id').single();
+      if(result.error)throw result.error;
+      assigned.set(member.profissional_id,{...row,id:result.data.id,viatura_id:o.viatura_id});
+    }
+  }
+  const incoming={source_shift_id:decision.source_shift_id,occurrence_ids:[...new Set([...(allowExisting?handoffIncomingIds(next):[]),...ids])],mode:decision.mode,confirmed_at:decision.confirmed_at,confirmed_by:decision.confirmed_by};
+  const update=supabase.from('plantoes').update({repasse_plantao:{...(next.repasse_plantao||{}),incoming}}).eq('id',next.id).eq('status','ABERTO');
+  if(next.repasse_plantao)update.eq('repasse_plantao',next.repasse_plantao);else update.is('repasse_plantao',null);
+  const result=await update.select('id').maybeSingle();
+  if(result.error||!result.data)throw result.error||new Error('O repasse foi alterado por outro operador. Atualize.');
+}
+async function includePreviousOccurrence(id){
+  if(!canEditOpenShift()||!currentPlantao)return;
+  const o=externalActiveOccurrences.find(o=>o.id===id);if(!o)return;
+  if(!confirm('Incluir a ocorrência Nº '+(o.numero||'—')+' e sua equipe em continuidade neste plantão?'))return;
+  return offline.userAction('Incluir atendimento em continuidade',async()=>{
+    await applyShiftHandoff(currentPlantao,{mode:'carry',occurrence_ids:[id],source_shift_id:o.plantao_id,confirmed_at:new Date().toISOString(),confirmed_by:profile?.nome||null},{allowExisting:true});
+    markOperationalDirty();await loadAll(selectedDate());await loadExpressScale();
   });
-  return '<section class="shift-handoff-review"><h3>EQUIPES AINDA EM ATENDIMENTO — REPASSE OBRIGATÓRIO</h3>'+
-    '<p>Estas equipes pertencem à ocorrência em andamento, mesmo que não dobrem a próxima escala. '+
-    'Registre a passagem com o novo rádio-operador. O sistema não deve supor que todos dobrarão.</p>'+
-    items.join('')+
-    '<p class="shift-handoff-warning">Atenção: esta é uma conferência visual. A transferência formal da guarnição '+
-    'para o novo turno e a decisão individual de dobrar exigem confirmação específica no futuro módulo de repasse.</p>'+
-    '</section>';
 }
 /* ---------- Troca e encerramento manual de plantão ---------- */
 function openShiftTransition(){
@@ -6206,27 +6299,32 @@ function openShiftTransition(){
   const p=currentPlantao;
   const open=norm(p.status)==='ABERTO';
   const reopen=canReopenCurrentShift(p);
-  const next=nextShiftContext(p);
+  const next=nextManualShiftContext(p);
   const earlyEnd=open&&Date.now()<shiftExpectedEnd(p).getTime();
   const earlyStart=Date.now()<shiftExpectedStart(next).getTime();
-  const active=occurrences.filter(o=>!['FINALIZADA','QTA','CANCELADA'].includes(norm(o.status))).length;
+  const active=activeHandoffOccurrences().length;
   const points=[
     '<b>Plantão atual:</b> '+esc(shiftTitle(p))+' — '+(open?'ABERTO':'ENCERRADO'),
     reopen?'O turno ainda está vigente. Reabra este plantão para continuar com a equipe e a Parte Diária já registradas.':
       '<b>Próximo plantão:</b> '+esc(shiftTitle(next)),
     earlyEnd?'<strong>O turno atual ainda não chegou ao horário previsto de encerramento.</strong>':'',
     earlyStart&&!reopen?'<strong>O próximo turno será iniciado antes do horário previsto.</strong>':'',
-    open&&active?'<strong>'+active+' ocorrência(s) em andamento.</strong> Serão mantidas no registro do plantão anterior; confira o repasse.':'',
+    open&&active?'<strong>'+active+' ocorrência(s) em andamento.</strong> Confirme abaixo quais equipes continuarão.':'',
     open&&(operationalNeedsConfirmation()||internalNeedsConfirmation()||unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())
       ?'<strong>Há informações não confirmadas ou não salvas.</strong> Salve e confirme antes de encerrar; o encerramento ficará bloqueado.':'',
     'O plantão continuará com TODOS os dados visíveis até sua confirmação. A virada do relógio não muda o turno.',
-    'O Livro oficial e o relatório serão gerados ANTES do encerramento. Se falhar, o plantão ficará aberto para nova tentativa.',
+    'O Livro oficial e o relatório serão gerados ANTES do encerramento. Somente após essa geração e sua confirmação o turno poderá mudar. Se falhar, o plantão ficará aberto.',
     'O arquivo será preparado para baixar e enviar. O envio automático por e-mail ainda não está configurado.',
     'A escala anterior fica no histórico. O sistema não encerra ocorrências nem altera automaticamente a situação das viaturas.'
   ].filter(Boolean);
   $('#shiftTransitionTitle').textContent=open?'ENCERRAR PLANTÃO / ENVIAR LIVRO':reopen?'Reabrir plantão vigente':'Iniciar próxima escala';
   $('#shiftTransitionDetails').innerHTML=points.map(p=>'<p>'+p+'</p>').join('')+
-    (open?activeShiftHandoffPreview():'');
+    (open?activeShiftHandoffPreview():(p.repasse_plantao?.outgoing?'<p>A decisão de continuidade registrada no encerramento será usada na abertura. Atendimentos já concluídos não serão transferidos.</p>':''));
+  $('#shiftTransitionDetails').querySelectorAll('input').forEach(input=>input.onchange=()=>{
+    if(input.matches('[data-handoff-occurrence]')&&input.checked)document.querySelector('input[name="shiftHandoffMode"][value="carry"]').checked=true;
+    if(input.name==='shiftHandoffMode'&&input.value==='clean'&&input.checked)document.querySelectorAll('[data-handoff-occurrence]').forEach(box=>box.checked=false);
+    updateShiftTransitionButtons();
+  });
   $('#shiftTransitionAcknowledge').checked=false;
   $('#shiftEndOnlyBtn').classList.toggle('hidden',!open);
   $('#shiftEndStartBtn').classList.toggle('hidden',!open);
@@ -6237,7 +6335,9 @@ function openShiftTransition(){
   openModal('shiftTransitionModal');
 }
 function updateShiftTransitionButtons(){
-  const allowed=$('#shiftTransitionAcknowledge').checked&&!shiftTransitionBusy;
+  const choice=document.querySelector('input[name="shiftHandoffMode"]:checked');
+  const handoffReady=!isOpenShift(currentPlantao)||(choice&&(choice.value==='clean'||document.querySelector('[data-handoff-occurrence]:checked')));
+  const allowed=$('#shiftTransitionAcknowledge').checked&&!shiftTransitionBusy&&handoffReady;
   ['#shiftEndOnlyBtn','#shiftEndStartBtn','#shiftStartOnlyBtn','#shiftReopenBtn'].forEach(id=>$(id).disabled=!allowed);
 }
 async function executeShiftTransition(...args){
@@ -6280,6 +6380,8 @@ async function executeShiftTransitionLocal(mode){
     unsavedOperationalScale||unsavedInternalScale||unsavedBook||anyDraftModalOpen())){
     return alert('ENCERRAMENTO BLOQUEADO: há escalas, Livro ou formulários sem confirmação. Salve e confirme os dados antes de encerrar o plantão.');
   }
+  let handoffDecision;
+  try{handoffDecision=open?readShiftHandoffDecision(old):old.repasse_plantao?.outgoing;}catch(error){return alert(error.message);}
   shiftTransitionBusy=true;
   updateShiftTransitionButtons();
   let closed=false;
@@ -6313,7 +6415,7 @@ async function executeShiftTransitionLocal(mode){
       if(!prepared?.blob?.size||prepared.shiftId!==old.id)
         throw new Error('O Livro não ficou pronto. O plantão permanece aberto.');
       const {data,error}=await supabase.from('plantoes')
-        .update({status:'ENCERRADO',encerrado_em:closeAt,operador_encerramento:profile?.nome||session?.user?.email||'OPERADOR'})
+        .update({status:'ENCERRADO',encerrado_em:closeAt,repasse_plantao:{...(old.repasse_plantao||{}),outgoing:handoffDecision},operador_encerramento:profile?.nome||session?.user?.email||'OPERADOR'})
         .eq('id',old.id).eq('status','ABERTO').select('id,encerrado_em').maybeSingle();
       if(error)throw error;
       if(!data)throw new Error('Este plantão já foi modificado por outro operador. O plantão não foi encerrado por esta ação.');
@@ -6335,9 +6437,16 @@ async function executeShiftTransitionLocal(mode){
       setSync('Plantão encerrado. Você pode iniciar o próximo quando quiser.','warn');
       return;
     }
-    const next=nextShiftContext(old);
+    const next=open?handoffDecision.target:nextManualShiftContext(old);
     const np=await ensureOperationalPlantao(next.date,next.turno,next.ala);
     if(norm(np.status)!=='ABERTO')throw new Error('O próximo plantão não está aberto.');
+    if(!open&&handoffDecision?.occurrence_ids?.length){
+      const live=await supabase.from('ocorrencias').select('id,status').in('id',handoffDecision.occurrence_ids);
+      if(live.error)throw live.error;
+      handoffDecision={...handoffDecision,occurrence_ids:(live.data||[]).filter(o=>['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status))).map(o=>o.id)};
+    }
+    await applyShiftHandoff(np,handoffDecision||{mode:'clean',occurrence_ids:[],source_shift_id:old.id,target:next,confirmed_at:new Date().toISOString(),confirmed_by:profile?.nome||null});
+    expressTechSelected.clear();expressNurseSelected.clear();manualScaleReference=null;selectedExpressPermutaRow=null;expressDriverEdit=null;
     autoFollowCurrentShift=true;
     rememberShiftSelection(np);
     await loadAll(next.date,next.turno,true);
@@ -6354,10 +6463,10 @@ async function executeShiftTransitionLocal(mode){
   }catch(error){
     console.error('Falha ao trocar plantão',error);
     if(closed){
-      autoFollowCurrentShift=false;
-      await loadAll(old.data_plantao,old.turno);
+      autoFollowCurrentShift=true;currentPlantao=old;
+      rememberShiftSelection(old);syncDateAndAla(old.data_plantao,old.turno);
       closeModal('shiftTransitionModal');
-      alert('O plantão anterior foi encerrado, mas a próxima escala não pôde ser iniciada. Clique em INICIAR PRÓXIMA ESCALA para tentar novamente.\n\n'+(error.message||error));
+      alert('A passagem não foi concluída. As alterações desta tentativa serão canceladas e o plantão anterior será preservado.\n\n'+(error.message||error));
     }else{
       alert('Não foi possível realizar a troca: '+(error.message||error));
     }
@@ -6481,6 +6590,8 @@ async function fetchSamuReportData(shift){
     supabase.from('livro_plantao').select('*').eq('plantao_id',id).maybeSingle()
   ]);
   if(bookResult.error)throw bookResult.error;
+  const carryIds=handoffIncomingIds(shift).filter(id=>!events.some(o=>o.id===id));
+  if(carryIds.length)events.push(...await reportRows(()=>supabase.from('ocorrencias').select('*,viaturas(nome,bases(nome))').in('id',carryIds)));
   const links=[];
   for(let i=0;i<events.length;i+=100){
     const ids=events.slice(i,i+100).map(o=>o.id);

@@ -166,6 +166,7 @@ export const OFFLINE_SCHEMA = {
   "plantoes": {
     "columns": [
       "id",
+      "repasse_plantao",
       "legacy_id",
       "data_plantao",
       "turno",
