@@ -1,8 +1,8 @@
 import { renderFleetOverview } from './operator-panels.js';
 import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261124-offline-23';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261124-offline-23';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-24';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-24';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';

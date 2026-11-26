@@ -67,21 +67,26 @@ test('importador mensal não adivinha nome parcial, nem muda o cadastro',()=>{
  assert.deepEqual(person.funcoes_habilitadas,['Condutor','Rádio-operador','TARM']);
 });
 
-test('todos os militares do grupo Bombeiro podem exercer postos operacionais sem cadastro um por um',()=>{
- const bombeiro={id:'bm',nome_completo:'MILITAR FICTÍCIO',ativo:true,
-   categoria_origem:'Bombeiro',funcao_sistema:'Condutor',funcoes_habilitadas:[]};
- const functions=professionalFunctions(bombeiro);
- for(const role of ['Condutor','Rádio-operador','TARM','Lavador','Sanitária','Motolância']){
-   assert.ok(functions.includes(role),role);
-   assert.equal(hasProfessionalFunction(bombeiro,role),true,role);
+test('origem Bombeiro não concede funções operacionais que não foram cadastradas',()=>{
+ for(const role of ['TARM','Rádio-operador','Lavador','Sanitária','Motolância']){
+   const p={categoria_origem:'Bombeiro',funcao_sistema:role,funcoes_habilitadas:[]};
+   assert.deepEqual(professionalFunctions(p),[role]);
+   assert.equal(hasProfessionalFunction(p,'Condutor'),false,role);
+   assert.equal(vehicleRoleChoices(p).includes('driver'),false,role);
  }
- assert.equal(professionalCanFillSlot(bombeiro,'RADIO-01'),true);
- assert.equal(professionalCanFillSlot(bombeiro,'TARM-02'),true);
- assert.equal(professionalCanFillSlot(bombeiro,'LAVADOR-01'),true);
- assert.equal(hasProfessionalFunction(bombeiro,'Médico'),false);
- assert.equal(hasProfessionalFunction(bombeiro,'Enfermeiro'),false);
- assert.equal(hasProfessionalFunction(bombeiro,'Técnico de Enfermagem'),false);
- assert.equal(bombeiro.funcoes_habilitadas.length,0,'não deve gravar funções no cadastro');
+ const driver={categoria_origem:'Bombeiro',funcao_sistema:'Condutor'};
+ assert.deepEqual(professionalFunctions(driver),['Condutor']);
+ assert.equal(professionalCanFillSlot(driver,'RADIO-01'),false);
+ assert.equal(professionalCanFillSlot(driver,'TARM-02'),false);
+ assert.equal(professionalCanFillSlot(driver,'LAVADOR-01'),false);
+});
+
+test('múltiplas funções explícitas continuam válidas para bombeiros',()=>{
+ const p={categoria_origem:'Bombeiro',funcao_sistema:'TARM',funcoes_habilitadas:['Condutor','TARM']};
+ assert.deepEqual(professionalFunctions(p),['TARM','Condutor']);
+ assert.deepEqual(vehicleRoleChoices(p),['driver']);
+ assert.equal(professionalCanFillSlot(p,'TARM-01'),true);
+ assert.equal(professionalCanFillSlot(p,'RADIO-01'),false);
 });
 
 test('escala nova com apelido antigo mantém nome de guerra confirmado',()=>{
@@ -90,7 +95,7 @@ test('escala nova com apelido antigo mantém nome de guerra confirmado',()=>{
    nome_completo:'LEONARDO DE JESUS SARTIN',
    nome_de_guerra:'SARTIN',nome_exibicao:'SARTIN',
    nomes_anteriores:['LEONARDO','LEONARDO DE JESUS SARTIN'],
-   funcao_sistema:'Condutor',funcoes_habilitadas:[]
+   funcao_sistema:'Condutor',funcoes_habilitadas:['Rádio-operador']
  };
  const resolve=resolveMonthlyRosterEntry({
    name:'Leonardo',position:'Rádio',professionals:[person]
@@ -105,7 +110,7 @@ test('escala nova com apelido antigo mantém nome de guerra confirmado',()=>{
 
 test('apelido comum entre militares não vincula pessoas erradas',()=>{
  const a={id:'a',ativo:true,categoria_origem:'Bombeiro',funcao_sistema:'Condutor',
-   nome_completo:'NOME A',nome_de_guerra:'SARTIN',nomes_anteriores:['LEONARDO']};
+   nome_completo:'NOME A',nome_de_guerra:'SARTIN',nomes_anteriores:['LEONARDO'],funcoes_habilitadas:['TARM']};
  const b={...a,id:'b',nome_completo:'NOME B',nome_de_guerra:'OUTRO'};
  const result=resolveMonthlyRosterEntry({name:'LEONARDO',position:'TARM',professionals:[a,b]});
  assert.equal(result.status,'AMBIGUOUS');
