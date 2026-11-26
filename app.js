@@ -1,8 +1,8 @@
 import { renderFleetOverview } from './operator-panels.js';
 import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-27';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-27';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-28';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-28';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -1234,7 +1234,7 @@ function vehicleCardHtml(v,options={}){
     (rosterOnly
       ?'<div class="regional-roster-count">'+occurrences.filter(row=>row.viatura_id===v.id&&norm(row.status)==='FINALIZADA').length+' ocorrência(s) finalizada(s) no plantão</div>'+
         (isOperator()?'<button type="button" class="regional-roster-edit" data-regional-team="'+esc(v.id)+'">ESCALAR / EDITAR EQUIPE</button>':'')
-      :(external?externalHandoffHtml(o):occurrenceInfoHtml(v,o))+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+(!o&&isOperator()?'<div class="card-status-actions"><div class="card-action-label">SITUAÇÃO DA VIATURA</div>'+statusStripHtml(v)+'</div>':''))+
+      :(external?'':occurrenceInfoHtml(v,o))+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+(!o&&isOperator()?'<div class="card-status-actions"><div class="card-action-label">SITUAÇÃO DA VIATURA</div>'+statusStripHtml(v)+'</div>':''))+
   '</article>';
 }
 function operationalGroup(title,subtitle,cls,list,extra=''){
@@ -2656,7 +2656,6 @@ function renderHistory(){
 
 function bindVehicleActions(root){
   bindSummaryEditors(root);
-  root.querySelectorAll('[data-handoff-include]').forEach(b=>b.onclick=()=>includePreviousOccurrence(b.dataset.handoffInclude));
   root.querySelectorAll('[data-team-card]').forEach(card=>{
     card.onclick=e=>{
       if(e.target.closest('button,select,input,textarea,a,summary,details'))return;
@@ -6195,10 +6194,6 @@ function nextManualShiftContext(old){
 function activeHandoffOccurrences(){
   return [...new Map([...occurrences,...externalActiveOccurrences].filter(o=>['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status))).map(o=>[o.id,o])).values()];
 }
-function externalHandoffHtml(o){
-  return '<div class="previous-shift-notice"><strong>ATENDIMENTO DO PLANTÃO ANTERIOR</strong><p>Nº '+esc(o.numero||'—')+' · '+esc(o.natureza||'Natureza não informada')+'</p><p>A viatura permanece ocupada. A equipe anterior não foi incluída nesta escala.</p>'+
-    (isOperator()&&isOpenShift(currentPlantao)?'<button type="button" class="btn" data-handoff-include="'+esc(o.id)+'">INCLUIR CONTINUIDADE</button>':'')+'</div>';
-}
 function activeShiftHandoffPreview(){
   const active=activeHandoffOccurrences();
   const items=active.map(o=>{
@@ -6298,15 +6293,6 @@ async function applyShiftHandoff(next,decision,{allowExisting=false}={}){
   if(next.repasse_plantao)update.eq('repasse_plantao',next.repasse_plantao);else update.is('repasse_plantao',null);
   const result=await update.select('id').maybeSingle();
   if(result.error||!result.data)throw result.error||new Error('O repasse foi alterado por outro operador. Atualize.');
-}
-async function includePreviousOccurrence(id){
-  if(!canEditOpenShift()||!currentPlantao)return;
-  const o=externalActiveOccurrences.find(o=>o.id===id);if(!o)return;
-  if(!confirm('Incluir a ocorrência Nº '+(o.numero||'—')+' e sua equipe em continuidade neste plantão?'))return;
-  return offline.userAction('Incluir atendimento em continuidade',async()=>{
-    await applyShiftHandoff(currentPlantao,{mode:'carry',occurrence_ids:[id],source_shift_id:o.plantao_id,confirmed_at:new Date().toISOString(),confirmed_by:profile?.nome||null},{allowExisting:true});
-    markOperationalDirty();await loadAll(selectedDate());await loadExpressScale();
-  });
 }
 /* ---------- Troca e encerramento manual de plantão ---------- */
 function openShiftTransition(){
