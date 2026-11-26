@@ -1,8 +1,8 @@
 import { renderFleetOverview } from './operator-panels.js';
 import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-28';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-28';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-29';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-29';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -887,6 +887,9 @@ async function loadAllContents(preferredDate=null,preferredTurno=null,skipAutoCr
         const live=await supabase.from('ocorrencias').select('*').in('status',['EM OCORRENCIA','RETORNANDO']);
         if(live.error)throw live.error;
         externalActiveOccurrences=(live.data||[]).filter(o=>!occurrences.some(own=>own.id===o.id));
+        // Every ongoing call keeps its normal card and operational controls.
+        // Historical completed calls remain scoped to their original shift.
+        occurrences.push(...externalActiveOccurrences);
         // Never advertise an occupied vehicle as QRV, including a clean start.
         for(const v of vehicles){
           const busy=[...occurrences,...externalActiveOccurrences].find(o=>o.viatura_id===v.id&&['EM OCORRENCIA','RETORNANDO'].includes(norm(o.status)));
@@ -996,7 +999,6 @@ function rotationPreviewSlotHtml(m,role){
 }
 function crewRowsForCard(v){
   const o=activeOccurrence(v);
-  if(o&&externalActiveOccurrences.some(x=>x.id===o.id))return vehicleMembers(v);
   if(o){
     const occRows=occurrenceMembers(o.id);
     if(occRows.length)return occRows;
@@ -1177,10 +1179,9 @@ function qthElapsedMinutes(o){
 }
 function occurrenceInfoHtml(v,o){
  if(!o)return '';
- const continuity=o.plantao_id!==currentPlantao?.id?'<div class="continuity-label">EM CONTINUIDADE DO PLANTÃO ANTERIOR</div>':'';
  const st=statusInfo(v).key,qth=!!o.chegada_qth_em,missing=o.qth_nao_informado===true;
  const time=(label,value)=>'<div class="occ-time-chip"><span>'+label+'</span><b>'+fmtTime(value)+'</b><small>'+esc(value?fmtDate(datetimeLocal(value).slice(0,10)):'')+'</small></div>';
- return continuity+'<div class="occ-identity-line"><span class="occ-number">Nº '+esc(o.numero||'—')+'</span><strong class="occ-nature">'+esc(o.natureza||'Natureza não informada')+'</strong></div>'+
+ return '<div class="occ-identity-line"><span class="occ-number">Nº '+esc(o.numero||'—')+'</span><strong class="occ-nature">'+esc(o.natureza||'Natureza não informada')+'</strong></div>'+
   '<div class="card-occurrence-body">'+
   '<div class="occ-timeline">'+time('Início / saída',o.saida_em||o.acionada_em)+time('Chegada QTH',o.chegada_qth_em)+'<div class="occ-time-chip"><span>Tempo até QTH</span><b>'+fmtMinutes(qthElapsedMinutes(o))+'</b></div>'+time('Início retorno',o.inicio_retorno_em)+'</div>'+
   '<div class="occ-address">'+esc([o.bairro,o.endereco].filter(Boolean).join(' · '))+'</div>'+
@@ -1213,10 +1214,9 @@ function vehicleCardHtml(v,options={}){
   const rosterOnly=options.rosterOnly===true;
   const st=statusInfo(v),o=activeOccurrence(v);
   const readiness=crewCompleteness(v);const badgeLabel=st.key==='base'&&readiness.state!=='complete'?(readiness.state==='empty'?'NA BASE · SEM EQUIPE':'NA BASE · EQUIPE PARCIAL'):st.label;
-  const external=o&&externalActiveOccurrences.some(x=>x.id===o.id);
   let primary='';
   if(st.key==='base'&&isOpenShift(currentPlantao)) primary='<button class="dispatch-btn" data-act="dispatch" data-v="'+v.id+'">ACIONAR VIATURA</button>';
-  if(st.key==='returning'&&!external){
+  if(st.key==='returning'){
     primary='<div class="occurrence-main-actions">'+
       '<button class="arrive-btn" data-act="arrive" data-o="'+(o?.id||'')+'" data-v="'+v.id+'">CHEGADA À BASE</button>'+
 
@@ -1234,7 +1234,7 @@ function vehicleCardHtml(v,options={}){
     (rosterOnly
       ?'<div class="regional-roster-count">'+occurrences.filter(row=>row.viatura_id===v.id&&norm(row.status)==='FINALIZADA').length+' ocorrência(s) finalizada(s) no plantão</div>'+
         (isOperator()?'<button type="button" class="regional-roster-edit" data-regional-team="'+esc(v.id)+'">ESCALAR / EDITAR EQUIPE</button>':'')
-      :(external?'':occurrenceInfoHtml(v,o))+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+(!o&&isOperator()?'<div class="card-status-actions"><div class="card-action-label">SITUAÇÃO DA VIATURA</div>'+statusStripHtml(v)+'</div>':''))+
+      :occurrenceInfoHtml(v,o)+(primary?'<div style="margin-top:6px">'+primary+'</div>':'')+(!o&&isOperator()?'<div class="card-status-actions"><div class="card-action-label">SITUAÇÃO DA VIATURA</div>'+statusStripHtml(v)+'</div>':''))+
   '</article>';
 }
 function operationalGroup(title,subtitle,cls,list,extra=''){
@@ -1661,6 +1661,8 @@ async function persistManualQueueLocal(reset=false){
  finally{save.disabled=false;resetBtn.disabled=false}
 }
 async function clearManualOnReturn(oid,vid){
+  const source=occurrences.find(o=>o.id===oid);
+  if(source&&source.plantao_id!==currentPlantao?.id&&!handoffIncomingIds(currentPlantao).includes(oid))return;
  if(!currentPlantao)return;
  const people=new Set(occurrenceMembers(oid).map(x=>x.profissional_id).filter(Boolean));
  const ids=activeTeamRows().filter(m=>people.has(m.profissional_id)).map(m=>m.id);
@@ -3904,8 +3906,9 @@ async function setOccurrenceQtaLocal(oid,vid){
   // QTA não soma ocorrência, mas reinicia o relógio de tempo na base
   // para quem chegou a ser empenhado.
   const ids=[...new Set(occurrenceMembers(oid).map(x=>x.profissional_id).filter(Boolean))];
+  const roster=await rosterForOccurrence(occurrences.find(o=>o.id===oid));
   for(const id of ids){
-    const row=activeTeamRows().find(m=>m.profissional_id===id);
+    const row=roster.find(m=>m.profissional_id===id);
     if(row)await supabase.from('equipe_plantao').update({ultimo_retorno_em:now}).eq('id',row.id);
   }
   await clearManualOnReturn(oid,vid);
@@ -3937,11 +3940,21 @@ async function undoReturningLocal(button){
   if(!confirm('Voltar a viatura para EM OCORRÊNCIA e limpar o horário de retorno lançado por engano?'))return;
   button.disabled=true;
   try{
-    const {error}=await supabase.rpc('corrigir_retorno_ocorrencia',{
-      p_ocorrencia_id:occurrenceId,p_viatura_id:vehicleId,
-      p_inicio_retorno:occurrence.inicio_retorno_em||null
-    });
-    if(error)throw error;
+    if(occurrence.plantao_id!==currentPlantao?.id){
+      let request=supabase.from('ocorrencias').update({status:'EM OCORRENCIA',inicio_retorno_em:null})
+        .eq('id',occurrenceId).eq('viatura_id',vehicleId).eq('status','RETORNANDO');
+      request=occurrence.inicio_retorno_em?request.eq('inicio_retorno_em',occurrence.inicio_retorno_em):request.is('inicio_retorno_em',null);
+      const changed=await request.select('id').maybeSingle();
+      if(changed.error||!changed.data)throw changed.error||new Error('A ocorrência mudou. Atualize o painel.');
+      const vehicleChanged=await supabase.from('viaturas').update({status_atual:'OCORRENCIA'}).eq('id',vehicleId).eq('status_atual','RETORNANDO').select('id').maybeSingle();
+      if(vehicleChanged.error||!vehicleChanged.data)throw vehicleChanged.error||new Error('A viatura mudou. Atualize o painel.');
+    }else{
+      const {error}=await supabase.rpc('corrigir_retorno_ocorrencia',{
+        p_ocorrencia_id:occurrenceId,p_viatura_id:vehicleId,
+        p_inicio_retorno:occurrence.inicio_retorno_em||null
+      });
+      if(error)throw error;
+    }
     await loadAll(selectedDate());
   }catch(error){
     alert('Não foi possível corrigir o retorno: '+(error.message||error));
@@ -3949,12 +3962,19 @@ async function undoReturningLocal(button){
     button.disabled=false;
   }
 }
+async function rosterForOccurrence(occ){
+  if(!occ||occ.plantao_id===currentPlantao?.id||handoffIncomingIds(currentPlantao).includes(occ.id))return activeTeamRows();
+  const result=await supabase.from('equipe_plantao').select('*').eq('plantao_id',occ.plantao_id).eq('status','ATIVO');
+  if(result.error)throw result.error;
+  return result.data||[];
+}
 async function creditOccurrence(occ){
   if(!occ||occ.creditou_revezamento)return;
   const members=occurrenceMembers(occ.id);
   const now=new Date().toISOString();
+  const roster=await rosterForOccurrence(occ);
   for(const em of members){
-    const m=activeTeamRows().find(x=>x.profissional_id===em.profissional_id);
+    const m=roster.find(x=>x.profissional_id===em.profissional_id);
     if(!m)continue;
     await supabase.from('equipe_plantao').update({
       ocorrencias_validas:Number(m.ocorrencias_validas||0)+1,

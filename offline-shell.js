@@ -28,7 +28,7 @@ export async function prepareOfflineShell(onReady) {
   const registration = await navigator.serviceWorker.register('./service-worker.js', {scope: './'});
   await navigator.serviceWorker.ready;
   const updateReadiness = async () => {
-    const cache = await caches.open('samu-shell-20261126-28');
+    const cache = await caches.open('samu-shell-20261126-29');
     const index = await cache.match(new URL('./index.html', location.href).href);
     onReady(!!index);
   };
