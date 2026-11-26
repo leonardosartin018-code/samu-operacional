@@ -146,3 +146,5 @@ body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-status-actions .sta
 body :is(#vehicles,#regionalGrid) .vehicle-card[class] .card-status-actions .status-strip button{min-height:34px;min-width:0;padding:6px 2px;font-size:.6rem}
 
 .card-secondary-actions:not(:has(.qth-not-informed-btn)) .qta-btn{grid-column:1/-1}
+
+#namesReview tr[data-base-label] th{padding:12px 10px;background:#edf4f8;color:#28536c;border-top:1px solid #cbdce7;text-align:left;font-size:.85rem}
