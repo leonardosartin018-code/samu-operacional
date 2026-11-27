@@ -33,3 +33,20 @@ export function maySwitchShiftAutomatically(currentShift){
 export function shouldBlockDateNavigation(currentShift,requestedDate){
   return isOpenShift(currentShift)&&requestedDate!==currentShift.data_plantao;
 }
+
+// A newer turn confirmed by an operator supersedes a stale local pin, even
+// when an unrelated legacy record was never closed. The clock is not evidence.
+export function confirmedHandoffSuccessor(shifts,currentShift=null){
+  const started=p=>{
+    const value=Date.parse(p?.iniciado_em||p?.criado_em||p?.data_plantao||'');
+    return Number.isFinite(value)?value:-Infinity;
+  };
+  const candidates=(shifts||[]).filter(p=>{
+    const incoming=p?.repasse_plantao?.incoming;
+    return isOpenShift(p)&&p.id!==currentShift?.id&&p.data_plantao&&p.turno&&p.ala&&
+      typeof incoming?.source_shift_id==='string'&&incoming.source_shift_id.length>0&&
+      ['clean','carry'].includes(incoming.mode)&&Number.isFinite(Date.parse(incoming.confirmed_at||''))&&
+      started(p)>started(currentShift);
+  });
+  return candidates.sort((a,b)=>started(b)-started(a))[0]||null;
+}

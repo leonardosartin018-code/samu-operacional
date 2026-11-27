@@ -5,7 +5,7 @@
  */
 import { hasProfessionalFunction } from './professional-functions.js';
 
-const ROLE_PATTERN=/\b(condutor(?:a)?|motorista|cond\.?|t[eé]cnic[oa](?:\s+de\s+enfermagem)?|t[eé]c\.?(?:\s+enf\.?)?|enfermeir[oa]|enf\.?|m[eé]dic[oa]|m[eé]d\.?|doutor(?:a)?|dr\.?|dra\.?)\b\.?\s*(?:[:=\-–—]\s*|\s+(?=[A-Za-zÀ-ÿ]))/giu;
+const ROLE_PATTERN=/\b(condutor(?:a|\([oa]\))?|motorista|cond\.?|t[eé]cnic[oa](?:\([oa]\))?(?:\s+(?:de\s+)?enfermagem)?|t[eé]c\.?(?:\s+(?:de\s+)?(?:enfermagem|enf\.?))?|enfermeir[oa](?:\([oa]\))?|enf\.?(?:[ªº]|\([oa]\))?|m[eé]dic[oa](?:\([oa]\))?|m[eé]d\.?|doutor(?:a)?|dr\.?|dra\.?)(?![A-Za-zÀ-ÿ])\s*(?:[:=\-–—]\s*|\s+(?=[A-Za-zÀ-ÿ]))/giu;
 const MAX_LENGTH=12000;
 const CITIES=[
   ['ABADIANIA',/\bABADI[AÂ]NIA\b/i],
@@ -22,9 +22,9 @@ function fold(value){
     .toUpperCase().replace(/[^A-Z0-9]+/g,' ').replace(/\s+/g,' ').trim();
 }
 export function regionalRoleFromLabel(label){
-  const value=fold(label).replace(/\s/g,'');
+  const value=fold(String(label||'').replace(/\([oa]\)/gi,'')).replace(/\s/g,'');
   if(/^(COND|CONDUTOR|CONDUTORA|MOTORISTA)$/.test(value))return 'driver';
-  if(/^(TEC|TECENF|TECNICA|TECNICO|TECNICADEENFERMAGEM|TECNICODEENFERMAGEM)$/.test(value))return 'tech';
+  if(/^(TEC|TECENF|TECDEENF|TECENFERMAGEM|TECDEENFERMAGEM|TECNICA|TECNICO|TECNICAENFERMAGEM|TECNICOENFERMAGEM|TECNICADEENFERMAGEM|TECNICODEENFERMAGEM)$/.test(value))return 'tech';
   if(/^(ENF|ENFERMEIRO|ENFERMEIRA)$/.test(value))return 'nurse';
   if(/^(MED|MEDICO|MEDICA|DOUTOR|DOUTORA|DR|DRA)$/.test(value))return 'doctor';
   return null;
@@ -37,15 +37,19 @@ export const REGIONAL_ROLE={
 };
 function cleanPersonName(text){
   return String(text||'')
+    .replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\u200d\ufe0f]/gu,' ')
     .replace(/^\s*(?:(?:sr|sra|dr|dra)\.?\s+)/i,'')
     .replace(/\s*(?:\(|\[)\s*(?:plant[aã]o|entra|turno|24h).*$/i,'')
     .replace(/\s+[-–—]\s*(?:plant[aã]o|24h|diurno|noturno|escala).*$/i,'')
+    .replace(/\s+(?:contato|telefone|tel\.?|celular|part\.?)\s*[:=].*$/i,'')
     .replace(/^\s*[\d\s.:|\-–—]+/,'')
     .replace(/[\s,;.|*\-–—]+$/,'')
     .replace(/\s+/g,' ').trim();
 }
 function stripWhatsAppHeader(line){
   return String(line||'')
+    // Desktop copies may put time before the date and a profession in the sender name.
+    .replace(/^\s*\[\d{1,2}:\d{2}(?::\d{2})?\s*,\s*\d{1,2}\/\d{1,2}\/\d{2,4}\]\s*[^:\n]{1,90}:\s*/,'')
     // [22/11/2026, 07:10] Nome: Condutor: PESSOA
     .replace(/^\s*\[\d{1,2}\/\d{1,2}\/\d{2,4}[^\]]*\]\s*[^:\n]{1,65}:\s*/,'')
     // 22/11/2026 07:10 - Nome: Condutor: PESSOA
@@ -66,21 +70,22 @@ export function parseRegionalCrewClipboard(raw){
     recognizedBase=key;
   }
   for(const original of text.split('\n')){
-    const normalized=stripWhatsAppHeader(original).replace(/[•*]/g,' ').trim();
-    if(!normalized)continue;
+    const normalized=stripWhatsAppHeader(original).replace(/[•*]/g,' ').replace(/[\p{Extended_Pictographic}\p{Emoji_Modifier}\u200d\ufe0f]/gu,' ').trim();
+    if(!normalized||/^(?:contato|telefone|tel\.?|celular|part\.?|matr[ií]cula|coren|crm)\s*[:=]/i.test(normalized))continue;
     // WhatsApp costuma trazer mais de uma função no mesmo parágrafo.
     const lines=normalized.split(/\s*[;|]\s*/);
     for(const line of lines){
       // "Médico regulador" pertence ao relato da ocorrência, não à escala.
       if(/^\s*m[eé]dic[oa]\s+regulad[oa]r/i.test(line))continue;
       ROLE_PATTERN.lastIndex=0;
-      const labels=[...line.matchAll(ROLE_PATTERN)];
+      const labelled=line.replace(/(\bm[eé]dic[oa]\s*[:=–—-]\s*)(?:dr|dra)\.?\s+/gi,'$1');
+      const labels=[...labelled.matchAll(ROLE_PATTERN)];
       if(!labels.length)continue;
       for(let i=0;i<labels.length;i++){
         const match=labels[i],key=regionalRoleFromLabel(match[1]);
         if(!key)continue;
-        const start=match.index+match[0].length,end=i+1<labels.length?labels[i+1].index:line.length;
-        const rawName=line.slice(start,end).replace(/\s*\/\s*$/,'');
+        const start=match.index+match[0].length,end=i+1<labels.length?labels[i+1].index:labelled.length;
+        const rawName=labelled.slice(start,end).replace(/\s*\/\s*$/,'');
         const name=cleanPersonName(rawName);
         if(!name||name.length<3){
           warnings.push('Foi encontrada a função '+REGIONAL_ROLE[key].label+' sem nome válido.');

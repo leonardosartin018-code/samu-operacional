@@ -7,7 +7,7 @@ const last=app.indexOf('\n/* ---------- quick team ---------- */',first);
 assert.ok(first>0&&last>first,'A função de salvamento deve existir no app.js');
 const source=app.slice(first,last);
 
-async function runCase({rows,existing=[]}){
+async function runCase({rows,existing=[],rawChanged=false}){
   const writes=[],messages=[],changes=[];
   const vehicle={id:'v1',nome:'USB ALEXÂNIA',bases:{nome:'Alexânia'}};
   const button={disabled:false,textContent:'CONFIRMAR, CADASTRAR NOVOS E ESCALAR'};
@@ -23,11 +23,12 @@ async function runCase({rows,existing=[]}){
   };
   let actionCount=0;
   const injected={
-    regionalWhatsappDraft:{vehicleId:'v1',warnings:[],items:rows},
+    regionalWhatsappDraft:{vehicleId:'v1',warnings:[],items:rows,raw:'MENSAGEM FICTÍCIA'},
     vehicleById:id=>id==='v1'?vehicle:null,
     isOperator:()=>true,canEditOpenShift:()=>true,isAnapolisVehicle:()=>false,
     currentPlantao:{id:'shift-1',status:'ABERTO'},selectedTeamVehicle:'v1',
-    $:selector=>selector==='#regionalWhatsappApply'?button:null,
+    $:selector=>selector==='#regionalWhatsappApply'?button:selector==='#regionalWhatsappRaw'?{value:rawChanged?'TEXTO EDITADO':'MENSAGEM FICTÍCIA'}:null,
+    parseRegionalWhatsappIntoTeam:()=>changes.push('reparsed'),
     regionalWhatsappCurrentCandidates:()=>rows,
     regionalSlotsForVehicle:()=>['driver','tech'],
     vehicleType:()=> 'USB',
@@ -108,4 +109,10 @@ test('não cria nomes nem movimenta equipe quando a mesma pessoa ocupa duas fun�
   assert.equal(out.actionCount,0);
   assert.equal(out.writes.length,0);
   assert.ok(out.messages.some(m=>/mais de uma posição/.test(m)));
+});
+
+
+test('alterar o texto original impede salvar nomes da prévia antiga',async()=>{
+ const out=await runCase({rows:[],rawChanged:true});
+ assert.equal(out.writes.length,0);assert.equal(out.actionCount,0);assert.ok(out.changes.includes('reparsed'));
 });

@@ -1,8 +1,8 @@
 import { renderFleetOverview } from './operator-panels.js';
 import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-29';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-29';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, confirmedHandoffSuccessor, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-30';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-30';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -339,8 +339,7 @@ function requiredDispatchRoles(v){
   return [];
 }
 function crewHasRole(mem,role){
-  return mem.some(m=>teamRoleKey(m)===role || (role==='tech' && teamRoleKey(m)==='nurse' &&
-    (norm(m.funcao).includes('TECN')||norm(m.grupo_revezamento).includes('USB_TECNICO'))));
+  return mem.some(m=>teamRoleKey(m)===role || (role==='tech'&&teamRoleKey(m)==='nurse'));
 }
 function crewCompleteness(v,mem=vehicleMembers(v)){
   const req=requiredDispatchRoles(v);
@@ -474,12 +473,17 @@ function shiftTitle(ctx){
 }
 async function resolveOperationalShiftContext(){
   const clock=operationalShiftContext();
+  const opened=await supabase.from('plantoes')
+    .select('id,data_plantao,turno,ala,status,iniciado_em,repasse_plantao')
+    .eq('status','ABERTO').order('iniciado_em',{ascending:false}).limit(60);
+  if(opened.error)throw opened.error;
+  const currentOrConfirmed=p=>confirmedHandoffSuccessor(opened.data||[],p)||p;
   // Não seguir o relógio enquanto houver plantão ABERTO: 07h ou 19h
   // não encerram o Livro e nem permitem apagar a escala visível.
   if(isOpenShift(currentPlantao)){
     const fresh=await supabase.from('plantoes').select('id,data_plantao,turno,ala,status,iniciado_em').eq('id',currentPlantao.id).maybeSingle();
     if(fresh.error)throw fresh.error;
-    if(fresh.data&&isOpenShift(fresh.data))return shiftContextOf(fresh.data,alaForDate);
+    if(fresh.data&&isOpenShift(fresh.data))return shiftContextOf(currentOrConfirmed(fresh.data),alaForDate);
     if(fresh.data)currentPlantao={...currentPlantao,...fresh.data};
   }
   const fixedId=storedShiftId();
@@ -490,15 +494,12 @@ async function resolveOperationalShiftContext(){
     if(saved.error)throw saved.error;
     if(saved.data&&(isOpenShift(saved.data)||
       (norm(saved.data.status)==='ENCERRADO'&&storedShiftHoldId()===fixedId))){
-      return shiftContextOf(saved.data,alaForDate);
+      return shiftContextOf(currentOrConfirmed(saved.data),alaForDate);
     }
   }
-  const {data,error}=await supabase.from('plantoes')
-    .select('id,data_plantao,turno,ala,status,iniciado_em')
-    .eq('status','ABERTO').order('iniciado_em',{ascending:false}).limit(60);
-  if(error)throw error;
-  const selected=chooseUnfinishedShift(data||[],clock,alaForDate);
-  if(selected)return shiftContextOf(selected,alaForDate);
+  const selected=chooseUnfinishedShift(opened.data||[],clock,alaForDate);
+  const confirmed=currentOrConfirmed(selected);
+  if(confirmed)return shiftContextOf(confirmed,alaForDate);
   // Sem plantão aberto, mostrar o turno do relógio para consulta, mas
   // nunca iniciar automaticamente uma escala nova; exigir confirmação.
   return {...clock,ala:alaForDate(clock.date)};
@@ -1045,6 +1046,7 @@ function crewGridHtml(v,options={}){
   const exp=expectedRoles(v);
   const used=new Set(mem.map(m=>m.profissional_id));
   let slots=[];
+  const slottedMembers=new Set();
   if(vehicleType(v).includes('MOTO')){
     const m1=mem.find(m=>norm(m.funcao)==='MOTOLANCIA 1')||null;
     const m2=mem.find(m=>norm(m.funcao)==='MOTOLANCIA 2')||null;
@@ -1054,8 +1056,8 @@ function crewGridHtml(v,options={}){
     ];
   }else if(exp.length){
     slots=exp.map(role=>{
-      const m=mem.find(x=>teamRoleKey(x)===role || (role==='tech'&&teamRoleKey(x)==='nurse'&&norm(x.funcao).includes('TECN')));
-      if(m)return memberSlotHtml(m);
+      const m=mem.find(x=>teamRoleKey(x)===role || (role==='tech'&&teamRoleKey(x)==='nurse'));
+      if(m){slottedMembers.add(m);return memberSlotHtml(m);}
 
       // Na base de Anápolis, quando não existe fixo nessa função,
       // já mostramos quem seria puxado automaticamente do revezamento.
@@ -1065,7 +1067,7 @@ function crewGridHtml(v,options={}){
       }
       return namedMemberSlotHtml(null,roleLabel(role));
     });
-    const extra=mem.filter(m=>!exp.includes(teamRoleKey(m)) && !(teamRoleKey(m)==='nurse'&&exp.includes('tech')));
+    const extra=mem.filter(m=>!slottedMembers.has(m));
     slots.push(...extra.map(memberSlotHtml));
   }else slots=mem.map(memberSlotHtml);
   if(!slots.length) slots=[memberSlotHtml(null)];
@@ -1782,7 +1784,7 @@ function fixedCrewForVehicleRotation(v){
   const driver=fixed.find(m=>teamRoleKey(m)==='driver')||null;
   const nurse=fixed.find(m=>teamRoleKey(m)==='nurse')||null;
   const tech=fixed.find(m=>teamRoleKey(m)==='tech'||(
-    teamRoleKey(m)==='nurse'&&norm(m.funcao).includes('TECN')))||null;
+    teamRoleKey(m)==='nurse'&&vehicleType(v).includes('USB')))||null;
   const doctor=fixed.find(m=>teamRoleKey(m)==='doctor')||null;
   return {v,driver,nurse,tech,doctor,complete:true,
     base:vehicleBaseMinutes(v),occ:vehicleOccurrenceCount(v),score:vehicleWeightedCount(v),rest:vehicleEffortRestMinutes(v)};
@@ -1867,7 +1869,7 @@ function automaticDispatchCrew(v){
   const used=new Set();
   const crew=[];
   roles.forEach(role=>{
-    const existing=fixed.find(m=>teamRoleKey(m)===role || (role==='tech'&&teamRoleKey(m)==='nurse'&&norm(m.funcao).includes('TECN')));
+    const existing=fixed.find(m=>teamRoleKey(m)===role || (role==='tech'&&teamRoleKey(m)==='nurse'));
     const pick=existing||dispatchCandidateForVehicleRole(v,role,used);
     if(pick&&!used.has(pick.profissional_id)){crew.push(pick);used.add(pick.profissional_id)}
   });
@@ -2692,6 +2694,7 @@ function bindOccurrenceActions(root){
 /* ---------- Escala regional por texto copiado do WhatsApp ---------- */
 // Todo reconhecimento é local. Não criar cadastros antes da confirmação.
 let regionalWhatsappDraft=null;
+let regionalWhatsappParseTimer=null;
 function regionalWhatsappStatus(message,invalid=false){
   const el=$('#regionalWhatsappStatus');
   if(!el)return;
@@ -2708,6 +2711,7 @@ function clearRegionalWhatsappDraft(){
   $('#teamModal .quick-team-grid')?.classList.remove('hidden');
 }
 function resetRegionalWhatsappImporter(v){
+  clearTimeout(regionalWhatsappParseTimer);regionalWhatsappParseTimer=null;
   clearRegionalWhatsappDraft();
   $('#teamModal .quick-team-grid').classList.remove('hidden');$('#saveTeam').classList.remove('hidden');
   const panel=$('#regionalWhatsappImporter');
@@ -2805,12 +2809,15 @@ function renderRegionalWhatsappReview(){
   $('#teamModal .quick-team-grid').classList.add('hidden');$('#saveTeam').classList.add('hidden');
 }
 function parseRegionalWhatsappIntoTeam(){
+  clearTimeout(regionalWhatsappParseTimer);regionalWhatsappParseTimer=null;
   const v=vehicleById(selectedTeamVehicle);
   if(!v||isAnapolisVehicle(v))return;
   const parsed=parseRegionalCrewClipboard($('#regionalWhatsappRaw').value);
   if(parsed.error){
+    const importing=!!regionalWhatsappDraft||!!$('#regionalWhatsappRaw').value.trim();
     clearRegionalWhatsappDraft();
-    regionalWhatsappStatus(parsed.error,true);return;
+    if(importing){$('#saveTeam').disabled=true;$('#saveTeam').classList.add('hidden');$('#teamModal .quick-team-grid').classList.add('hidden');}
+    regionalWhatsappStatus(parsed.error+(importing?' Corrija o texto ou use Limpar para voltar à edição manual.':''),true);return;
   }
   const supported=regionalSlotsForVehicle(vehicleType(v));
   const items=parsed.members.map(m=>({...m,slot:regionalWhatsappSlot(m.key,v),selectedId:null}));
@@ -2833,6 +2840,8 @@ async function saveRegionalWhatsappIntoTeam(){
   const draft=regionalWhatsappDraft,v=vehicleById(draft?.vehicleId);
   if(!isOperator()||!canEditOpenShift()||!v||isAnapolisVehicle(v)||!currentPlantao)return;
   if(draft.vehicleId!==selectedTeamVehicle||$('#regionalWhatsappApply').disabled)return;
+  if($('#regionalWhatsappRaw').value!==draft.raw){parseRegionalWhatsappIntoTeam();return;}
+
   // Reavaliar diretamente antes de gravar. Nunca confiar só no HTML da prévia.
   const rows=regionalWhatsappCurrentCandidates();
   const allowed=regionalSlotsForVehicle(vehicleType(v));
@@ -2935,7 +2944,7 @@ function allowedForField(p,key){
   return true;
 }
 function currentByRole(vId,key){
-  return activeTeamRows().find(m=>m.viatura_id===vId && (teamRoleKey(m)===key || (key==='tech'&&teamRoleKey(m)==='nurse'&&norm(m.funcao).includes('TECN')))) || null;
+  return activeTeamRows().find(m=>m.viatura_id===vId && (teamRoleKey(m)===key || (key==='tech'&&teamRoleKey(m)==='nurse'))) || null;
 }
 function quickCfg(){
   return {
@@ -3043,12 +3052,10 @@ function showAutocomplete(box,list,key,input,hidden){
     box.classList.remove('show');
   });
 }
-function quickAutocomplete(key){
+function quickAutocomplete(key,preserveSelection=false){
   const cfg=quickCfg()[key],input=$(cfg.input),hidden=$(cfg.hidden),box=$(cfg.results),q=norm(input.value);
   const role=effectiveQuickRole(key);
-  hidden.value='';
-  updateQuickSelectionState(key);
-  if(q.length<3){box.classList.remove('show');box.innerHTML='';return}
+  if(!preserveSelection){hidden.value='';updateQuickSelectionState(key);}
   const list=professionals.filter(p=>allowedForField(p,role)&&teamSearchText(p).includes(q)).slice(0,15);
   showAutocomplete(box,list,role,input,hidden);
 }
@@ -3065,6 +3072,8 @@ function bindQuickInputs(){
     if(!input.dataset.bound){
       input.dataset.bound='1';
       input.addEventListener('input',()=>quickAutocomplete(key));
+      input.addEventListener('pointerdown',()=>{if(!$(cfg.hidden).value)quickAutocomplete(key,true);});
+      if(['tech','nurse','doctor'].includes(key))input.addEventListener('focus',()=>{if(!$(cfg.hidden).value)quickAutocomplete(key,true);});
       $(cfg.hidden).addEventListener('change',()=>updateQuickSelectionState(key));
       input.addEventListener('keydown',e=>{if(e.key==='Escape')$(cfg.results).classList.remove('show')});
     }
@@ -3228,7 +3237,8 @@ async function assignProfessionalToVehicle(proId,vId,funcao,source='EDICAO_RAPID
   const v=vehicleById(vId);
   if(!pro||!v)throw new Error('Profissional ou viatura não encontrado.');
   const now=new Date().toISOString();
-  const currentSameRole=activeTeamRows().find(m=>m.viatura_id===vId && norm(m.funcao)===norm(funcao));
+  const currentSameRole=norm(funcao).includes('TECN')&&vehicleType(v).includes('USB')
+    ?currentByRole(vId,'tech'):activeTeamRows().find(m=>m.viatura_id===vId&&norm(m.funcao)===norm(funcao));
   if(currentSameRole?.profissional_id===proId){
     if(driverMetadata){
       const {error}=await supabase.from('equipe_plantao').update(driverMetadata).eq('id',currentSameRole.id);
@@ -3266,6 +3276,7 @@ async function saveQuickTeamLocal(){
   if(!canEditOpenShift()||!currentPlantao||!selectedTeamVehicle)return;
   if($('#saveTeam').disabled)return;
   const v=vehicleById(selectedTeamVehicle);
+  if(!isAnapolisVehicle(v)&&$('#regionalWhatsappRaw').value.trim()){parseRegionalWhatsappIntoTeam();return;}
   const mode=quickModalMode(v);
   const rows=mode==='moto'
     ? [
@@ -3393,7 +3404,7 @@ function dispatchRoleMatch(m,role,v){
   // Enfermeiro cadastrado como apoio técnico no USB é compatível com essa função.
   return role==='tech'&&teamRoleKey(m)==='nurse'&&
     (norm(m.grupo_revezamento).includes('USB_TECNICO')||
-      (m.viatura_id===v.id&&norm(m.funcao).includes('TECN')));
+      (m.viatura_id===v.id&&vehicleType(v).includes('USB')));
 }
 // Médico registrado no banco, mas não escalado: participação avulsa somente
 // nesta ocorrência. Não cria escala nem modifica a fila do revezamento.
@@ -4863,7 +4874,6 @@ function expressSearch(role,q){
   const input=role==='tech'?$('#expressTechSearch'):$('#expressNurseSearch');
   const box=role==='tech'?$('#expressTechResults'):$('#expressNurseResults');
   const n=norm(q);
-  if(n.length<3){box.classList.remove('show');box.innerHTML='';return}
   const allowed=p=>role==='tech'?allowedForField(p,'tech'):allowedForField(p,'nurse');
   const selected=role==='tech'?expressTechSelected:expressNurseSelected;
   const list=professionals.filter(p=>allowed(p)&&teamSearchText(p).includes(n)&&!selected.has(p.id)).slice(0,15);
@@ -7235,6 +7245,7 @@ $('#bulkRotationAcknowledge').onchange=()=>{
 };
 $('#bulkRotationApplyBtn').onclick=applyBulkRotation;
 $('#expressTechSearch').oninput=e=>expressSearch('tech',e.target.value);$('#expressNurseSearch').oninput=e=>expressSearch('nurse',e.target.value);
+$('#expressTechSearch').onfocus=e=>expressSearch('tech',e.target.value);$('#expressNurseSearch').onfocus=e=>expressSearch('nurse',e.target.value);
 $('#expressTechAddBtn').onclick=()=>openExpressRegistration('tech');
 $('#expressNurseAddBtn').onclick=()=>openExpressRegistration('nurse');
 $('#applyExpressPreviewBtn').onclick=()=>{$('#expressStatus').className='express-status ok';$('#expressStatus').innerHTML='<b>Prévia preparada:</b> '+expressTechSelected.size+' técnico(s)/enfermeiro(s) para USB e '+expressNurseSelected.size+' enfermeiro(s) para USA. Clique em CONFIRMAR para gravar.'};
@@ -7267,9 +7278,14 @@ $('#regionalWhatsappClear').onclick=()=>{
   resetRegionalWhatsappImporter(v);
   if(v)openTeamModal(v.id).catch(error=>console.error(error));
 };
-$('#regionalWhatsappRaw').addEventListener('paste',()=>{
-  setTimeout(parseRegionalWhatsappIntoTeam,0);
-});
+function scheduleRegionalWhatsappParse(delay=200){
+  clearTimeout(regionalWhatsappParseTimer);
+  $('#regionalWhatsappApply').disabled=true;
+  if($('#regionalWhatsappRaw').value.trim()){ $('#saveTeam').disabled=true;$('#saveTeam').classList.add('hidden');$('#teamModal .quick-team-grid').classList.add('hidden'); }
+  regionalWhatsappParseTimer=setTimeout(parseRegionalWhatsappIntoTeam,delay);
+}
+$('#regionalWhatsappRaw').addEventListener('input',()=>scheduleRegionalWhatsappParse());
+$('#regionalWhatsappRaw').addEventListener('paste',()=>scheduleRegionalWhatsappParse(0));
 $('#saveQuickRegisterBtn').onclick=saveQuickRegistration;
 
 window.addEventListener('beforeunload',e=>{

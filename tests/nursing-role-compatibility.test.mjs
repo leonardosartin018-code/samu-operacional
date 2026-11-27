@@ -1,0 +1,10 @@
+import test from 'node:test';import assert from 'node:assert/strict';import {readFileSync} from 'node:fs';
+const source=readFileSync(new URL('../app.js',import.meta.url),'utf8');
+const cut=(name,next)=>source.slice(source.indexOf('function '+name+'('),source.indexOf('function '+next+'(',source.indexOf('function '+name+'(')+1));
+const norm=v=>String(v||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase();
+const role=new Function('norm','professionalRoleKey',cut('teamRoleKey','roleLabel')+';return teamRoleKey;')(norm,()=> 'other');
+const has=new Function('teamRoleKey',cut('crewHasRole','crewCompleteness')+';return crewHasRole;')(role);
+const nurse={id:'n1',profissional_id:'p1',funcao:'Enfermeiro',viatura_id:'usb1'};
+test('enfermeiro já vinculado a USB preenche a necessidade de enfermagem sem mudar função',()=>{assert.equal(has([nurse],'tech'),true);assert.equal(nurse.funcao,'Enfermeiro');assert.equal(has([nurse],'driver'),false);});
+test('médico não ocupa a posição técnica por aproximação',()=>{assert.equal(has([{funcao:'Médico'}],'tech'),false);assert.equal(has([{funcao:'Técnico de Enfermagem'}],'nurse'),false);});
+test('edição localiza o enfermeiro existente na posição de enfermagem da USB',()=>{const find=new Function('activeTeamRows','teamRoleKey',cut('currentByRole','quickCfg')+';return currentByRole;')(()=>[nurse,{id:'d1',funcao:'Condutor',viatura_id:'usb1'}],role);assert.equal(find('usb1','tech'),nurse);assert.equal(find('usb2','tech'),null);assert.equal(find('usb1','driver').id,'d1');});

@@ -97,3 +97,32 @@ test('técnico de enfermagem em texto e médico regulador não criam médicos fa
   assert.deepEqual(out.members.map(x=>x.key),['tech','driver']);
   assert.equal(out.members[0].name,'Raíssa');
 });
+
+
+test('rótulos completos e abreviados de enfermagem não entram no nome',()=>{
+ for(const label of ['Téc. de Enfermagem','Téc. Enfermagem','Técnico(a) de Enfermagem','Técnica de Enfermagem','Tec de Enf.','Enf.','Enfª']){
+  const out=parseRegionalCrewClipboard('Condutor: CEFERINO SIMULADO\n'+label+': TERESA SIMULADA');
+  assert.equal(out.members.length,2,label);
+  assert.equal(out.members[1].name,'TERESA SIMULADA',label);
+  assert.deepEqual(out.warnings,[],label);
+ }
+});
+
+test('honorífico após Médico não cria segunda função vazia',()=>{
+ const out=parseRegionalCrewClipboard('Médico: Dr. CARLOS SIMULADO');
+ assert.deepEqual(out.members.map(m=>[m.key,m.name]),[['doctor','CARLOS SIMULADO']]);
+ assert.deepEqual(out.warnings,[]);
+});
+
+
+test('ícones e metadados do WhatsApp não integram o nome',()=>{
+ const out=parseRegionalCrewClipboard('👨‍⚕️ *Enfermeira* 👩‍⚕️: ALICE LOCAL 👩‍⚕️\n📞 Contato: 62999999999\nMédico regulador: OUTRO NOME');
+ assert.deepEqual(out.members.map(m=>[m.key,m.name]),[['nurse','ALICE LOCAL']]);
+ assert.deepEqual(out.warnings,[]);
+});
+
+
+test('cabeçalho com horário antes da data não transforma remetente em integrante',()=>{
+ const out=parseRegionalCrewClipboard('[07:10, 26/11/2026] Enfermeira JULIA: Condutor: RICARDO\n[07:11, 26/11/2026] Enfermeira JULIA: Téc. Enfermagem: TERESA');
+ assert.deepEqual(out.members.map(m=>[m.key,m.name]),[['driver','RICARDO'],['tech','TERESA']]);assert.deepEqual(out.warnings,[]);
+});

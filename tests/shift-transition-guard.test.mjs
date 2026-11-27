@@ -9,7 +9,7 @@ assert.ok(start>0&&end>start,'Não foi encontrada a rotina de encerramento');
 const routine=app.slice(start,end);
 
 async function simulate({pdfFails=false,unsaved=false}={}){
-  const state={writes:[],alerts:[],downloads:0,loaded:[],staysOpen:true,reportCalls:0};
+  const state={writes:[],alerts:[],downloads:0,loaded:[],staysOpen:true,reportCalls:0,pendingShown:0};
   const shift={id:'ficticio',data_plantao:'2026-11-22',turno:'DIURNO',ala:'ALFA',
     status:'ABERTO',iniciado_em:'2026-11-22T10:00:00Z'};
   const db={
@@ -26,7 +26,7 @@ async function simulate({pdfFails=false,unsaved=false}={}){
   const variables={
     isOperator:()=>true,
     shiftTransitionBusy:false,
-    $:()=>({checked:true}),
+    $:()=>({checked:true,scrollIntoView:()=>{}}),
     currentPlantao:shift,
     shiftTransitionPlantaoId:'ficticio',
     alert:value=>state.alerts.push(String(value)),
@@ -36,6 +36,9 @@ async function simulate({pdfFails=false,unsaved=false}={}){
     internalNeedsConfirmation:()=>false,
     unsavedOperationalScale:false,unsavedInternalScale:false,unsavedBook:false,
     anyDraftModalOpen:()=>false,
+    shiftClosingPending:()=>unsaved?[{key:'operational'}]:[],
+    renderShiftClosingPending:()=>state.pendingShown++,
+    readShiftHandoffDecision:()=>({mode:'clean',occurrence_ids:[],source_shift_id:shift.id,target:{date:'2026-11-22',turno:'NOTURNO',ala:'ALFA'}}),
     updateShiftTransitionButtons:()=>{},
     exportClosingReport:async (record,options)=>{
       state.reportCalls++;
@@ -78,7 +81,8 @@ test('dados não confirmados impedem gerar Livro ou encerrar',async()=>{
   const state=await simulate({unsaved:true});
   assert.equal(state.reportCalls,0);
   assert.equal(state.writes.length,0);
-  assert.ok(state.alerts.some(msg=>/ENCERRAMENTO BLOQUEADO/.test(msg)));
+  assert.equal(state.pendingShown,1);
+  assert.equal(state.alerts.length,0);
 });
 
 test('confirmação explícita prepara Livro antes de encerrar o registro',async()=>{
