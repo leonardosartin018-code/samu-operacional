@@ -1,4 +1,4 @@
-const CACHE_NAME = 'samu-shell-20261126-30';
+const CACHE_NAME = 'samu-shell-20261126-31';
 const SHELL = [
   './operator-theme.css', './operator-panels.js', './index.html', './styles.css', './offline.css', './app.js',
   './occurrence-time-editor.js', './shift-manual-lifecycle.js', './regional-whatsapp-import.js', './names-review.js', './professional-functions.js', './monthly-roster-match.js', './offline-store.js', './offline-query.js', './offline-schema.js',

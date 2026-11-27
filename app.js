@@ -1,8 +1,8 @@
 import { renderFleetOverview } from './operator-panels.js';
 import { openOccurrenceEditor, datetimeLocal } from './occurrence-time-editor.js';
 import { openNamesReview } from './names-review.js';
-import { isOpenShift, shiftContextOf, chooseUnfinishedShift, confirmedHandoffSuccessor, shouldBlockDateNavigation } from './shift-manual-lifecycle.js?v=20261126-offline-30';
-import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-30';
+import { isOpenShift, shiftContextOf, chooseUnfinishedShift, confirmedHandoffSuccessor, shouldBlockDateNavigation, regionalRosterForNight } from './shift-manual-lifecycle.js?v=20261126-offline-31';
+import { parseRegionalCrewClipboard, resolveRegionalCrewName, regionalCanFillRole, regionalSlotsForVehicle, REGIONAL_ROLE } from './regional-whatsapp-import.js?v=20261126-offline-31';
 import { professionalFunctions, hasProfessionalFunction, vehicleRoleChoices, professionalCanFillSlot, functionForInternalSlot } from './professional-functions.js';
 import { parseRegulationClipboard, formatImportedAddress, formatImportedObservation } from './regulation-import.js?v=20261115-88-historicos-multiplos';
 import { canManageVictimDestination } from './victim-destination-rules.js?v=20261115-89-destino-qth-retorno';
@@ -6231,6 +6231,7 @@ function activeShiftHandoffPreview(){
     return '<label class="shift-handoff-item"><input type="checkbox" data-handoff-occurrence="'+esc(o.id)+'"><span><strong>'+esc(v?.nome||o.viatura_snapshot||'SEM VIATURA')+' · Nº '+esc(o.numero||'—')+'</strong><small>'+esc(crew||'Equipe não registrada')+'</small></span></label>';
   }).join('');
   return '<section class="shift-handoff-review"><h3>Como começar o próximo plantão?</h3>'+
+    '<small class="shift-closing-note">Nas bases descentralizadas, a equipe do diurno permanece no noturno do mesmo dia.</small>'+
     '<label class="handoff-mode"><input type="radio" name="shiftHandoffMode" value="clean" checked> Começar limpo</label>'+
     (active.length?'<label class="handoff-mode"><input type="radio" name="shiftHandoffMode" value="carry"> Manter equipes na rua ('+active.length+')</label><div data-handoff-list hidden><p>Selecione quem continuará:</p>'+items+'</div><small class="shift-closing-note">Viaturas ainda na rua continuam ocupadas, mesmo ao começar limpo.</small>':'')+'</section>';
 }
@@ -6298,6 +6299,29 @@ async function applyShiftHandoff(next,decision,{allowExisting=false}={}){
   const sourceRows=sourceShiftIds.length?await supabase.from('equipe_plantao').select('*').in('plantao_id',sourceShiftIds):{data:[]};
   if(sourceRows.error)throw sourceRows.error;
   const assigned=new Map((tr.data||[]).filter(m=>norm(m.status)==='ATIVO').map(m=>[m.profissional_id,m]));
+  // Regional duty lasts 07h to 07h, including a clean Anápolis start.
+  // Read saved rows so removed or replaced people are never resurrected.
+  const regionalSource=await supabase.from('plantoes').select('id,data_plantao,turno').eq('id',decision.source_shift_id).maybeSingle();
+  if(regionalSource.error)throw regionalSource.error;
+  const regionalRows=regionalSource.data?.turno==='DIURNO'&&next.turno==='NOTURNO'&&regionalSource.data.data_plantao===next.data_plantao
+    ?await supabase.from('equipe_plantao').select('*').eq('plantao_id',decision.source_shift_id).eq('status','ATIVO'):{data:[]};
+  if(regionalRows.error)throw regionalRows.error;
+  const regionalCarry=regionalRosterForNight(regionalSource.data,next,regionalRows.data||[],vehicles);
+  for(const member of regionalCarry){
+    const existing=assigned.get(member.profissional_id);
+    if(existing){
+      if(existing.viatura_id!==member.viatura_id||norm(existing.funcao)!==norm(member.funcao))throw new Error('Uma equipe regional já foi alterada no próximo turno. Confira antes de continuar.');
+      continue;
+    }
+    const row={plantao_id:next.id,profissional_id:member.profissional_id,nome_snapshot:member.nome_snapshot,
+      funcao:member.funcao,tipo_escala:'FIXO EM VIATURA',status:'ATIVO',viatura_id:member.viatura_id,
+      viatura_snapshot:member.viatura_snapshot||vehicleById(member.viatura_id)?.nome,
+      entrou_em:member.entrou_em||new Date().toISOString(),ultimo_retorno_em:member.ultimo_retorno_em||null,
+      origem_escala:'REGIONAL_24H'};
+    const saved=await supabase.from('equipe_plantao').insert(row).select('id').single();
+    if(saved.error)throw saved.error;
+    assigned.set(member.profissional_id,{...row,id:saved.data.id});
+  }
   for(const o of selected.data||[]){
     // A guard also detects a conflicting status change during synchronization.
     const guard=await supabase.from('ocorrencias').update({status:o.status}).eq('id',o.id).eq('status',o.status).eq('viatura_id',o.viatura_id).select('id').maybeSingle();

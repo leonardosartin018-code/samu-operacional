@@ -34,6 +34,20 @@ export function shouldBlockDateNavigation(currentShift,requestedDate){
   return isOpenShift(currentShift)&&requestedDate!==currentShift.data_plantao;
 }
 
+// Regional crews cover the day and night of the same service date.
+// Never infer a fresh 24-hour roster from a prior night or an unknown base.
+export function regionalRosterForNight(source,target,members,vehicles){
+  if(!source?.data_plantao||source.data_plantao!==(target?.data_plantao||target?.date)||
+    String(source.turno||'').toUpperCase()!=='DIURNO'||
+    String(target?.turno||'').toUpperCase()!=='NOTURNO')return [];
+  const regional=new Set((vehicles||[]).filter(v=>{
+    const name=String(v.bases?.nome||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toUpperCase();
+    return v.ativo!==false&&name&&name!=='ANAPOLIS';
+  }).map(v=>v.id));
+  return (members||[]).filter(m=>m.plantao_id===source.id&&
+    String(m.status||'').toUpperCase()==='ATIVO'&&m.profissional_id&&regional.has(m.viatura_id));
+}
+
 // A newer turn confirmed by an operator supersedes a stale local pin, even
 // when an unrelated legacy record was never closed. The clock is not evidence.
 export function confirmedHandoffSuccessor(shifts,currentShift=null){
